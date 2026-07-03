@@ -6,7 +6,7 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/chiuhow/Orvena"
+repository = "https://github.com/williamlabdev/Orvena"
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
