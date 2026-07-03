@@ -27,13 +27,13 @@ context, and no clear definition of "done". Orvena puts brakes on each of these:
 
 ```bash
 # from source (single static binary)
-cargo install --git https://github.com/chiuhow/Orvena orvena-cli
+cargo install --git https://github.com/williamlabdev/Orvena orvena-cli
 ```
 
 Or build the repo directly:
 
 ```bash
-git clone https://github.com/chiuhow/Orvena && cd Orvena
+git clone https://github.com/williamlabdev/Orvena && cd Orvena
 cargo build --release      # binary at target/release/orvena
 ```
 
