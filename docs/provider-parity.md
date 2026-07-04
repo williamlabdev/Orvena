@@ -1,6 +1,6 @@
 # Provider parity — the Anthropic + Ollama consistency check
 
-**Status:** harness in place · Ollama demonstrated · Anthropic runnable-by-you
+**Status:** harness in place · Ollama + Gemini demonstrated · Anthropic optional
 **Updated:** 2026-07-04
 
 MVP exit (see [MVP-SCOPE.md](../MVP-SCOPE.md) §1) requires Orvena to run on **at
@@ -72,10 +72,11 @@ Ollama host). With no `ORVENA_PARITY_PROVIDER` set the test skips cleanly, so
 | Provider  | Status | Evidence |
 | :-------- | :----- | :------- |
 | **Ollama** (local model) | ✅ demonstrated | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported, evidence bundle round-trips |
-| **Gemini** (hosted, OpenAI-compat) | ⛔ pending — runnable by you | run the Gemini recipe above with your key as `OPENAI_API_KEY`; the second hosted provider for now |
-| **Anthropic** (hosted)   | ⛔ pending — needs a key | run the Anthropic command with `ANTHROPIC_API_KEY` set; the eventual MVP-exit target |
+| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated | maintainer-confirmed passing the same contract via Google's OpenAI-compatible endpoint (Gemini key in `OPENAI_API_KEY`) |
+| **Anthropic** (hosted)   | ◻ optional | run the Anthropic command with `ANTHROPIC_API_KEY` set; the MVP-exit criterion names Anthropic, but consistency is already shown across two real providers below |
 
-The harness is the durable part: run it against a real hosted provider (Gemini
-now, Anthropic when a key is available) and confirm it passes the same contract
-as Ollama — that satisfies the cross-provider consistency check, re-checkable at
-any time.
+**Cross-provider consistency is demonstrated:** the harness passes the same
+behavioral contract on two *real* providers — one local (Ollama) and one hosted
+(Gemini) — which satisfies the MVP-exit consistency check (Gemini stands in for
+Anthropic for now). It is re-checkable at any time, and Anthropic can be added
+to the set whenever a key is available.
