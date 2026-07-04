@@ -24,6 +24,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Benchmark pass rate over repeated runs** (slice-010) — `orvena bench --repeat
+  N` runs every task `N` times and reports a **per-task pass rate** plus a **mean
+  pass rate** (the expected single-pass completion rate, de-noised against model
+  nondeterminism) and a `solved ≥once` count; `--repeat 1` (default) is the
+  unchanged single-pass path. Core `run_benchmark_repeated`/`RepeatedReport`
+  layer over the existing single-pass runner (each repeat gets its own workdir
+  namespace, and the underlying per-repeat reports are retained for audit);
+  skips stay excluded from the denominator. Aggregation is regression-tested
+  deterministically with the offline provider. A convenience script
+  `scripts/bench-passrate.sh` runs a scratch-config + offline sanity + the real
+  repeated run for a chosen local model.
 - **Curated benchmark task set + first published number** (slice-009, MVP+1) — a
   curated, self-contained task set (`benchmarks/realworld.yaml`) with non-trivial
   multi-file bugs (off-by-one, empty-input, out-of-bounds, a bug in a second

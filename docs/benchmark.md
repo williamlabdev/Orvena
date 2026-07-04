@@ -42,6 +42,18 @@ orvena bench --provider openai            # e.g. Gemini via OpenAI-compat, see p
 `--tasks <file.yaml>` runs your own task set instead of the built-in one.
 `--provider <kind>` overrides the configured provider for the run only, and the
 same readiness preflight as `orvena run` applies (a missing key fails fast).
+`--out <path>` also writes the JSON report where you want to publish it.
+
+**Pass rate (`--repeat N`).** A single pass of a stochastic model is noisy.
+`--repeat N` runs every task `N` times and reports a **per-task pass rate** plus a
+**mean pass rate** (the expected single-pass completion rate, de-noised) and
+`solved ≥once`. The convenience script
+[`scripts/bench-passrate.sh`](../scripts/bench-passrate.sh) does a throwaway-scratch
+setup + an offline sanity run + the real repeated run:
+
+```sh
+scripts/bench-passrate.sh 5 qwen3:14b   # 5 runs/task against a local Ollama model
+```
 
 ## Project tasks with real test runners (opt-in)
 
@@ -66,10 +78,9 @@ orvena bench --tasks benchmarks/projects.yaml --provider <kind>
 
 ## Honesty caveats (不美化)
 
-- **One run per task.** Real-provider numbers vary run to run (LLM
-  nondeterminism); the harness reports a single pass, not a smoothed statistic.
-  Re-run to see the spread. Always report the provider + model (both are in
-  `report.json`).
+- **Runs vary.** Real-provider numbers vary run to run (LLM nondeterminism). A
+  single pass is one sample; use `--repeat N` for a de-noised pass rate. Always
+  report the provider + model and how many runs (all in `report.json`).
 - **Failures are counted, not hidden.** A task that fails its `verify` — or
   whose run errors out — is a non-completion in the rate, with its blockers in
   the report.

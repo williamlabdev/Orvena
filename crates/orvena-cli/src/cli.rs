@@ -41,6 +41,10 @@ enum Command {
         /// Also write the JSON report to this path (e.g. to publish/commit it).
         #[arg(long = "out")]
         out: Option<std::path::PathBuf>,
+        /// Run each task N times and report a pass rate (de-noises a stochastic
+        /// model). Default 1 = single pass.
+        #[arg(long = "repeat", default_value_t = 1)]
+        repeat: u32,
     },
     /// Preflight: provider readiness, config validity.
     Doctor,
@@ -54,7 +58,9 @@ pub async fn run() -> i32 {
     let result = match cli.command {
         Command::Init => commands::init::run(),
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
-        Command::Bench { provider, tasks, out } => commands::bench::run(provider, tasks, out).await,
+        Command::Bench { provider, tasks, out, repeat } => {
+            commands::bench::run(provider, tasks, out, repeat).await
+        }
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),
     };

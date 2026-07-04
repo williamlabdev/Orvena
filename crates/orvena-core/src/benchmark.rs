@@ -208,6 +208,116 @@ fn command_exists(cmd: &str) -> bool {
     std::env::split_paths(&paths).any(|dir| dir.join(cmd).is_file())
 }
 
+/// Per-task pass rate across repeated runs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPassRate {
+    pub id: String,
+    pub runs: u32,
+    pub solved: u32,
+    pub skipped: bool,
+    pub pass_rate: f32,
+}
+
+/// Aggregate of `repeat` benchmark runs — a de-noised completion rate that
+/// tolerates a stochastic model, unlike a single pass.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatedReport {
+    pub provider: String,
+    pub model: String,
+    pub run_id: String,
+    pub repeat: u32,
+    pub task_count: u32,
+    pub ran: u32,
+    pub skipped: u32,
+    /// Mean of per-task pass rates over ran tasks — the expected single-pass
+    /// completion rate, averaged over `repeat` attempts to cut model noise.
+    pub mean_pass_rate: f32,
+    /// Tasks solved in at least one run (an optimistic pass@k upper bound).
+    pub solved_any: u32,
+    pub tasks: Vec<TaskPassRate>,
+    /// The underlying per-repeat reports, for full auditability.
+    pub runs: Vec<BenchReport>,
+}
+
+/// Run the whole set `repeat` times and aggregate per-task pass rates. Each
+/// repeat gets its own workdir namespace (`<run_id>-rep<i>`) so runs never
+/// collide. `repeat` is clamped to at least 1.
+pub async fn run_benchmark_repeated(
+    set: &BenchTaskSet,
+    provider: &ProviderSelection,
+    base_dir: &Path,
+    run_id: &str,
+    repeat: u32,
+) -> Result<RepeatedReport> {
+    let repeat = repeat.max(1);
+    let mut runs = Vec::with_capacity(repeat as usize);
+    for i in 0..repeat {
+        runs.push(run_benchmark(set, provider, base_dir, &format!("{run_id}-rep{i}")).await?);
+    }
+
+    // Aggregate per task, in the set's declared order. A skip is deterministic
+    // (it depends only on PATH), so a task skipped in the first run is skipped
+    // in all of them and counts as not-run.
+    let mut tasks = Vec::with_capacity(set.tasks.len());
+    for t in &set.tasks {
+        let skipped = runs[0].results.iter().any(|r| r.id == t.id && r.skipped);
+        if skipped {
+            tasks.push(TaskPassRate {
+                id: t.id.clone(),
+                runs: 0,
+                solved: 0,
+                skipped: true,
+                pass_rate: 0.0,
+            });
+            continue;
+        }
+        let solved = runs
+            .iter()
+            .filter(|rep| rep.results.iter().any(|r| r.id == t.id && r.completed))
+            .count() as u32;
+        tasks.push(TaskPassRate {
+            id: t.id.clone(),
+            runs: repeat,
+            solved,
+            skipped: false,
+            pass_rate: solved as f32 / repeat as f32,
+        });
+    }
+
+    let task_count = tasks.len() as u32;
+    let skipped = tasks.iter().filter(|t| t.skipped).count() as u32;
+    let ran = task_count - skipped;
+    let mean_pass_rate = if ran == 0 {
+        0.0
+    } else {
+        tasks.iter().filter(|t| !t.skipped).map(|t| t.pass_rate).sum::<f32>() / ran as f32
+    };
+    let solved_any = tasks.iter().filter(|t| !t.skipped && t.solved > 0).count() as u32;
+
+    Ok(RepeatedReport {
+        provider: provider.kind.clone(),
+        model: provider.model.clone(),
+        run_id: run_id.to_string(),
+        repeat,
+        task_count,
+        ran,
+        skipped,
+        mean_pass_rate,
+        solved_any,
+        tasks,
+        runs,
+    })
+}
+
+/// Serialize a [`RepeatedReport`] as pretty JSON to `path`, creating parents.
+pub fn write_repeated_report(report: &RepeatedReport, path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(report)?)?;
+    Ok(())
+}
+
 /// Serialize a [`BenchReport`] as pretty JSON to `path`, creating parents.
 pub fn write_report(report: &BenchReport, path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {

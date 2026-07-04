@@ -138,3 +138,68 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
 
     let _ = std::fs::remove_dir_all(&base);
 }
+
+#[tokio::test]
+async fn repeated_runs_aggregate_per_task_pass_rates() {
+    let base = temp_dir("repeat");
+    let set = BenchTaskSet {
+        tasks: vec![
+            // offline solves this every run → pass_rate 1.0
+            BenchTask {
+                id: "make-a".into(),
+                instruction: "Create a file named a.txt".into(),
+                writes: vec!["a.txt".into()],
+                verify: "test -f a.txt".into(),
+                seed: vec![],
+                timeout_secs: None,
+                requires: vec![],
+            },
+            // offline never solves this → pass_rate 0.0
+            BenchTask {
+                id: "fix-b".into(),
+                instruction: "Edit b.txt so it contains DONE".into(),
+                writes: vec!["b.txt".into()],
+                verify: "grep -q DONE b.txt".into(),
+                seed: vec![SeedFile { path: "b.txt".into(), contents: "TODO\n".into() }],
+                timeout_secs: None,
+                requires: vec![],
+            },
+            // skipped every run (missing toolchain)
+            BenchTask {
+                id: "needs-tool".into(),
+                instruction: "never runs".into(),
+                writes: vec![],
+                verify: "true".into(),
+                seed: vec![],
+                timeout_secs: None,
+                requires: vec!["orvena-no-such-tool-xyz".into()],
+            },
+        ],
+    };
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+
+    let report =
+        benchmark::run_benchmark_repeated(&set, &provider, &base, "rep", 3).await.unwrap();
+
+    assert_eq!(report.repeat, 3);
+    assert_eq!(report.task_count, 3);
+    assert_eq!(report.skipped, 1);
+    assert_eq!(report.ran, 2);
+    assert_eq!(report.runs.len(), 3, "underlying per-repeat reports are retained");
+
+    let a = report.tasks.iter().find(|t| t.id == "make-a").unwrap();
+    let b = report.tasks.iter().find(|t| t.id == "fix-b").unwrap();
+    let n = report.tasks.iter().find(|t| t.id == "needs-tool").unwrap();
+    assert_eq!((a.runs, a.solved), (3, 3));
+    assert!((a.pass_rate - 1.0).abs() < f32::EPSILON);
+    assert_eq!((b.runs, b.solved), (3, 0));
+    assert!((b.pass_rate - 0.0).abs() < f32::EPSILON);
+    assert!(n.skipped && n.runs == 0);
+
+    // mean over the two ran tasks: (1.0 + 0.0) / 2 = 0.5; one solved ≥ once.
+    assert!((report.mean_pass_rate - 0.5).abs() < f32::EPSILON, "mean: {}", report.mean_pass_rate);
+    assert_eq!(report.solved_any, 1);
+
+    let _ = std::fs::remove_dir_all(&base);
+}
