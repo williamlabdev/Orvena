@@ -6,6 +6,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Verify-gate feedback no longer goes silent** (slice-004) — a `verify` command
+  that **fails without output** (`test -f x`, `grep -q`, `diff -q`, and most real
+  checks print nothing on failure) used to feed back an *empty* evidence string,
+  leaving the loop's next attempt with an unchanged context — it would re-emit the
+  same output and spin to `max_steps` without ever converging. Now a failed
+  automated gate always contributes an actionable line: the gate's **target
+  condition** plus either the command output or a synthesized `verify exited <n>
+  with no output`. This is what makes "done = your verify command exits 0" hold on
+  real projects. Backed by new regression tests: driver-level coverage for the
+  all-gates-must-pass conjunction, silent-failure convergence (fail → fix from the
+  fed-back condition → pass), human-gate escalation, and `max_steps` exhaustion;
+  plus unit coverage for a verify-less automated gate failing closed and the
+  synthesized exit status.
+
 ### Added
 
 - **Evidence-bundle exporter** (slice-003, per ADR-002) — the minimal, provable
