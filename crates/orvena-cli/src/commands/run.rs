@@ -8,17 +8,29 @@ use super::{config_dir, load_dotenv, project_root};
 use anyhow::{bail, Result};
 use orvena_core::config::Config;
 use orvena_core::metrics::evidence;
+use orvena_core::provider::registry::{self, Readiness};
 use orvena_core::skills::{self, SkillRegistry};
 use orvena_core::{Agent, Task};
 
-pub async fn run(task_text: String, write: Vec<String>) -> Result<()> {
+pub async fn run(task_text: String, write: Vec<String>, provider: Option<String>) -> Result<()> {
     load_dotenv();
 
     let dir = config_dir();
     if !super::is_initialized(&dir) {
         bail!("no config found — run `orvena init` first");
     }
-    let config = Config::load_dir(&dir)?;
+    let mut config = Config::load_dir(&dir)?;
+
+    // A per-run provider override (e.g. `--provider offline` to see the loop with
+    // no key or network). It affects only this run — the config on disk is left
+    // untouched.
+    if let Some(kind) = provider {
+        config.agent.provider.kind = kind;
+    }
+
+    // Preflight: fail fast with actionable guidance rather than dead-ending on a
+    // deep provider/network error — the first run must never get stuck on setup.
+    preflight_provider(&config.agent.provider.kind)?;
 
     // Resolve a skill from the task text (engine ships in v0.1; content grows
     // one reviewed skill at a time).
@@ -48,6 +60,25 @@ pub async fn run(task_text: String, write: Vec<String>) -> Result<()> {
         bail!("run did not complete (see blockers above); evidence: {}", bundle.display());
     }
     Ok(())
+}
+
+/// Check the provider is usable *before* building it, and turn a not-ready state
+/// into the same actionable guidance `orvena doctor` gives. Readiness is a local,
+/// network-free check (a missing key, or an unknown kind) — reused from the
+/// registry so `run` and `doctor` never drift.
+fn preflight_provider(kind: &str) -> Result<()> {
+    match registry::readiness(kind) {
+        Readiness::Ready => Ok(()),
+        Readiness::MissingKey(key) => bail!(
+            "provider '{kind}' is not ready — {key} is not set.\n  \
+             • add it to .env (see .env.example), then `orvena doctor` to verify; or\n  \
+             • see the loop run right now with no key: `orvena run --provider offline \"<task>\"`"
+        ),
+        Readiness::Unknown => bail!(
+            "provider '{kind}' is unknown — choose anthropic | openai | openrouter | ollama | offline\n  \
+             (edit .orvena/orvena.yaml, or pass `--provider <kind>`)."
+        ),
+    }
 }
 
 /// A filesystem-safe run identifier: milliseconds since the Unix epoch. Millis

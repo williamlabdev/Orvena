@@ -43,6 +43,14 @@ pub fn run() -> Result<()> {
         }
     }
 
-    println!("\n{}", if ok { "All checks passed." } else { "Some checks failed — see above." });
+    if ok {
+        println!("\nAll checks passed.");
+        println!(
+            "A run exports an evidence bundle to {}/runs/<timestamp>/evidence.json (success or not).",
+            dir.display()
+        );
+    } else {
+        println!("\nSome checks failed — see above.");
+    }
     Ok(())
 }

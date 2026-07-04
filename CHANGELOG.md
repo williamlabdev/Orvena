@@ -24,6 +24,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Painless first run** (slice-005) — a brand-new user can go from `init` to a
+  working loop + evidence bundle without getting stuck on setup. `orvena run`
+  now takes `--provider/-p <kind>` to **override the configured provider for one
+  run** (config on disk untouched): `orvena run --provider offline "<task>"`
+  runs the whole loop against the deterministic stub with **no API key and no
+  network**, completing against the scaffold's `verify: "true"` gate and
+  exporting an evidence bundle — so the core "evidence by default" deliverable
+  is visible before committing to a real provider. `run` also **preflights
+  provider readiness** (reusing the same `registry::readiness` check as
+  `doctor`, so the two never drift): a missing key or unknown provider now fails
+  fast with actionable guidance (point to `.env.example`, `orvena doctor`, and
+  the offline shortcut) instead of dead-ending on a deep provider/network error.
+  `orvena doctor` additionally notes the evidence-bundle path on success. Proven
+  by CLI integration tests driving the built binary end to end (zero-setup
+  offline run lands a bundle; a not-ready provider fails fast with guidance and
+  writes nothing).
 - **Evidence-bundle exporter** (slice-003, per ADR-002) — the minimal, provable
   form of "evidence by default". After a run, the `RunReport` (which already
   derives `Serialize`) is written to disk as a single **pretty-printed JSON**
