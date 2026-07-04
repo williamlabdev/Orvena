@@ -4,6 +4,7 @@
 //! ourselves — not an external benchmark. (Evidence & Done pillar.)
 
 pub mod baseline;
+pub mod evidence;
 
 pub use baseline::{BaselineRecord, GoldenTask};
 

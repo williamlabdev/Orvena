@@ -194,9 +194,14 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
             }
             if !outcome.passed {
                 all_passed = false;
-                if !outcome.evidence.is_empty() {
-                    evidence.push_str(&format!("[{}] {}\n", outcome.gate, outcome.evidence));
-                }
+                // Feed back the gate's target condition alongside its evidence so
+                // the re-attempt knows *what to satisfy* — not just that a check
+                // failed. gate.rs guarantees non-empty evidence on failure, so
+                // even a silent verify yields an actionable line here.
+                evidence.push_str(&format!(
+                    "[{}] {}: {}\n",
+                    outcome.gate, gate.condition, outcome.evidence
+                ));
             }
         }
 

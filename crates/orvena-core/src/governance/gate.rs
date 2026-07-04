@@ -60,13 +60,27 @@ impl GateRunner {
                 needs_human: false,
             },
             Ok(out) => {
-                let mut evidence = String::new();
-                evidence.push_str(&out.stdout);
-                evidence.push_str(&out.stderr);
+                let mut captured = String::new();
+                captured.push_str(&out.stdout);
+                captured.push_str(&out.stderr);
+                let captured = captured.trim();
+                // Never emit empty evidence for a *failure*: a silent verify
+                // (`test -f x`, `grep -q`, `diff -q`) prints nothing on failure,
+                // and an empty string would leave the loop's next attempt with an
+                // unchanged context — nothing to act on. Synthesize the exit
+                // status so the model at least knows the check ran and failed.
+                let evidence = if out.success() || !captured.is_empty() {
+                    captured.to_string()
+                } else {
+                    match out.exit_code {
+                        Some(code) => format!("verify exited {code} with no output"),
+                        None => "verify exited abnormally with no output".to_string(),
+                    }
+                };
                 GateOutcome {
                     gate: name.to_string(),
                     passed: out.success(),
-                    evidence: evidence.trim().to_string(),
+                    evidence,
                     needs_human: false,
                 }
             }
@@ -117,6 +131,36 @@ mod tests {
         assert!(!outcome.passed, "a timed-out gate must not pass");
         assert!(outcome.evidence.contains("timed out"), "evidence: {}", outcome.evidence);
         assert!(!outcome.needs_human);
+    }
+
+    #[test]
+    fn silent_failure_synthesizes_exit_status() {
+        // A verify that fails with no output must still yield actionable evidence
+        // (the exit code), or the re-attempt loop has nothing to converge on.
+        let outcome = GateRunner::run(&gate("exit 7", None), &std::env::temp_dir());
+        assert!(!outcome.passed);
+        assert!(
+            outcome.evidence.contains("exited 7"),
+            "silent failure must report the exit status: {}",
+            outcome.evidence
+        );
+    }
+
+    #[test]
+    fn missing_verify_command_fails_closed() {
+        // An automated gate with no `verify` cannot produce evidence — it must
+        // fail closed (never silently pass), and it is not a human escalation.
+        let g = Gate {
+            name: "no-verify".into(),
+            condition: "something observable".into(),
+            verify: None,
+            gatekeeper: Gatekeeper::Automated,
+            timeout_secs: None,
+        };
+        let outcome = GateRunner::run(&g, &std::env::temp_dir());
+        assert!(!outcome.passed, "a verify-less automated gate must not pass");
+        assert!(!outcome.needs_human);
+        assert!(outcome.evidence.contains("verify"), "evidence: {}", outcome.evidence);
     }
 
     #[test]
