@@ -1,0 +1,69 @@
+# Benchmark — the completion-rate number
+
+**Status:** minimal harness in place (slice-007) · number not yet published
+**Updated:** 2026-07-04
+
+MVP+1 (see [MVP-SCOPE.md](../MVP-SCOPE.md) §1) is to publish an **honest,
+reproducible completion rate**: run a set of hand-picked, auto-verifiable coding
+tasks through Orvena and report the fraction that reached a passing `verify`.
+This document defines the method; `orvena bench` produces the number.
+
+## Method
+
+- **Task set** — hand-picked tasks in a YAML file
+  ([`crates/orvena-cli/src/benchmarks/tasks.yaml`](../crates/orvena-cli/src/benchmarks/tasks.yaml),
+  embedded as the default). Each task is: an `instruction`, the paths it may
+  modify (`writes`), an optional `seed` (files placed in the workdir first), and
+  its **own** `verify` command.
+- **Solved = `verify` exits 0** — the same "done" rule the product ships. Each
+  task carries its own criterion; a shared always-pass gate would make the
+  number meaningless. Checks are toolchain-free (`test`/`grep`) so the set runs
+  anywhere.
+- **Completion rate = solved / total**, one run per task.
+- **Isolation + evidence** — each task runs in its own workdir under
+  `.orvena/bench/<run_id>/<task-id>/` and leaves an `evidence.json` bundle; the
+  aggregate is written to `.orvena/bench/<run_id>/report.json`. Every number is
+  auditable down to the per-task run.
+
+## How to run it
+
+```sh
+# Deterministic smoke (no key, no network) — exercises the harness, not a real
+# number: the offline stub only writes boilerplate, so most tasks fail.
+orvena bench --provider offline
+
+# A real number against a local model.
+orvena bench --provider ollama            # provider.model in .orvena/orvena.yaml
+
+# A real number against a hosted model (key in the environment).
+orvena bench --provider openai            # e.g. Gemini via OpenAI-compat, see provider-parity.md
+```
+
+`--tasks <file.yaml>` runs your own task set instead of the built-in one.
+`--provider <kind>` overrides the configured provider for the run only, and the
+same readiness preflight as `orvena run` applies (a missing key fails fast).
+
+## Honesty caveats (不美化)
+
+- **One run per task.** Real-provider numbers vary run to run (LLM
+  nondeterminism); the harness reports a single pass, not a smoothed statistic.
+  Re-run to see the spread. Always report the provider + model (both are in
+  `report.json`).
+- **Failures are counted, not hidden.** A task that fails its `verify` — or
+  whose run errors out — is a non-completion in the rate, with its blockers in
+  the report.
+- **`offline` is a smoke, not a benchmark.** The deterministic stub proves the
+  harness works; being "consistent with a stub" says nothing about real
+  capability (MVP-SCOPE §5). A published number must come from a real provider.
+- **The task set is small and file-oriented by design** (v0.1). It includes a
+  seeded "fix until the check passes" task (edit an existing file until `verify`
+  goes green) so the rate reflects real editing, not only file creation. Heavier
+  seeded projects (real `cargo test` / `pytest` fixtures) are a deferred
+  extension — grow the set via `--tasks`.
+
+## Status
+
+The harness and default set exist and are demonstrated end to end (a local
+`qwen3:14b` run solved the built-in set). Turning this into a *published* number
+with a written method is the remaining MVP+1 step; it is intentionally not
+automated here.

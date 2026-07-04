@@ -24,6 +24,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Minimal benchmark harness** (slice-007, MVP+1) — `orvena bench [--provider
+  <kind>] [--tasks <file>]` runs a set of hand-picked, auto-verifiable coding
+  tasks through the bounded loop and reports a **completion rate** (fraction that
+  reached a passing `verify`), writing a per-task table + `report.json` and a
+  per-task evidence bundle under `.orvena/bench/<run_id>/`. Each task carries its
+  **own** `verify` (its success criterion — a shared always-pass gate would make
+  the number meaningless); the built-in set is toolchain-free (`test`/`grep`) and
+  includes a seeded "fix until the check passes" task so the rate reflects real
+  editing, not just file creation. Adds no execution engine — it orchestrates the
+  existing loop and aggregates; a task that errors is counted as a non-completion
+  (with its error as a blocker), not an abort. Core logic lives in
+  `orvena_core::benchmark` (`run_benchmark`/`write_report`), the CLI is a thin
+  wrapper sharing `run`'s provider override + readiness preflight. Method and
+  honesty caveats in [docs/benchmark.md](docs/benchmark.md); the deterministic
+  offline path is regression-tested (a mixed set yields a known 0.5 rate).
+  Demonstrated end to end against a real local model (`qwen3:14b`). *Publishing*
+  the number stays a manual step (MVP+1 exit boxes remain unchecked).
 - **Cross-provider parity harness** (slice-006) — the repeatable, operational
   form of the MVP-exit criterion "Anthropic + Ollama behave consistently". A new
   `#[ignore]`d integration test (`crates/orvena-core/tests/provider_parity.rs`,

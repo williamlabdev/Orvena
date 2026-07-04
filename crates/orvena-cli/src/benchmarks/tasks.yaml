@@ -1,0 +1,33 @@
+# Orvena benchmark task set — hand-picked, auto-verifiable coding tasks.
+#
+# Each task defines its OWN `verify` command (exit 0 = solved); the reported
+# completion rate is the fraction of tasks that reach a passing verify. Checks
+# are toolchain-free (test/grep) so the number is reproducible anywhere. Run
+# with `orvena bench [--provider <kind>]`. See docs/benchmark.md for method and
+# honesty caveats. Override with `--tasks <your-file.yaml>`.
+
+tasks:
+  - id: create-greeting
+    instruction: "Create a file named hello.txt containing the single word: hello"
+    writes: [hello.txt]
+    verify: "test -f hello.txt"
+
+  - id: write-content
+    instruction: "Create a file named greeting.txt whose contents include the word WELCOME."
+    writes: [greeting.txt]
+    verify: "grep -q WELCOME greeting.txt"
+
+  - id: markdown-heading
+    instruction: "Create a file named NOTES.md that starts with a top-level Markdown heading (a line beginning with '# ')."
+    writes: [NOTES.md]
+    verify: "grep -q '^# ' NOTES.md"
+
+  # Seeded "fix until the check passes": edit an existing file so the check goes
+  # green — the observe-failing-check → fix → re-verify loop, no toolchain needed.
+  - id: fix-until-pass
+    instruction: "Edit data.txt so that it contains the word DONE in place of the placeholder."
+    writes: [data.txt]
+    seed:
+      - path: data.txt
+        contents: "TODO\n"
+    verify: "grep -q DONE data.txt"
