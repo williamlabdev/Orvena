@@ -31,8 +31,8 @@ VISION 的長期承諾是「發布一個誠實的外部 benchmark 數字」。�
 
 **MVP+1(下一步,不擋 MVP)— 對外 benchmark 數字**
 
-- [ ] 把上面的任務集擴成一個可重現 benchmark harness,算出完成率。
-- [ ] 公開該數字,附方法說明,不美化。
+- [x] 把上面的任務集擴成一個可重現 benchmark harness,算出完成率。〔`orvena bench`,slice-007/008;`--tasks` 可換任務集,`requires`/skip、真實 test runner〕
+- [x] 公開該數字,附方法說明,不美化。〔slice-009:`docs/benchmark-results.md` + README,首個數字 = 本機 `qwen3:14b` 單輪解 5/5 策展 Rust 任務。**刻意去美化**:明講「小而簡單的策展集、單輪、非真實 repo」是弱訊號,非能力宣稱。〕 ⚠️ 註:這是誠實但**弱**的起點;更強的數字(更大/更難任務、真實 repo 快照、多輪、hosted 模型)仍待做。
 
 **只有第一層是 MVP 的 exit criteria。** 下面的 must-have 都是為了讓第一層成立。
 

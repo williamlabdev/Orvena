@@ -38,6 +38,9 @@ enum Command {
         /// Path to a task set (YAML). Omit to use the built-in default set.
         #[arg(long = "tasks")]
         tasks: Option<std::path::PathBuf>,
+        /// Also write the JSON report to this path (e.g. to publish/commit it).
+        #[arg(long = "out")]
+        out: Option<std::path::PathBuf>,
     },
     /// Preflight: provider readiness, config validity.
     Doctor,
@@ -51,7 +54,7 @@ pub async fn run() -> i32 {
     let result = match cli.command {
         Command::Init => commands::init::run(),
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
-        Command::Bench { provider, tasks } => commands::bench::run(provider, tasks).await,
+        Command::Bench { provider, tasks, out } => commands::bench::run(provider, tasks, out).await,
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),
     };

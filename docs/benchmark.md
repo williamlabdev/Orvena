@@ -84,9 +84,10 @@ orvena bench --tasks benchmarks/projects.yaml --provider <kind>
 
 ## Status
 
-The harness, the default set, and the opt-in project set exist and are
-demonstrated end to end with a local `qwen3:14b`: it solved the built-in set, and
-fixed the seeded Rust bug so a real `cargo test` passed (the Python task skipped,
-`pytest` absent). Turning this into a *published* number with a written method is
-the remaining MVP+1 step; it is intentionally not
-automated here.
+A **first number is published**: see
+[benchmark-results.md](benchmark-results.md) (2026-07-04, a local `qwen3:14b`
+solving a small curated Rust set single-pass). The harness, the default set, and
+the curated/project sets are all demonstrated end to end. Making the number
+*stronger and more credible* — larger/harder tasks, real-repo snapshots, repeated
+runs, hosted models — is ongoing; those are larger efforts and stay manual, not
+CI-gated.

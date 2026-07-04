@@ -24,6 +24,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Curated benchmark task set + first published number** (slice-009, MVP+1) — a
+  curated, self-contained task set (`benchmarks/realworld.yaml`) with non-trivial
+  multi-file bugs (off-by-one, empty-input, out-of-bounds, a bug in a second
+  module) verified by real `cargo test`/`pytest`, plus an `orvena bench --out
+  <path>` flag to land the JSON report where it's published. **First published
+  number** ([docs/benchmark-results.md](docs/benchmark-results.md), 2026-07-04):
+  Orvena driving a local `qwen3:14b` solved **5/5 (100%)** of the ran Rust tasks
+  single-pass (2 Python tasks skipped, `pytest` absent). The results page is
+  written to *deflate* — it states plainly that 100% on a tiny, simple, curated
+  set is a weak early signal, not a real-world capability claim, and lists the
+  path to a stronger number (harder/larger tasks, real-repo snapshots, repeated
+  runs, hosted models). README gains a Benchmark section linking it.
 - **Seeded project benchmark tasks with real test runners** (slice-008) — an
   opt-in task set (`benchmarks/projects.yaml`, run via `orvena bench --tasks`)
   where each task seeds a small **buggy project** and its `verify` runs a real

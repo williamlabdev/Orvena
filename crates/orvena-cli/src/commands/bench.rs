@@ -14,7 +14,11 @@ use orvena_core::config::Config;
 /// directory on disk (same pattern as the init scaffold).
 const DEFAULT_TASKS: &str = include_str!("../benchmarks/tasks.yaml");
 
-pub async fn run(provider: Option<String>, tasks: Option<PathBuf>) -> Result<()> {
+pub async fn run(
+    provider: Option<String>,
+    tasks: Option<PathBuf>,
+    out: Option<PathBuf>,
+) -> Result<()> {
     load_dotenv();
 
     let dir = config_dir();
@@ -54,6 +58,12 @@ pub async fn run(provider: Option<String>, tasks: Option<PathBuf>) -> Result<()>
     let report_path = base.join(&run_id).join("report.json");
     benchmark::write_report(&report, &report_path)?;
     println!("\nreport: {}", report_path.display());
+
+    // Optionally also land the report where it will be published/committed.
+    if let Some(out) = out {
+        benchmark::write_report(&report, &out)?;
+        println!("report: {}", out.display());
+    }
     Ok(())
 }
 
