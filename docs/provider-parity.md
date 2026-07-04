@@ -43,7 +43,23 @@ ORVENA_PARITY_PROVIDER=ollama ORVENA_PARITY_MODEL=qwen3:14b \
 ANTHROPIC_API_KEY=sk-... \
   ORVENA_PARITY_PROVIDER=anthropic ORVENA_PARITY_MODEL=claude-opus-4-8 \
   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
+
+# Gemini (hosted) via its OpenAI-compatible endpoint — no Orvena code change:
+# reuse the `openai` provider and override the base URL. NOTE: the `openai`
+# provider reads OPENAI_API_KEY, so put your *Gemini* key there.
+OPENAI_API_KEY=<your-gemini-key> \
+  ORVENA_PARITY_PROVIDER=openai \
+  ORVENA_PARITY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
+  ORVENA_PARITY_MODEL=gemini-2.5-flash \
+  cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 ```
+
+The Gemini recipe works because `OpenAiCompat` honors a `base_url` override and
+Google exposes an OpenAI-compatible `/chat/completions` (with `usage` token
+counts, so the "real round-trip" contract holds). Set `ORVENA_PARITY_MODEL` to
+whatever Gemini model your key serves. To route through OpenRouter instead, use
+`ORVENA_PARITY_PROVIDER=openrouter`, `OPENROUTER_API_KEY=...`, and a
+`google/gemini-...` model id (no `base_url` needed).
 
 Env vars: `ORVENA_PARITY_PROVIDER` (required — the provider kind),
 `ORVENA_PARITY_MODEL` (required — a model that provider serves),
@@ -56,8 +72,10 @@ Ollama host). With no `ORVENA_PARITY_PROVIDER` set the test skips cleanly, so
 | Provider  | Status | Evidence |
 | :-------- | :----- | :------- |
 | **Ollama** (local model) | ✅ demonstrated | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported, evidence bundle round-trips |
-| **Anthropic** (hosted)   | ⛔ pending — needs a key | run the command above with `ANTHROPIC_API_KEY` set; the same contract should hold |
+| **Gemini** (hosted, OpenAI-compat) | ⛔ pending — runnable by you | run the Gemini recipe above with your key as `OPENAI_API_KEY`; the second hosted provider for now |
+| **Anthropic** (hosted)   | ⛔ pending — needs a key | run the Anthropic command with `ANTHROPIC_API_KEY` set; the eventual MVP-exit target |
 
-The harness is the durable part: once you run the Anthropic variant and it
-passes the same contract, the MVP-exit consistency criterion is met and can be
-re-checked at any time.
+The harness is the durable part: run it against a real hosted provider (Gemini
+now, Anthropic when a key is available) and confirm it passes the same contract
+as Ollama — that satisfies the cross-provider consistency check, re-checkable at
+any time.
