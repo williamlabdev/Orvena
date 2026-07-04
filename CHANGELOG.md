@@ -24,6 +24,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Cross-provider parity harness** (slice-006) — the repeatable, operational
+  form of the MVP-exit criterion "Anthropic + Ollama behave consistently". A new
+  `#[ignore]`d integration test (`crates/orvena-core/tests/provider_parity.rs`,
+  selected by `ORVENA_PARITY_PROVIDER`/`ORVENA_PARITY_MODEL`) runs a golden task
+  against a **real** provider and asserts the behavioral **contract** that must
+  hold regardless of model — a well-formed `RunReport`, consistent completion
+  semantics (`completed` ⇔ every gate passed), a real round-trip (token usage
+  reported; the `offline` stub is only a regression baseline per MVP-SCOPE §5),
+  and an evidence bundle that round-trips — **not** exact step/token equality,
+  which legitimately varies. Ignored by default so `cargo test` stays offline and
+  deterministic. Demonstrated end-to-end against a real local Ollama model
+  (`qwen3:14b`: golden task completes, gate passes, real token usage, bundle
+  round-trips); the Anthropic side is runnable with a key. See
+  [docs/provider-parity.md](docs/provider-parity.md).
 - **Painless first run** (slice-005) — a brand-new user can go from `init` to a
   working loop + evidence bundle without getting stuck on setup. `orvena run`
   now takes `--provider/-p <kind>` to **override the configured provider for one
