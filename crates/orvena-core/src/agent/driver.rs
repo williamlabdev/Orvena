@@ -17,9 +17,40 @@ use crate::metrics::{GateRecord, RunReport};
 use crate::provider::ChatRequest;
 use crate::tools::fs::FsTool;
 use crate::tools::grep::GrepTool;
+use crate::tools::shell::ShellTool;
 
 /// Output cap per model call (input is governed by the context budget).
 const MAX_OUTPUT_TOKENS: u32 = 1024;
+
+/// Caller-side caps on RUN evidence so a chatty command cannot flood the next
+/// step's context (the runner itself returns untruncated output — the truncation
+/// is a driver concern, mirroring how SEARCH caps hits at the call site).
+const RUN_EVIDENCE_MAX_LINES: usize = 100;
+const RUN_EVIDENCE_MAX_BYTES: usize = 8 * 1024;
+
+/// Trim `raw` to the RUN evidence caps. Returns the (possibly truncated) body and
+/// a note describing the cap when one was hit (empty otherwise).
+fn cap_run_output(raw: &str) -> (String, String) {
+    let mut body = String::new();
+    let mut truncated = false;
+    for (idx, line) in raw.trim_end().lines().enumerate() {
+        if idx >= RUN_EVIDENCE_MAX_LINES || body.len() + line.len() + 1 > RUN_EVIDENCE_MAX_BYTES {
+            truncated = true;
+            break;
+        }
+        body.push_str(line);
+        body.push('\n');
+    }
+    let note = if truncated {
+        format!(
+            "(capped at {RUN_EVIDENCE_MAX_LINES} lines / {RUN_EVIDENCE_MAX_BYTES} bytes — \
+             narrow the command for the rest)\n"
+        )
+    } else {
+        String::new()
+    };
+    (body.trim_end().to_string(), note)
+}
 
 pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
     let cfg = agent.config();
@@ -57,11 +88,12 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
         report.input_tokens += resp.input_tokens;
         report.output_tokens += resp.output_tokens;
 
-        // 3. apply (each write is role- and scope-gated; search is role-gated
-        // and read-only, its results feed the next attempt's context)
+        // 3. apply (each write is role- and scope-gated; search and run are
+        // role-gated and read-only, their output feeds the next attempt's context)
         let fs = FsTool::new(agent.root(), &scope, &role);
         let grep = GrepTool::new(agent.root(), &role);
-        let mut search_evidence = String::new();
+        let shell = ShellTool::new(agent.root(), &role, &cfg.commands);
+        let mut tool_evidence = String::new();
         for action in step::parse_actions(&resp.content) {
             report.tool_calls += 1;
             match action {
@@ -83,12 +115,12 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
                             } else {
                                 ""
                             };
-                            search_evidence.push_str(&format!(
+                            tool_evidence.push_str(&format!(
                                 "SEARCH '{pattern}' → {} hit(s){capped}:\n",
                                 hits.len()
                             ));
                             for h in &hits {
-                                search_evidence
+                                tool_evidence
                                     .push_str(&format!("  {}:{}: {}\n", h.path, h.line_no, h.text));
                             }
                         }
@@ -103,7 +135,42 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
                             // e.g. an invalid regex — recorded and fed back so the
                             // model can correct it on the next bounded attempt.
                             report.blockers.push(e.to_string());
-                            search_evidence.push_str(&format!("SEARCH '{pattern}' failed: {e}\n"));
+                            tool_evidence.push_str(&format!("SEARCH '{pattern}' failed: {e}\n"));
+                        }
+                    }
+                }
+                step::Action::Run { name } => {
+                    match shell.run(&name) {
+                        Ok(out) => {
+                            // Execution failure (exit != 0 or timeout) is NOT a
+                            // blocker — like a failed gate, its output is fed back
+                            // as evidence and the loop continues (engineering does
+                            // not hard-stop), so the model can fix and re-run.
+                            let exit = match out.exit_code {
+                                Some(code) => code.to_string(),
+                                None if out.timed_out => "timeout".to_string(),
+                                None => "killed".to_string(),
+                            };
+                            let raw = format!("{}{}", out.stdout, out.stderr);
+                            let (body, capped) = cap_run_output(&raw);
+                            tool_evidence.push_str(&format!("RUN '{name}' → exit {exit}:\n{body}\n"));
+                            if !capped.is_empty() {
+                                tool_evidence.push_str(&capped);
+                            }
+                        }
+                        Err(e @ Error::Scope(_)) => {
+                            // Authorization failure (undeclared / mutating / role):
+                            // same handling as a forbidden write.
+                            report.blockers.push(e.to_string());
+                            if cfg.agent.tier.enforces() {
+                                return Ok(report.finished(false));
+                            }
+                        }
+                        Err(e) => {
+                            // Could not run the command at all (e.g. program not
+                            // found) — recorded and fed back like a failed search.
+                            report.blockers.push(e.to_string());
+                            tool_evidence.push_str(&format!("RUN '{name}' failed: {e}\n"));
                         }
                     }
                 }
@@ -143,8 +210,8 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
             return Ok(report.finished(false));
         }
 
-        // 5. observe → bounded re-attempt (search results + failed-gate output)
-        prior_evidence = format!("{search_evidence}{evidence}");
+        // 5. observe → bounded re-attempt (tool output + failed-gate output)
+        prior_evidence = format!("{tool_evidence}{evidence}");
     }
 
     report.blockers.push(format!(

@@ -1,0 +1,29 @@
+# Named commands the model may run by reference (never as a free-form string).
+# The model emits `<<<RUN name>>>`; the runtime executes ONLY declared names,
+# spawning the fixed argv directly — no shell interpretation, so injection and
+# `rm`/redirection are simply not expressible. (See docs/adr/ADR-001.)
+#
+#   name         — the reference the model uses in `<<<RUN name>>>`
+#   argv         — the exact program + arguments to spawn (argv[0] is the program)
+#   intent       — read_only : the model MAY trigger it
+#                  mutating  : declared for humans/gates only; the model may NOT
+#                              run it. `intent` is YOUR trust declaration — the
+#                              runtime does not verify a command is truly
+#                              read-only. Only declare a command read_only if it is.
+#   timeout_secs — optional wall-clock ceiling; defaults to 300.
+#
+# The defaults below are all read_only Rust checks — replace them with your
+# project's own (e.g. `pytest -q`, `npm test`, `go test ./...`).
+
+commands:
+  - name: test
+    argv: [cargo, test]
+    intent: read_only
+
+  - name: build
+    argv: [cargo, build]
+    intent: read_only
+
+  - name: clippy
+    argv: [cargo, clippy, --, -D, warnings]
+    intent: read_only

@@ -29,6 +29,7 @@ pub const SCAFFOLD: &[ScaffoldFile] = &[
     ScaffoldFile { rel: "orvena.yaml", contents: include_str!("../scaffold/orvena.yaml") },
     ScaffoldFile { rel: "roles.yaml", contents: include_str!("../scaffold/roles.yaml") },
     ScaffoldFile { rel: "gates.yaml", contents: include_str!("../scaffold/gates.yaml") },
+    ScaffoldFile { rel: "commands.yaml", contents: include_str!("../scaffold/commands.yaml") },
     ScaffoldFile {
         rel: "context-budgets.yaml",
         contents: include_str!("../scaffold/context-budgets.yaml"),

@@ -18,6 +18,7 @@
 pub mod agent;
 pub mod config;
 pub mod error;
+pub mod exec;
 pub mod governance;
 pub mod metrics;
 pub mod provider;

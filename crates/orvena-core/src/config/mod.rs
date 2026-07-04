@@ -4,11 +4,13 @@
 //! / `context-budgets.yaml`.
 
 pub mod agent;
+pub mod commands;
 pub mod context_budget;
 pub mod gates;
 pub mod roles;
 
 pub use agent::{AgentConfig, ProviderSelection, Tier};
+pub use commands::{Command, Commands, Intent};
 pub use context_budget::{ContextBudget, ContextBudgets};
 pub use gates::{Gate, Gatekeeper, Gates};
 pub use roles::{Role, Roles};
@@ -24,10 +26,13 @@ pub struct Config {
     pub roles: Roles,
     pub gates: Gates,
     pub budgets: ContextBudgets,
+    /// Named shell commands the model may run by reference (ADR-001). Optional:
+    /// a project without `commands.yaml` simply has no runnable commands.
+    pub commands: Commands,
 }
 
 impl Config {
-    /// Load the four config files from a directory (typically `.orvena/`).
+    /// Load the config files from a directory (typically `.orvena/`).
     pub fn load_dir(dir: impl AsRef<Path>) -> Result<Self> {
         let dir = dir.as_ref();
         let cfg = Self {
@@ -35,6 +40,8 @@ impl Config {
             roles: read_yaml(dir.join("roles.yaml"))?,
             gates: read_yaml(dir.join("gates.yaml"))?,
             budgets: read_yaml(dir.join("context-budgets.yaml"))?,
+            // Backward-compatible: pre-slice-002 projects have no commands.yaml.
+            commands: read_yaml_optional(dir.join("commands.yaml"))?,
         };
         cfg.validate()?;
         Ok(cfg)
@@ -51,6 +58,7 @@ impl Config {
         if self.agent.max_steps == 0 {
             return Err(Error::Config("max_steps must be >= 1".into()));
         }
+        self.commands.validate()?;
         Ok(())
     }
 }
@@ -62,4 +70,17 @@ pub(crate) fn read_yaml<T: DeserializeOwned>(path: impl AsRef<Path>) -> Result<T
         .map_err(|e| Error::Config(format!("cannot read {}: {e}", path.display())))?;
     serde_yaml::from_str(&text)
         .map_err(|e| Error::Config(format!("invalid YAML in {}: {e}", path.display())))
+}
+
+/// Like [`read_yaml`], but a missing file yields `T::default()` instead of an
+/// error — for config files that are optional (a project may not have declared
+/// any). A file that exists but is malformed is still a loud error.
+pub(crate) fn read_yaml_optional<T: DeserializeOwned + Default>(
+    path: impl AsRef<Path>,
+) -> Result<T> {
+    let path = path.as_ref();
+    if !path.exists() {
+        return Ok(T::default());
+    }
+    read_yaml(path)
 }

@@ -4,6 +4,7 @@
 //! L1 golden-task regression.
 
 use orvena_core::config::agent::{AgentConfig, ProviderSelection, Tier};
+use orvena_core::config::commands::Commands;
 use orvena_core::config::context_budget::ContextBudgets;
 use orvena_core::config::gates::{Gate, Gatekeeper, Gates};
 use orvena_core::config::roles::{Role, Roles};
@@ -42,9 +43,11 @@ fn dev_config(provider: ProviderSelection) -> Config {
                 condition: "hello.txt was created".into(),
                 verify: Some("test -f hello.txt".into()),
                 gatekeeper: Gatekeeper::Automated,
+                timeout_secs: None,
             }],
         },
         budgets: ContextBudgets::default(),
+        commands: Commands::default(),
     }
 }
 

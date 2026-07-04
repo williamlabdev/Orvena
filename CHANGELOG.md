@@ -8,6 +8,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Declarative shell `RUN` tool + `CommandRunner`** (slice-002, per ADR-001) — the
+  model never supplies a command string; it references a command the human declared
+  in `commands.yaml` by name (`<<<RUN name>>>`), and the runtime spawns that
+  command's **fixed argv** directly with no shell interpretation. Role-gated
+  (`shell.run`); authorization is a fixed order — role → declared name → `read_only`
+  intent — and every denial is an `Error::Scope` (undeclared names and `mutating`
+  commands are refused even when a role allows `shell.run`). An authorized
+  `read_only` command that exits non-zero is **evidence-only** (fed back like a
+  failed gate, never a `report.blocker`, no engineering hard-stop), so the loop can
+  "run tests → read the failure → fix → re-run" (proven by an offline round-trip
+  test). A shared `CommandRunner` now backs both the RUN tool (fixed argv) and the
+  `verify` gate (`sh -c`, human-authored), adding a **timeout** to both: a gate that
+  outruns its `timeout_secs` (default 300s) now fails verify instead of hanging.
+  `orvena init` scaffolds `commands.yaml` with `test`/`build`/`clippy` (all
+  `read_only`) and grants `developer` the `shell.run` tool.
 - **Read-only grep tool + `SEARCH` action** — role-gated (`grep.search`), pure-Rust
   (`regex` + `ignore`, no shell-out) content search bounded to the project root
   (symlinks not followed; `.git/`/`target/` excluded). The model requests it with a

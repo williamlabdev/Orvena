@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use orvena_core::config::agent::{AgentConfig, ProviderSelection, Tier};
+use orvena_core::config::commands::Commands;
 use orvena_core::config::context_budget::ContextBudgets;
 use orvena_core::config::gates::{Gate, Gatekeeper, Gates};
 use orvena_core::config::roles::{Role, Roles};
@@ -81,9 +82,11 @@ fn config() -> Config {
                 condition: "hello.txt contains the greeting found via search".into(),
                 verify: Some("grep -q 'greet politely' hello.txt".into()),
                 gatekeeper: Gatekeeper::Automated,
+                timeout_secs: None,
             }],
         },
         budgets: ContextBudgets::default(),
+        commands: Commands::default(),
     }
 }
 

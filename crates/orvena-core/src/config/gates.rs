@@ -4,7 +4,9 @@
 //! "re-run CI until green"), and a gatekeeper that is either `automated`
 //! (evidence decides) or `human` (escalates and stops the loop).
 
+use crate::exec::DEFAULT_TIMEOUT_SECS;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Gates {
@@ -21,6 +23,17 @@ pub struct Gate {
     pub verify: Option<String>,
     #[serde(default)]
     pub gatekeeper: Gatekeeper,
+    /// Wall-clock ceiling for `verify` in seconds. Optional; defaults to
+    /// [`DEFAULT_TIMEOUT_SECS`]. A verify that outruns it counts as a failure.
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+}
+
+impl Gate {
+    /// The effective `verify` timeout, applying the default when none is declared.
+    pub fn timeout(&self) -> Duration {
+        Duration::from_secs(self.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS))
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]

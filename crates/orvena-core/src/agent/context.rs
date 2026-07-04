@@ -95,6 +95,11 @@ fn system_prompt(role: &Role) -> String {
          \x20 <<<SEARCH <regex pattern>\n\
          \x20 [optional relative path to limit the search]\n\
          \x20 >>>\n\
+         - To run a pre-declared command (e.g. tests), emit a run block; its output\n\
+         \x20 is returned as evidence on your next step. You may only reference a\n\
+         \x20 command the project declared by NAME — you cannot pass a command string:\n\
+         \x20 <<<RUN <command name>\n\
+         \x20 >>>\n\
          - Do not write prose outside action blocks.",
         role = role.name
     )
