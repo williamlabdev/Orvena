@@ -1,0 +1,64 @@
+# Orvena benchmark — seeded project tasks with REAL test runners (opt-in).
+#
+# Heavier than the built-in set: each task seeds a small buggy project and its
+# `verify` runs a real test runner (exit 0 = solved), so the completion rate
+# reflects real code editing. These are toolchain-dependent and slower, so they
+# ship as a separate set — run with:
+#
+#     orvena bench --tasks benchmarks/projects.yaml [--provider <kind>]
+#
+# `requires` lists the commands each task needs; if one is missing the task is
+# SKIPPED (excluded from the rate), not failed. The test file is read-only (only
+# the implementation is in `writes`) so the number can't be gamed by deleting it.
+
+tasks:
+  - id: rust-add-bug
+    instruction: "There is a bug in src/lib.rs: `add` subtracts instead of adds. Fix src/lib.rs so that `cargo test` passes."
+    writes: [src/lib.rs]
+    requires: [cargo]
+    verify: "cargo test"
+    timeout_secs: 120
+    seed:
+      # An empty [workspace] table is REQUIRED: it makes this a standalone
+      # workspace so `cargo test` does not try to join a parent workspace (the
+      # bench workdir lives under the caller's project, which may be one).
+      - path: Cargo.toml
+        contents: |
+          [package]
+          name = "bench_fixture"
+          version = "0.0.0"
+          edition = "2021"
+
+          [workspace]
+      - path: src/lib.rs
+        contents: |
+          pub fn add(a: i32, b: i32) -> i32 {
+              a - b
+          }
+      - path: tests/it.rs
+        contents: |
+          use bench_fixture::add;
+
+          #[test]
+          fn adds() {
+              assert_eq!(add(2, 3), 5);
+          }
+
+  - id: python-add-bug
+    instruction: "There is a bug in calc.py: `add` subtracts instead of adds. Fix calc.py so that `pytest` passes."
+    writes: [calc.py]
+    requires: [pytest]
+    verify: "pytest -q"
+    timeout_secs: 60
+    seed:
+      - path: calc.py
+        contents: |
+          def add(a, b):
+              return a - b
+      - path: test_calc.py
+        contents: |
+          from calc import add
+
+
+          def test_add():
+              assert add(2, 3) == 5

@@ -51,6 +51,11 @@ pub struct BenchTask {
     pub seed: Vec<SeedFile>,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    /// Commands that must exist on `PATH` for this task to run (e.g. `cargo`,
+    /// `pytest`). If any is missing the task is **skipped**, not failed — a
+    /// missing toolchain must not read as "0% because it isn't installed".
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,17 +68,22 @@ pub struct BenchTaskSet {
 pub struct TaskResult {
     pub id: String,
     pub completed: bool,
+    /// True when the task was not run because a required toolchain was absent.
+    /// A skipped task is excluded from the completion-rate denominator.
+    pub skipped: bool,
+    pub skip_reason: Option<String>,
     pub steps: u32,
     pub tool_calls: u32,
     pub input_tokens: u32,
     pub output_tokens: u32,
-    /// Path to the task's evidence bundle (`None` if the run errored before one
-    /// could be written).
+    /// Path to the task's evidence bundle (`None` if skipped, or if the run
+    /// errored before one could be written).
     pub evidence_path: Option<PathBuf>,
     pub blockers: Vec<String>,
 }
 
-/// The aggregate benchmark result. `completion_rate = passed / task_count`.
+/// The aggregate benchmark result. `completion_rate = passed / ran`, where
+/// `ran = task_count - skipped` (skipped tasks are not counted against the rate).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReport {
     pub provider: String,
@@ -81,6 +91,7 @@ pub struct BenchReport {
     pub run_id: String,
     pub task_count: u32,
     pub passed: u32,
+    pub skipped: u32,
     pub completion_rate: f32,
     pub results: Vec<TaskResult>,
 }
@@ -100,6 +111,24 @@ pub async fn run_benchmark(
     let mut results = Vec::with_capacity(set.tasks.len());
 
     for task in &set.tasks {
+        // Skip (do not fail) a task whose required toolchain is absent — a
+        // missing `cargo`/`pytest` must not read as a completion failure.
+        if let Some(missing) = task.requires.iter().find(|c| !command_exists(c)) {
+            results.push(TaskResult {
+                id: task.id.clone(),
+                completed: false,
+                skipped: true,
+                skip_reason: Some(format!("requires `{missing}` (not found on PATH)")),
+                steps: 0,
+                tool_calls: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                evidence_path: None,
+                blockers: Vec::new(),
+            });
+            continue;
+        }
+
         let workdir = base_dir.join(run_id).join(&task.id);
         std::fs::create_dir_all(&workdir)?;
         for f in &task.seed {
@@ -123,6 +152,8 @@ pub async fn run_benchmark(
                 TaskResult {
                     id: task.id.clone(),
                     completed: report.completed,
+                    skipped: false,
+                    skip_reason: None,
                     steps: report.steps,
                     tool_calls: report.tool_calls,
                     input_tokens: report.input_tokens,
@@ -134,6 +165,8 @@ pub async fn run_benchmark(
             Err(e) => TaskResult {
                 id: task.id.clone(),
                 completed: false,
+                skipped: false,
+                skip_reason: None,
                 steps: 0,
                 tool_calls: 0,
                 input_tokens: 0,
@@ -145,8 +178,11 @@ pub async fn run_benchmark(
     }
 
     let task_count = results.len() as u32;
+    let skipped = results.iter().filter(|r| r.skipped).count() as u32;
     let passed = results.iter().filter(|r| r.completed).count() as u32;
-    let completion_rate = if task_count == 0 { 0.0 } else { passed as f32 / task_count as f32 };
+    // Rate is over tasks that actually ran, so skips neither help nor hurt it.
+    let ran = task_count - skipped;
+    let completion_rate = if ran == 0 { 0.0 } else { passed as f32 / ran as f32 };
 
     Ok(BenchReport {
         provider: provider.kind.clone(),
@@ -154,9 +190,22 @@ pub async fn run_benchmark(
         run_id: run_id.to_string(),
         task_count,
         passed,
+        skipped,
         completion_rate,
         results,
     })
+}
+
+/// Does `cmd` resolve to an executable? A value containing `/` is treated as a
+/// direct path; otherwise `PATH` is scanned. Dep-free (no `which` crate).
+fn command_exists(cmd: &str) -> bool {
+    if cmd.contains('/') {
+        return Path::new(cmd).is_file();
+    }
+    let Some(paths) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&paths).any(|dir| dir.join(cmd).is_file())
 }
 
 /// Serialize a [`BenchReport`] as pretty JSON to `path`, creating parents.

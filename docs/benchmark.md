@@ -43,6 +43,27 @@ orvena bench --provider openai            # e.g. Gemini via OpenAI-compat, see p
 `--provider <kind>` overrides the configured provider for the run only, and the
 same readiness preflight as `orvena run` applies (a missing key fails fast).
 
+## Project tasks with real test runners (opt-in)
+
+The built-in set is toolchain-free (`test`/`grep`) so it runs anywhere. A heavier
+**opt-in** set seeds small buggy projects whose `verify` runs a real test runner
+— the model must fix the code so `cargo test` / `pytest` exits 0:
+
+```sh
+orvena bench --tasks benchmarks/projects.yaml --provider <kind>
+```
+
+- **Skip-aware.** Each task declares `requires` (e.g. `cargo`, `pytest`). If a
+  required command is absent, the task is **skipped**, not failed, and is
+  **excluded from the completion-rate denominator** — the rate is `passed / ran`,
+  so a missing toolchain never reads as "0% because it isn't installed". Skips
+  are reported (`report.json` carries `skipped` + per-task `skip_reason`).
+- **Not gameable.** The test file is read-only (only the implementation is in
+  `writes`), so a task can't be "solved" by deleting its test.
+- **Rust fixtures need an empty `[workspace]`** in their `Cargo.toml`, or
+  `cargo test` in the bench workdir tries to join a parent workspace and errors.
+- Slower and toolchain-dependent by design; grow the set via your own `--tasks`.
+
 ## Honesty caveats (不美化)
 
 - **One run per task.** Real-provider numbers vary run to run (LLM
@@ -55,15 +76,17 @@ same readiness preflight as `orvena run` applies (a missing key fails fast).
 - **`offline` is a smoke, not a benchmark.** The deterministic stub proves the
   harness works; being "consistent with a stub" says nothing about real
   capability (MVP-SCOPE §5). A published number must come from a real provider.
-- **The task set is small and file-oriented by design** (v0.1). It includes a
-  seeded "fix until the check passes" task (edit an existing file until `verify`
-  goes green) so the rate reflects real editing, not only file creation. Heavier
-  seeded projects (real `cargo test` / `pytest` fixtures) are a deferred
-  extension — grow the set via `--tasks`.
+- **The default set is small and file-oriented by design** (v0.1) so it runs
+  anywhere; it includes a seeded "fix until the check passes" task so the rate
+  reflects real editing, not only file creation. Heavier seeded projects with
+  real test runners live in the opt-in `benchmarks/projects.yaml` (above); grow
+  either via your own `--tasks`.
 
 ## Status
 
-The harness and default set exist and are demonstrated end to end (a local
-`qwen3:14b` run solved the built-in set). Turning this into a *published* number
-with a written method is the remaining MVP+1 step; it is intentionally not
+The harness, the default set, and the opt-in project set exist and are
+demonstrated end to end with a local `qwen3:14b`: it solved the built-in set, and
+fixed the seeded Rust bug so a real `cargo test` passed (the Python task skipped,
+`pytest` absent). Turning this into a *published* number with a written method is
+the remaining MVP+1 step; it is intentionally not
 automated here.

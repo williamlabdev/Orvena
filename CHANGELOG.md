@@ -24,6 +24,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Seeded project benchmark tasks with real test runners** (slice-008) — an
+  opt-in task set (`benchmarks/projects.yaml`, run via `orvena bench --tasks`)
+  where each task seeds a small **buggy project** and its `verify` runs a real
+  test runner — the model must fix the code so `cargo test` / `pytest` exits 0
+  (the actual "done = your tests pass" claim, not just file creation).
+  **Skip-aware:** a task declares `requires` (e.g. `cargo`, `pytest`); if a
+  required command is absent the task is **skipped**, not failed, and excluded
+  from the completion-rate denominator (`rate = passed / ran`) — a missing
+  toolchain never reads as "0% because it isn't installed". Skips are reported
+  (`BenchReport.skipped` + per-task `skip_reason`). Test files are read-only
+  (only the implementation is writable) so a task can't be gamed by deleting its
+  test; Rust fixtures carry an empty `[workspace]` so `cargo test` in the bench
+  workdir doesn't try to join a parent workspace. Regression-tested
+  deterministically (a missing-toolchain task skips and the rate is over ran
+  tasks only); demonstrated end to end against a real local `qwen3:14b` (fixed
+  the seeded Rust bug so `cargo test` passed; the Python task skipped with
+  `pytest` absent). See [docs/benchmark.md](docs/benchmark.md).
 - **Minimal benchmark harness** (slice-007, MVP+1) — `orvena bench [--provider
   <kind>] [--tasks <file>]` runs a set of hand-picked, auto-verifiable coding
   tasks through the bounded loop and reports a **completion rate** (fraction that

@@ -61,19 +61,24 @@ fn print_report(r: &BenchReport) {
     println!("── benchmark ──");
     println!("provider:  {} / {}", r.provider, r.model);
     for res in &r.results {
-        let mark = if res.completed { "pass" } else { "FAIL" };
-        println!(
-            "  {:<18} {}   {} steps, {} tok",
-            res.id,
-            mark,
-            res.steps,
-            res.input_tokens + res.output_tokens
-        );
+        if res.skipped {
+            let why = res.skip_reason.as_deref().unwrap_or("skipped");
+            println!("  {:<18} SKIP   {why}", res.id);
+        } else {
+            let mark = if res.completed { "pass" } else { "FAIL" };
+            println!(
+                "  {:<18} {}   {} steps, {} tok",
+                res.id,
+                mark,
+                res.steps,
+                res.input_tokens + res.output_tokens
+            );
+        }
     }
-    println!(
-        "\ncompletion rate: {}/{} = {:.0}%",
-        r.passed,
-        r.task_count,
-        r.completion_rate * 100.0
-    );
+    let ran = r.task_count - r.skipped;
+    print!("\ncompletion rate: {}/{} ran = {:.0}%", r.passed, ran, r.completion_rate * 100.0);
+    if r.skipped > 0 {
+        print!(" ({} skipped)", r.skipped);
+    }
+    println!();
 }

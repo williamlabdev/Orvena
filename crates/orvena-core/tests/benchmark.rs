@@ -33,6 +33,7 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
                 verify: "test -f a.txt".into(),
                 seed: vec![],
                 timeout_secs: None,
+                requires: vec![],
             },
             // Not solved by offline: it overwrites b.txt with boilerplate, which
             // does not contain DONE — a deterministic non-completion.
@@ -43,6 +44,7 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
                 verify: "grep -q DONE b.txt".into(),
                 seed: vec![SeedFile { path: "b.txt".into(), contents: "TODO\n".into() }],
                 timeout_secs: None,
+                requires: vec![],
             },
         ],
     };
@@ -77,6 +79,62 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
         serde_json::from_str(&std::fs::read_to_string(&report_path).unwrap()).unwrap();
     assert_eq!(reloaded_report.passed, 1);
     assert_eq!(reloaded_report.results.len(), 2);
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[tokio::test]
+async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
+    let base = temp_dir("skip");
+    let set = BenchTaskSet {
+        tasks: vec![
+            // Runs and is solved by offline.
+            BenchTask {
+                id: "make-a".into(),
+                instruction: "Create a file named a.txt".into(),
+                writes: vec!["a.txt".into()],
+                verify: "test -f a.txt".into(),
+                seed: vec![],
+                timeout_secs: None,
+                requires: vec![],
+            },
+            // Requires a command that does not exist → must be skipped, and must
+            // not drag the completion rate down.
+            BenchTask {
+                id: "needs-tool".into(),
+                instruction: "irrelevant — this never runs".into(),
+                writes: vec![],
+                verify: "true".into(),
+                seed: vec![],
+                timeout_secs: None,
+                requires: vec!["orvena-no-such-tool-xyz".into()],
+            },
+        ],
+    };
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+
+    let report = benchmark::run_benchmark(&set, &provider, &base, "skiprun").await.unwrap();
+
+    assert_eq!(report.task_count, 2, "both tasks are accounted for");
+    assert_eq!(report.skipped, 1, "the missing-toolchain task is skipped");
+    assert_eq!(report.passed, 1);
+    // Rate is over the ONE task that ran, not both — the skip neither helps nor hurts.
+    assert!(
+        (report.completion_rate - 1.0).abs() < f32::EPSILON,
+        "rate is over ran tasks only: {}",
+        report.completion_rate
+    );
+
+    let skipped = report.results.iter().find(|r| r.id == "needs-tool").unwrap();
+    assert!(skipped.skipped);
+    assert!(!skipped.completed);
+    assert!(skipped.evidence_path.is_none(), "a skipped task produces no evidence bundle");
+    assert!(
+        skipped.skip_reason.as_deref().unwrap_or_default().contains("orvena-no-such-tool-xyz"),
+        "skip reason names the missing command: {:?}",
+        skipped.skip_reason
+    );
 
     let _ = std::fs::remove_dir_all(&base);
 }
