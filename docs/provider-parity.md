@@ -72,7 +72,7 @@ Ollama host). With no `ORVENA_PARITY_PROVIDER` set the test skips cleanly, so
 | Provider  | Status | Evidence |
 | :-------- | :----- | :------- |
 | **Ollama** (local model) | ✅ demonstrated | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported, evidence bundle round-trips |
-| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated | maintainer-confirmed passing the same contract via Google's OpenAI-compatible endpoint (Gemini key in `OPENAI_API_KEY`) |
+| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (Gemini key in `OPENAI_API_KEY`) |
 | **Anthropic** (hosted)   | ◻ optional | run the Anthropic command with `ANTHROPIC_API_KEY` set; the MVP-exit criterion names Anthropic, but consistency is already shown across two real providers below |
 
 **Cross-provider consistency is demonstrated:** the harness passes the same
