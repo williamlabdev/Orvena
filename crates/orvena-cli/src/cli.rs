@@ -30,6 +30,15 @@ enum Command {
         #[arg(short = 'p', long = "provider")]
         provider: Option<String>,
     },
+    /// Run the benchmark task set and report a completion rate.
+    Bench {
+        /// Override the configured provider for this benchmark only.
+        #[arg(short = 'p', long = "provider")]
+        provider: Option<String>,
+        /// Path to a task set (YAML). Omit to use the built-in default set.
+        #[arg(long = "tasks")]
+        tasks: Option<std::path::PathBuf>,
+    },
     /// Preflight: provider readiness, config validity.
     Doctor,
     /// Show the current config: provider, tier, roles, gates, budgets, skills.
@@ -42,6 +51,7 @@ pub async fn run() -> i32 {
     let result = match cli.command {
         Command::Init => commands::init::run(),
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
+        Command::Bench { provider, tasks } => commands::bench::run(provider, tasks).await,
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),
     };

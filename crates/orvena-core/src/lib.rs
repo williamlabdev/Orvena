@@ -16,6 +16,7 @@
 //! minimal **tiered governance** ([`config::agent::Tier`]).
 
 pub mod agent;
+pub mod benchmark;
 pub mod config;
 pub mod error;
 pub mod exec;
@@ -27,6 +28,7 @@ pub mod tools;
 pub mod util;
 
 pub use agent::{Agent, Task};
+pub use benchmark::{run_benchmark, BenchReport, BenchTaskSet};
 pub use config::Config;
 pub use error::{Error, Result};
 pub use metrics::RunReport;
