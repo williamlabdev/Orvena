@@ -66,7 +66,8 @@ pub fn build(
 
     if !prior_evidence.trim().is_empty() {
         let note = format!(
-            "\nThe previous attempt did not pass the gates. Fix this:\n{}\n",
+            "\nEvidence from the previous attempt (search results and/or failed-gate \
+             output) — use it to complete the task:\n{}\n",
             prior_evidence.trim()
         );
         used += estimate_tokens(&note);
@@ -88,6 +89,11 @@ fn system_prompt(role: &Role) -> String {
          - Emit changes ONLY as action blocks, each in this exact format:\n\
          \x20 <<<WRITE relative/path\n\
          \x20 <full new file content>\n\
+         \x20 >>>\n\
+         - To search file contents (read-only), emit a search block; the hits are\n\
+         \x20 returned as evidence on your next step:\n\
+         \x20 <<<SEARCH <regex pattern>\n\
+         \x20 [optional relative path to limit the search]\n\
          \x20 >>>\n\
          - Do not write prose outside action blocks.",
         role = role.name

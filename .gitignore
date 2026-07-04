@@ -9,3 +9,6 @@
 
 # Project-local scaffold deployed by `orvena init` into a user's repo.
 .orvena/
+
+# macOS noise
+.DS_Store

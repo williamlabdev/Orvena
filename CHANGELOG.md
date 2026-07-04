@@ -8,6 +8,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Read-only grep tool + `SEARCH` action** — role-gated (`grep.search`), pure-Rust
+  (`regex` + `ignore`, no shell-out) content search bounded to the project root
+  (symlinks not followed; `.git/`/`target/` excluded). The model requests it with a
+  `<<<SEARCH pattern ... >>>` block; hits are fed back as evidence on the next
+  step, so the loop can "search -> use the results to change a file" (proven by an
+  offline round-trip test).
 - **Bounded coding loop** — prepare context → call model → apply (scope-gated) →
   check gates, with a bounded re-attempt when an automated gate fails (capped by
   `max_steps`).

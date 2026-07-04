@@ -1,13 +1,13 @@
 # Roles & tool boundaries. Each role declares which tools it may use; forbidden
-# tools are hard-denied. Tools in v0.1: fs.read, fs.write.
+# tools are hard-denied. Tools in v0.1: fs.read, fs.write, grep.search.
 
 roles:
   - name: developer
-    allowed_tools: [fs.read, fs.write]
+    allowed_tools: [fs.read, fs.write, grep.search]
     forbidden_tools: []
     knowledge_scope: [src, tests]
 
   - name: reviewer
-    allowed_tools: [fs.read]
-    forbidden_tools: [fs.write]   # a reviewer never writes
+    allowed_tools: [fs.read, grep.search]   # grep is read-only, so a reviewer may search
+    forbidden_tools: [fs.write]             # a reviewer never writes
     knowledge_scope: [src, tests]
