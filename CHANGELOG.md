@@ -8,6 +8,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Evidence-bundle exporter** (slice-003, per ADR-002) — the minimal, provable
+  form of "evidence by default". After a run, the `RunReport` (which already
+  derives `Serialize`) is written to disk as a single **pretty-printed JSON**
+  file at `.orvena/runs/<timestamp>/evidence.json` — carrying `completed`,
+  `gate_outcomes`, `blockers`, and the frozen `steps`/`tool_calls`/token counts —
+  and its path is printed to stdout (the `print_report()` summary is kept). The
+  bundle is written **before** the `!completed` bail, so a run stopped by a gate
+  leaves an audit trail too: **failed runs get a bundle just like completed ones**
+  (the evidence matters most exactly then). `timestamp` is Unix-epoch
+  milliseconds (no date-library dependency in v0.1; ADR-002 records the location
+  and format rationale). This is *not* a new subsystem — a persistent event log
+  stays deferred; this only serializes the report already in memory. Proven by an
+  offline round-trip test covering both a completed and an incomplete run
+  (bundle written → deserializes back into an equal `RunReport` → `completed` /
+  `gate_outcomes` / `blockers` intact).
 - **Declarative shell `RUN` tool + `CommandRunner`** (slice-002, per ADR-001) — the
   model never supplies a command string; it references a command the human declared
   in `commands.yaml` by name (`<<<RUN name>>>`), and the runtime spawns that

@@ -1,9 +1,13 @@
 //! `orvena run "<task>"` — load config, resolve any matching skill, run one
-//! bounded loop, and print the run report (the L1 metric fields).
+//! bounded loop, print the run report (the L1 metric fields), and export an
+//! evidence bundle to disk.
+
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::{config_dir, load_dotenv, project_root};
 use anyhow::{bail, Result};
 use orvena_core::config::Config;
+use orvena_core::metrics::evidence;
 use orvena_core::skills::{self, SkillRegistry};
 use orvena_core::{Agent, Task};
 
@@ -32,10 +36,30 @@ pub async fn run(task_text: String, write: Vec<String>) -> Result<()> {
     let report = agent.run(Task::new(instruction, write)).await?;
 
     print_report(&report);
+
+    // Evidence by default: every run leaves an auditable bundle on disk. This
+    // must happen BEFORE the completion check below — a run stopped by a gate is
+    // exactly when the evidence matters most, so failed runs get a bundle too.
+    let bundle = evidence::bundle_path(&dir, &run_timestamp());
+    evidence::write_bundle(&report, &bundle)?;
+    println!("\nevidence bundle: {}", bundle.display());
+
     if !report.completed {
-        bail!("run did not complete (see blockers above)");
+        bail!("run did not complete (see blockers above); evidence: {}", bundle.display());
     }
     Ok(())
+}
+
+/// A filesystem-safe run identifier: milliseconds since the Unix epoch. Millis
+/// (not seconds) to avoid collisions between back-to-back runs; a raw epoch
+/// number (not ISO-8601) keeps the core dependency-free of a date library in
+/// v0.1 — see ADR-002. Sortable lexicographically for equal-width values.
+fn run_timestamp() -> String {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0)
+        .to_string()
 }
 
 fn print_report(report: &orvena_core::RunReport) {
