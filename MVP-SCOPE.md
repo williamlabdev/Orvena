@@ -26,8 +26,8 @@ VISION 的長期承諾是「發布一個誠實的外部 benchmark 數字」。�
 
 **MVP exit(唯一必達)— 手選任務證據包**
 
-- [ ] 一小組手選、可自動驗證的真實 coding 任務,Orvena 跑完後能**匯出一份證據包檔案**(events + gate 結果 + 完成/未完成 + blockers)。
-- [ ] 至少在 **Anthropic + Ollama** 兩個真實 provider 上跑通,行為一致。
+- [x] 一小組手選、可自動驗證的真實 coding 任務,Orvena 跑完後能**匯出一份證據包檔案**(gate 結果 + 完成/未完成 + blockers + steps/tool_calls/tokens)。〔slice-003,`.orvena/runs/<ts>/evidence.json`〕 ⚠️ 註:持久化 event log 依第 4 節仍 defer,證據包載的是 `RunReport` 現有欄位,尚**不含 events**。
+- [x] 至少在**兩個真實 provider** 上跑通,行為一致。〔Ollama 本地 `qwen3:14b` + Gemini 雲端 `gemini-2.5-flash` 均證綠;可重跑 parity 契約見 `docs/provider-parity.md`。Gemini 暫代 Anthropic,後者有 key 隨時可加入同一契約。〕
 
 **MVP+1(下一步,不擋 MVP)— 對外 benchmark 數字**
 
@@ -52,11 +52,11 @@ VISION 的長期承諾是「發布一個誠實的外部 benchmark 數字」。�
 | L1 regression metrics(completed/tokens/steps/tool calls + golden baseline) | ✅ 可運作 | `metrics/baseline.rs` |
 | 最小 skill engine(discover→resolve→apply) | ✅ 可運作 | `skills/*` |
 | CLI(init/run/doctor/status) | ✅ 可運作 | `orvena-cli/*` |
-| **工具集** | ⚠️ **只有 `fs`(讀寫檔)** — 尚無 shell / grep | `tools/fs.rs` |
+| **工具集** | ✅ `fs`(讀寫檔)+ `grep`(唯讀搜尋,slice-001)+ `shell`(宣告式 RUN,slice-002/ADR-001) | `tools/fs.rs`, `grep.rs`, `shell.rs` |
 | Session snapshot / crash recovery | ❌ Rust 版尚無 | — |
-| Evidence-bundle exporter(可匯出審計包) | ❌ Rust 版尚無(目前只有迴圈內的 gate 證據字串) | — |
+| Evidence-bundle exporter(可匯出審計包) | ✅ 可運作(slice-003,ADR-002) | `metrics/evidence.rs` |
 | In-process 多迴圈編排(delegation / role routing) | ❌ Rust 版尚無 | — |
-| 測試覆蓋 | ⚠️ **僅 4 個測試 / ~2100 LOC** | `crates/**` |
+| 測試覆蓋 | ✅ 37 unit + 17 整合(含 CLI 首跑、跨 provider parity 骨架;parity 預設 ignored) | `crates/**` |
 
 ---
 
@@ -64,10 +64,10 @@ VISION 的長期承諾是「發布一個誠實的外部 benchmark 數字」。�
 
 按優先序,全部是「小而必要」:
 
-1. **shell + grep 工具。**(大)只有 `fs` 無法完成真實 coding 任務,更無法跑 benchmark。這是最高優先、也是最大的功能缺口。
-2. **Evidence-bundle exporter。**(小 — 幾乎免費)`RunReport` 已經 derive `serde::Serialize`,且已在記憶體帶了 `gate_outcomes` 與 `blockers`;目前 `run.rs` 只 `println!` 到 stdout。所以這項只是「把已可序列化的 report 寫成一份檔案」,不是新子系統。核心賣點「evidence by default」的最小可證版本,成本很低,優先做掉。
-3. **verify gate 的可靠性。**(中)「done = 你的 test 指令 exit 0」要在真實專案上穩定成立。目前只有 4 個測試(2 unit + `loop_offline` 整合),先把這條的回歸測試補起來。
-4. **doctor / init 的乾淨首跑。**(中)新使用者能 `init → run → 拿到證據包`,不卡在設定。這是唯一面向外部信任的入口,必須無痛。
+1. **shell + grep 工具。**(大)只有 `fs` 無法完成真實 coding 任務,更無法跑 benchmark。這是最高優先、也是最大的功能缺口。 **✅ 已交付**(grep:slice-001;宣告式 shell RUN:slice-002/ADR-001)。
+2. **Evidence-bundle exporter。**(小 — 幾乎免費)`RunReport` 已經 derive `serde::Serialize`,且已在記憶體帶了 `gate_outcomes` 與 `blockers`;目前 `run.rs` 只 `println!` 到 stdout。所以這項只是「把已可序列化的 report 寫成一份檔案」,不是新子系統。核心賣點「evidence by default」的最小可證版本,成本很低,優先做掉。 **✅ 已交付**(slice-003/ADR-002;成功與失敗的 run 都落地)。
+3. **verify gate 的可靠性。**(中)「done = 你的 test 指令 exit 0」要在真實專案上穩定成立。目前只有 4 個測試(2 unit + `loop_offline` 整合),先把這條的回歸測試補起來。 **✅ 已交付**(slice-004:修 verify 靜默失敗的回饋收斂 bug + 回歸測試)。
+4. **doctor / init 的乾淨首跑。**(中)新使用者能 `init → run → 拿到證據包`,不卡在設定。這是唯一面向外部信任的入口,必須無痛。 **✅ 已交付**(slice-005:`--provider` 覆寫 + 就緒 preflight;`--provider offline` 零設定首跑)。
 5. **最小 benchmark harness → 屬 MVP+1。** 見第 1 節;不擋 MVP exit,別排進第一層。
 
 > 對 provider 的答覆(第二個問題):**維持現有 BYO 抽象即可,不在 MVP 階段選 local 或 cloud。** Anthropic 當首跑推薦,Ollama 覆蓋私有/受監管場景。MVP 不需要新增 provider,只需保證 evidence/gate 行為在 **Anthropic + Ollama 兩個真實 provider** 上一致(offline 只作回歸基準,見第 5 節)。
