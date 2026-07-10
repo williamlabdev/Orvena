@@ -1,0 +1,14 @@
+name: orvena
+layer: 產生器
+line: 治理線
+status: active
+summary: AINE 第一個對外產品——config-first governed terminal coding agent(Rust, clean-room,與 lab 無 git 關係)。治理線的對外產品證明。
+depends_on:
+  - repo: aine-lab
+    what: 方法論(roles/gates/context-budgets 配置模型)——概念繼承,非程式碼依賴
+    sync: none
+produces:
+  - orvena-cli + orvena-core(agent loop:context→model→scope-gated apply→gates)
+  - 已發表第一個誠實(弱)benchmark
+notes: MVP-exit 已達成;crash recovery/多 agent 編排明列 defer;更強 benchmark 需真實 repo 快照。advanced 子系統(RAG/委派)明列 out of scope——都在 lab runtime。
+updated: 2026-07-10
