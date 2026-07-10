@@ -9,6 +9,7 @@ pub mod status;
 use anyhow::{bail, Result};
 use orvena_core::provider::registry::{self, Readiness};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Project-local config directory deployed by `orvena init`.
@@ -71,17 +72,21 @@ pub fn preflight_provider(kind: &str) -> Result<()> {
     }
 }
 
-/// A filesystem-safe run identifier: milliseconds since the Unix epoch. Millis
-/// (not seconds) to avoid collisions between back-to-back runs; a raw epoch
-/// number (not ISO-8601) keeps this dependency-free of a date library in v0.1 —
-/// see ADR-002. Sortable lexicographically for equal-width values. Shared by
-/// `run` and `bench`.
+/// A filesystem-safe, collision-proof run identifier:
+/// `<epoch_ms>-<pid>-<seq>`. The millisecond prefix keeps it time-sortable; the
+/// pid distinguishes concurrent processes; the per-process sequence distinguishes
+/// back-to-back runs that land in the same millisecond (e.g. a benchmark loop) so
+/// one run's evidence directory can never overwrite another's. A raw epoch number
+/// (not ISO-8601) keeps this dependency-free of a date library in v0.1 — see
+/// ADR-002. Shared by `run` and `bench`.
 pub fn run_timestamp() -> String {
-    SystemTime::now()
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis())
-        .unwrap_or(0)
-        .to_string()
+        .unwrap_or(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("{ms}-{}-{seq}", std::process::id())
 }
 
 /// Minimal `.env` loader (no extra dependency). Reads `KEY=VALUE` lines from
@@ -103,5 +108,22 @@ pub fn load_dotenv() {
                 std::env::set_var(key, value);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_timestamp;
+
+    #[test]
+    fn run_timestamps_are_unique_within_a_process() {
+        // Back-to-back calls (same millisecond) must not collide, or one run's
+        // evidence directory would overwrite another's.
+        let ids: Vec<String> = (0..1000).map(|_| run_timestamp()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "run ids must be unique across rapid calls");
+        assert!(ids.iter().all(|s| s.split('-').count() == 3), "id shape is <ms>-<pid>-<seq>");
     }
 }

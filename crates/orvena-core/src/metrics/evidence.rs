@@ -38,6 +38,46 @@ pub fn write_bundle(report: &RunReport, path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, serde_json::to_string_pretty(report)?)?;
+    let json = serde_json::to_string_pretty(report)?;
+    // Atomic write: serialize to a sibling temp file, then rename into place. A
+    // crash or `kill -9` mid-write can only leave a stray `.tmp`; the bundle at
+    // `path` is either the previous complete file or the new complete one, never
+    // a truncated / invalid-JSON artifact.
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metrics::RunReport;
+
+    #[test]
+    fn write_is_atomic_and_leaves_no_temp() {
+        let dir = std::env::temp_dir().join(format!("orvena-ev-atomic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = bundle_path(&dir, "run-1");
+
+        let report = RunReport::new("demo").finished(false);
+        write_bundle(&report, &path).unwrap();
+
+        // Final file exists, is valid JSON, and no temp file is left behind.
+        assert!(path.exists(), "bundle must exist at the final path");
+        let reloaded: RunReport =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(reloaded.task, "demo");
+        assert!(!path.with_extension("json.tmp").exists(), "temp file must be renamed away");
+
+        // Overwriting an existing bundle also lands atomically.
+        let report2 = RunReport::new("demo-2").finished(true);
+        write_bundle(&report2, &path).unwrap();
+        let reloaded2: RunReport =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(reloaded2.task, "demo-2");
+        assert!(reloaded2.completed);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

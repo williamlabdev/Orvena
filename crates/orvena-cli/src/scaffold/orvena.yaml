@@ -10,8 +10,12 @@ provider:
   # base_url:              # optional endpoint override
 
 # Governance tier (discipline scales with risk):
-#   light       — scope lock & gates are advisory (warn)
-#   engineering — scope lock & gates are hard-enforced (block)
+#   light       — scope lock & gates are advisory: an in-root scope-lock or gate
+#                 violation is recorded and the loop continues (it does not halt
+#                 the run).
+#   engineering — scope lock & gates are hard-enforced: a violation halts the run.
+# Independent of tier: a write whose path escapes the project root (via `..` or a
+# symlink) is ALWAYS refused by the fs tool — never written — even under `light`.
 tier: light
 
 default_role: developer

@@ -37,15 +37,20 @@ pub struct ProviderSelection {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Tier {
-    /// Assistant-like: scope lock and gates are advisory (violations warn).
+    /// Assistant-like: an in-root scope-lock or gate violation is advisory —
+    /// recorded as a blocker, but the loop continues rather than halting.
     #[default]
     Light,
-    /// Engineering: scope lock and gates are hard-enforced (violations block).
+    /// Engineering: an in-root scope-lock or gate violation halts the run.
     Engineering,
 }
 
 impl Tier {
-    /// Whether scope/gate violations block the run rather than just warn.
+    /// Whether an in-root scope/gate violation halts the run rather than just
+    /// being recorded. Note: this governs *loop-halt* behavior only — a write
+    /// that escapes the project root is always refused by the fs tool regardless
+    /// of tier (see `FsTool::resolve_in_root`), so `Light` is never a path to
+    /// writing outside the root.
     pub fn enforces(&self) -> bool {
         matches!(self, Tier::Engineering)
     }
