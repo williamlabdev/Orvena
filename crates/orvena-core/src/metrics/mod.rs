@@ -25,6 +25,10 @@ pub struct RunReport {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GateRecord {
+    /// The loop step (1-based) this outcome was recorded on. Lets a bundle with
+    /// accumulated multi-step gate history be read step-by-step.
+    #[serde(default)]
+    pub step: u32,
     pub gate: String,
     pub passed: bool,
     pub needs_human: bool,

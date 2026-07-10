@@ -1,6 +1,6 @@
 # Ticket: Scope-lock write-path escape + advisory-by-default tier
 
-> Status: PLANNED · 2026-07-10 · diagnosis-to-fix, no code changed
+> Status: DONE · 2026-07-10 · branch `fix/governance-p1`
 
 ## Problem
 
@@ -46,10 +46,17 @@ even when it is detected.
 
 ## Acceptance criteria
 
-- [ ] A write whose path resolves outside the project root via `..` segments
-      (e.g. `src/../../../.ssh/authorized_keys`) is blocked.
-- [ ] A write that resolves outside the project root via a symlink is blocked.
-- [ ] The enforcement posture of the shipped default tier is explicit and
-      documented (scaffold config and docs agree on it).
-- [ ] Under the shipped default configuration, a scope violation does not
-      silently proceed to write the file.
+- [x] A write whose path resolves outside the project root via `..` segments is
+      blocked — `FsTool::resolve_in_root` (fs.rs) rejects absolute paths and any
+      `..` component before the write; test `write_escaping_root_via_dotdot_is_blocked`.
+- [x] A write that resolves outside the project root via a symlink is blocked —
+      `resolve_in_root` canonicalizes the nearest existing ancestor and requires
+      it under the canonicalized root; test `write_escaping_root_via_symlink_is_blocked`.
+- [x] The enforcement posture is explicit and documented: scaffold `orvena.yaml`
+      and the `Tier` doc both state that `light` is advisory for *in-root* scope/gate
+      violations (loop continues) while a *root-escaping* write is always refused
+      by the fs tool regardless of tier.
+- [x] Under the shipped default (`light`) config a scope violation does not
+      silently write: `resolve_in_root` runs before the scope-pattern check and
+      returns an error, so the file is never written even in advisory mode; and
+      `scope.decision` no longer reports an escaping path as `Allow`.
