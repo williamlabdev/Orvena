@@ -42,6 +42,12 @@ pub struct RunReport {
     /// without parsing prose.
     #[serde(default)]
     pub scope_refusals: Vec<String>,
+    /// Whether this run's spawned children were confined by an OS sandbox
+    /// (ADR-003) — so the bundle can distinguish enforced containment from mere
+    /// intention. Bundles written before the field existed read back as
+    /// `disabled` (they were).
+    #[serde(default)]
+    pub sandbox: crate::exec::sandbox::SandboxStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +74,7 @@ impl RunReport {
             gate_outcomes: Vec::new(),
             blockers: Vec::new(),
             scope_refusals: Vec::new(),
+            sandbox: crate::exec::sandbox::SandboxStatus::default(),
         }
     }
 

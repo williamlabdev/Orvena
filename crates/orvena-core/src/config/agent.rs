@@ -1,6 +1,7 @@
 //! Top-level agent config (`orvena.yaml`): which provider, which governance tier,
-//! default role, and the bounded-loop step ceiling.
+//! default role, the bounded-loop step ceiling, and the OS sandbox posture.
 
+use super::sandbox::SandboxConfig;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +22,12 @@ pub struct AgentConfig {
     /// unbounded re-planning). The gate-fail → re-attempt loop stops here.
     #[serde(default = "default_max_steps")]
     pub max_steps: u32,
+
+    /// OS-level sandbox posture for spawned children (ADR-003). Optional: an
+    /// `orvena.yaml` without a `sandbox:` block gets `SandboxConfig::default()`
+    /// (disabled), so pre-slice-015 projects keep the previous behavior.
+    #[serde(default)]
+    pub sandbox: SandboxConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

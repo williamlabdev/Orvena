@@ -69,6 +69,7 @@ async fn provider_satisfies_the_parity_contract() {
             tier: Tier::Light,
             default_role: "developer".into(),
             max_steps: MAX_STEPS,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {

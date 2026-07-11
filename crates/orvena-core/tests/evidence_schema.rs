@@ -33,6 +33,7 @@ fn config(gates: Gates, tier: Tier) -> Config {
             tier,
             default_role: "developer".into(),
             max_steps: 3,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {
