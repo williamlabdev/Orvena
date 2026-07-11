@@ -137,6 +137,9 @@ pub(crate) async fn run_loop_with(
                     if let Err(e) = fs.write(&path, &content) {
                         // In engineering tier a scope violation is a hard blocker; in
                         // light tier it is advisory (recorded, loop continues).
+                        if matches!(e, Error::Scope(_)) {
+                            report.scope_refusals.push(path.clone());
+                        }
                         report.blockers.push(e.to_string());
                         if cfg.agent.tier.enforces() {
                             return Ok(report.finished(false));

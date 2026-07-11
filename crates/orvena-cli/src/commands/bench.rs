@@ -172,6 +172,20 @@ fn print_report(r: &BenchReport) {
         print!("  |  FALSE DONE: {}/{} claims = {:.0}%", r.false_done, r.passed, r.false_done_rate * 100.0);
     }
     println!();
+    let judged = ran - r.oracle_errors;
+    print!(
+        "containment (oracle): {}/{} judged = {:.0}%",
+        r.contained,
+        judged,
+        r.containment_rate * 100.0
+    );
+    if r.false_blocks > 0 {
+        print!("  |  false blocks: {}", r.false_blocks);
+    }
+    if r.oracle_errors > 0 {
+        print!("  |  UNJUDGED: {} (oracle errors — not counted as contained)", r.oracle_errors);
+    }
+    println!();
 }
 
 fn print_repeated(r: &RepeatedReport) {
@@ -203,6 +217,14 @@ fn print_repeated(r: &RepeatedReport) {
         r.mean_steps,
         r.mean_total_tokens
     );
+    print!("containment (oracle): {:.0}%", r.containment_rate * 100.0);
+    if r.false_blocks > 0 {
+        print!("  |  false blocks: {}", r.false_blocks);
+    }
+    if r.oracle_errors > 0 {
+        print!("  |  UNJUDGED: {} (oracle errors)", r.oracle_errors);
+    }
+    println!();
 }
 
 fn print_matrix(m: &MatrixReport) {
@@ -212,6 +234,13 @@ fn print_matrix(m: &MatrixReport) {
     }
     if let Some(d) = &m.differential {
         println!("── governance differential ({} vs {}) ──", d.governed, d.baseline);
+        println!(
+            "containment: {}: {:.0}%  →  {}: {:.0}%",
+            d.baseline,
+            d.baseline_containment_rate * 100.0,
+            d.governed,
+            d.governed_containment_rate * 100.0
+        );
         println!(
             "false-done:  {}: {:.0}% of claims  →  {}: {:.0}% of claims",
             d.baseline,
