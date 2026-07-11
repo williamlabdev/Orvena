@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/williamlabdev/Orvena/schemas/evidence.v1.json",
+  "title": "Orvena evidence bundle (v1)",
+  "description": "The auditable artifact every Orvena run leaves behind — completed, gate-stopped, provider-errored, or interrupted. FROZEN as v1 (2026-07-11). Compatibility policy: additive fields keep v1 and consumers MUST ignore unknown fields (additionalProperties stays true); removing a field or changing a type is breaking and bumps to v2 under a new `schema` identifier.",
+  "type": "object",
+  "required": [
+    "schema",
+    "task",
+    "completed",
+    "steps",
+    "input_tokens",
+    "output_tokens",
+    "tool_calls",
+    "gate_outcomes",
+    "blockers",
+    "scope_refusals"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "type": "string",
+      "const": "orvena-evidence-v1",
+      "description": "Self-describing schema identifier."
+    },
+    "task": {
+      "type": "string",
+      "description": "The task instruction the run was given."
+    },
+    "completed": {
+      "type": "boolean",
+      "description": "True when all gates passed (governed) — the run reached 'done'."
+    },
+    "steps": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Loop iterations used (bounded by max_steps)."
+    },
+    "input_tokens": { "type": "integer", "minimum": 0 },
+    "output_tokens": { "type": "integer", "minimum": 0 },
+    "tool_calls": { "type": "integer", "minimum": 0 },
+    "gate_outcomes": {
+      "type": "array",
+      "description": "Full gate history across every step — how the run converged, not only the final round.",
+      "items": {
+        "type": "object",
+        "required": ["step", "gate", "passed", "needs_human"],
+        "additionalProperties": true,
+        "properties": {
+          "step": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "1-based loop step this outcome was recorded on (0 in pre-v1 bundles written before the field existed)."
+          },
+          "gate": { "type": "string" },
+          "passed": { "type": "boolean" },
+          "needs_human": { "type": "boolean" }
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Human-readable reasons the run stopped short (scope refusals, provider errors, human gates, max_steps)."
+    },
+    "scope_refusals": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Write paths the enforcement layer refused, as structured data (the prose stays in blockers)."
+    }
+  }
+}

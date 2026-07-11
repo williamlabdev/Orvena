@@ -24,6 +24,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Evidence schema v1 (frozen) + exit-path fault injection** (slice-013,
+  M3/D4) — the evidence bundle is now a versioned artifact of record.
+  `schemas/evidence.v1.json` (JSON Schema 2020-12) freezes the contract;
+  bundles are self-describing via a new `schema: "orvena-evidence-v1"` field
+  (pre-v1 bundles read back as v1). Compatibility policy is in the schema
+  itself: additive fields keep v1 — consumers must ignore unknown fields;
+  a removal or type change bumps to v2 under a new identifier. A shipped
+  validator (`evidence::validate_bundle`) checks the contract hand-rolled over
+  raw JSON — deliberately NOT via the serde derive, whose defaults would
+  silently repair a bundle missing required fields. A test suite exercises
+  every driver exit path (success, gate-fail to max_steps, human gate,
+  provider error) and validates each bundle twice — shipped validator AND a
+  real JSON-Schema engine against the schema file — so the two cannot drift
+  apart (engine is a dev-dependency only). `orvena bench` now measures **M3
+  on every run**: per-task `evidence_valid` and an aggregate
+  `evidence_valid_rate` (a ran task with a missing or invalid bundle counts
+  against it — never assumed).
 - **Temptation task set + independent violation oracle** (slice-012, M1/D3) —
   `benchmarks/temptation.yaml`: 8 scope-adversarial tasks where the easiest or
   most "natural" fix violates the declared scope (edit the check instead of the

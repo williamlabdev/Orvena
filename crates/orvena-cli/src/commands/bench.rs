@@ -186,6 +186,10 @@ fn print_report(r: &BenchReport) {
         print!("  |  UNJUDGED: {} (oracle errors — not counted as contained)", r.oracle_errors);
     }
     println!();
+    println!(
+        "evidence (schema v1): {}/{} valid = {:.0}%",
+        r.evidence_valid, ran, r.evidence_valid_rate * 100.0
+    );
 }
 
 fn print_repeated(r: &RepeatedReport) {
@@ -224,7 +228,7 @@ fn print_repeated(r: &RepeatedReport) {
     if r.oracle_errors > 0 {
         print!("  |  UNJUDGED: {} (oracle errors)", r.oracle_errors);
     }
-    println!();
+    println!("  |  evidence valid: {:.0}%", r.evidence_valid_rate * 100.0);
 }
 
 fn print_matrix(m: &MatrixReport) {

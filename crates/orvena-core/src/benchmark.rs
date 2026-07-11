@@ -153,6 +153,10 @@ pub struct TaskResult {
     /// silently counted as contained.
     #[serde(default)]
     pub oracle_error: Option<String>,
+    /// M3: the run left an evidence bundle that validates against the frozen
+    /// v1 schema. A ran task with no bundle, or an invalid one, is `false`.
+    #[serde(default)]
+    pub evidence_valid: bool,
 }
 
 /// The aggregate benchmark result. `completion_rate = passed / ran`, where
@@ -190,6 +194,11 @@ pub struct BenchReport {
     pub false_blocks: u32,
     #[serde(default)]
     pub oracle_errors: u32,
+    /// M3: ran tasks whose bundle exists and validates against schema v1.
+    #[serde(default)]
+    pub evidence_valid: u32,
+    #[serde(default)]
+    pub evidence_valid_rate: f32,
     pub results: Vec<TaskResult>,
 }
 
@@ -232,6 +241,7 @@ pub async fn run_benchmark(
                 false_blocks: Vec::new(),
                 contained: false,
                 oracle_error: None,
+                evidence_valid: false,
             });
             continue;
         }
@@ -287,6 +297,10 @@ pub async fn run_benchmark(
             Ok(report) => {
                 let evidence_path = workdir.join(evidence::BUNDLE_FILE);
                 evidence::write_bundle(&report, &evidence_path)?;
+                // M3: the bundle just written must validate against the frozen
+                // v1 schema — measured on every run, not assumed.
+                let evidence_valid =
+                    evidence::validate_bundle(&evidence_path).map(|p| p.is_empty()).unwrap_or(false);
                 TaskResult {
                     id: task.id.clone(),
                     completed: report.completed,
@@ -303,6 +317,7 @@ pub async fn run_benchmark(
                     false_blocks,
                     contained,
                     oracle_error,
+                    evidence_valid,
                 }
             }
             Err(e) => TaskResult {
@@ -321,6 +336,8 @@ pub async fn run_benchmark(
                 false_blocks,
                 contained,
                 oracle_error,
+                // A ran task that left no bundle is an M3 failure by definition.
+                evidence_valid: false,
             },
         });
     }
@@ -345,6 +362,10 @@ pub async fn run_benchmark(
     let containment_rate = if judged == 0 { 0.0 } else { contained as f32 / judged as f32 };
     let false_blocks =
         results.iter().map(|r| r.false_blocks.len() as u32).sum::<u32>();
+    let evidence_valid =
+        results.iter().filter(|r| !r.skipped && r.evidence_valid).count() as u32;
+    let evidence_valid_rate =
+        if ran == 0 { 0.0 } else { evidence_valid as f32 / ran as f32 };
 
     Ok(BenchReport {
         provider: provider.kind.clone(),
@@ -363,6 +384,8 @@ pub async fn run_benchmark(
         containment_rate,
         false_blocks,
         oracle_errors,
+        evidence_valid,
+        evidence_valid_rate,
         results,
     })
 }
@@ -434,6 +457,9 @@ pub struct RepeatedReport {
     pub false_blocks: u32,
     #[serde(default)]
     pub oracle_errors: u32,
+    /// M3 across all ran task-runs: schema-valid bundle rate.
+    #[serde(default)]
+    pub evidence_valid_rate: f32,
     /// Cost per ran task-run (M4): mean steps and mean total tokens.
     #[serde(default)]
     pub mean_steps: f32,
@@ -524,6 +550,11 @@ pub async fn run_benchmark_repeated(
     };
     let false_blocks =
         ran_results.iter().map(|t| t.false_blocks.len() as u32).sum::<u32>();
+    let evidence_valid_rate = if n_ran == 0.0 {
+        0.0
+    } else {
+        ran_results.iter().filter(|t| t.evidence_valid).count() as f32 / n_ran
+    };
     let mean_steps = if n_ran == 0.0 {
         0.0
     } else {
@@ -551,6 +582,7 @@ pub async fn run_benchmark_repeated(
         containment_rate,
         false_blocks,
         oracle_errors,
+        evidence_valid_rate,
         mean_steps,
         mean_total_tokens,
         tasks,

@@ -10,8 +10,23 @@ pub use baseline::{BaselineRecord, GoldenTask};
 
 use serde::{Deserialize, Serialize};
 
+/// The evidence-bundle schema identifier (v1, frozen — see
+/// `schemas/evidence.v1.json`). Compatibility policy: additive fields keep v1
+/// (consumers must ignore unknown fields); a removal or type change bumps to
+/// v2 under a new identifier.
+pub const EVIDENCE_SCHEMA_V1: &str = "orvena-evidence-v1";
+
+fn evidence_schema_v1() -> String {
+    EVIDENCE_SCHEMA_V1.into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunReport {
+    /// Self-describing schema identifier — an artifact of record must say what
+    /// it is without its producer on hand. Bundles written before the field
+    /// existed read back as v1 (they are).
+    #[serde(default = "evidence_schema_v1")]
+    pub schema: String,
     pub task: String,
     /// True when all gates passed (the run reached "done").
     pub completed: bool,
@@ -43,6 +58,7 @@ pub struct GateRecord {
 impl RunReport {
     pub fn new(task: impl Into<String>) -> Self {
         Self {
+            schema: EVIDENCE_SCHEMA_V1.into(),
             task: task.into(),
             completed: false,
             steps: 0,
