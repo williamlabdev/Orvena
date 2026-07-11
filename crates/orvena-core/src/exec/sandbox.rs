@@ -181,6 +181,11 @@ impl Sandbox {
 }
 
 enum Availability {
+    // In this slice only macOS constructs `Available`; the Linux/other arms of
+    // `backend_availability` always report `Unavailable` (the Landlock backend is
+    // a follow-up), so the variant is dead on those targets. `-D warnings` would
+    // otherwise fail the non-macOS build.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Available,
     Unavailable(String),
 }
