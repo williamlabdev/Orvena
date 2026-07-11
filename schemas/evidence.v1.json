@@ -67,6 +67,11 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Write paths the enforcement layer refused, as structured data (the prose stays in blockers)."
+    },
+    "sandbox": {
+      "type": "string",
+      "enum": ["enforced", "disabled", "unavailable"],
+      "description": "Whether this run's spawned children (RUN commands + gate verify) were confined by an OS sandbox (ADR-003). 'enforced' = confined; 'disabled' = no sandbox applied; 'unavailable' = sandbox required but the platform backend was unavailable and the policy failed closed (commands refused). Additive optional field; absent in bundles written before slice-015 (read back as 'disabled')."
     }
   }
 }

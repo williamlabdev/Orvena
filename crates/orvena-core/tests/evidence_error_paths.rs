@@ -27,6 +27,7 @@ fn dev_config() -> Config {
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps: 3,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {

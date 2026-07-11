@@ -52,6 +52,7 @@ fn config(commands: Commands, gates: Gates) -> Config {
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps: 4,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {

@@ -14,6 +14,7 @@ use super::Tool;
 use crate::config::commands::{Commands, Intent};
 use crate::config::roles::Role;
 use crate::error::{Error, Result};
+use crate::exec::sandbox::Sandbox;
 use crate::exec::{CommandOutput, CommandRunner, RunError};
 use std::path::PathBuf;
 
@@ -21,11 +22,18 @@ pub struct ShellTool<'a> {
     pub root: PathBuf,
     pub role: &'a Role,
     pub commands: &'a Commands,
+    /// OS sandbox applied to every command this tool spawns (ADR-003).
+    pub sandbox: &'a Sandbox,
 }
 
 impl<'a> ShellTool<'a> {
-    pub fn new(root: impl Into<PathBuf>, role: &'a Role, commands: &'a Commands) -> Self {
-        Self { root: root.into(), role, commands }
+    pub fn new(
+        root: impl Into<PathBuf>,
+        role: &'a Role,
+        commands: &'a Commands,
+        sandbox: &'a Sandbox,
+    ) -> Self {
+        Self { root: root.into(), role, commands, sandbox }
     }
 
     /// Run the declared command `name` in the project root and return its captured
@@ -49,10 +57,11 @@ impl<'a> ShellTool<'a> {
             )));
         }
 
-        let runner = CommandRunner::new(&self.root, cmd.timeout());
-        runner
-            .run_argv(&cmd.argv)
-            .map_err(|RunError::Spawn(e)| Error::Other(anyhow::anyhow!("cannot run '{name}': {e}")))
+        let runner = CommandRunner::with_sandbox(&self.root, cmd.timeout(), self.sandbox.clone());
+        runner.run_argv(&cmd.argv).map_err(|e| match e {
+            RunError::Spawn(e) => Error::Other(anyhow::anyhow!("cannot run '{name}': {e}")),
+            RunError::Sandbox(e) => Error::Other(anyhow::anyhow!("cannot run '{name}': {e}")),
+        })
     }
 
     fn require_tool(&self, tool: &str) -> Result<()> {
@@ -107,7 +116,7 @@ mod tests {
     fn read_only_command_runs_and_captures_output() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds).run("ok").unwrap();
+        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("ok").unwrap();
         assert!(out.success());
         assert_eq!(out.stdout, "out");
         assert_eq!(out.stderr, "err");
@@ -117,7 +126,7 @@ mod tests {
     fn nonzero_exit_is_returned_not_errored() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds).run("fail").unwrap();
+        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("fail").unwrap();
         assert!(!out.success());
         assert_eq!(out.exit_code, Some(7));
     }
@@ -126,7 +135,7 @@ mod tests {
     fn role_without_shell_run_is_denied_with_scope_error() {
         let cmds = commands();
         let role = role(vec!["fs.read"]);
-        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds).run("ok").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("ok").unwrap_err();
         assert!(matches!(err, Error::Scope(_)));
     }
 
@@ -134,7 +143,7 @@ mod tests {
     fn undeclared_name_is_a_scope_error() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds).run("deploy").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("deploy").unwrap_err();
         assert!(matches!(err, Error::Scope(_)));
         assert!(err.to_string().contains("not declared"));
     }
@@ -143,7 +152,7 @@ mod tests {
     fn mutating_command_is_denied_even_when_declared() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds).run("fmt-fix").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("fmt-fix").unwrap_err();
         assert!(matches!(err, Error::Scope(_)));
         assert!(err.to_string().contains("mutating"));
     }
@@ -155,7 +164,7 @@ mod tests {
         let cmds = commands();
         let role = role(vec!["fs.read"]);
         let err =
-            ShellTool::new(std::env::temp_dir(), &role, &cmds).run("does-not-exist").unwrap_err();
+            ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("does-not-exist").unwrap_err();
         assert!(err.to_string().contains("not allowed to use 'shell.run'"));
     }
 }

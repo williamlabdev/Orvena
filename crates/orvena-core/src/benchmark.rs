@@ -291,7 +291,12 @@ pub async fn run_benchmark(
         // makes a "claimed done" comparable to an actual done (M2), and it
         // cross-checks the gate in governed modes (a gate-passed run whose
         // external verify fails would be a harness/gate bug).
-        let verified = GateRunner::run(&verify_gate(task), &workdir).passed;
+        // The oracle's verify is trusted measurement infrastructure (it checks
+        // the agent's ground truth), not an agent-triggered command — so it runs
+        // unsandboxed regardless of the project's sandbox posture.
+        let verified =
+            GateRunner::run(&verify_gate(task), &workdir, &crate::exec::sandbox::Sandbox::disabled())
+                .passed;
 
         results.push(match run {
             Ok(report) => {
@@ -732,6 +737,7 @@ fn bench_config(provider: &ProviderSelection, task: &BenchTask, mode: Governance
             tier,
             default_role: "developer".into(),
             max_steps: MAX_STEPS,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {

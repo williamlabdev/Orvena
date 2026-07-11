@@ -10,8 +10,17 @@ env:
 
 jobs:
   build-test:
-    name: build · test · clippy · boundary
-    runs-on: ubuntu-latest
+    # Run every gate on both platforms. macOS is where the OS sandbox is enforced
+    # today (slice-015: `sandbox-exec`), so its containment tests only actually
+    # run on the macos leg; Linux currently fails closed (the Landlock backend
+    # lands in slice-016, at which point its containment tests run on the ubuntu
+    # leg). Keep both green.
+    name: build · test · clippy · boundary (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 

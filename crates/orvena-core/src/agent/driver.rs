@@ -11,6 +11,7 @@
 
 use super::{context, step, Agent, Task};
 use crate::error::{Error, Result};
+use crate::exec::sandbox::Sandbox;
 use crate::governance::gate::GateRunner;
 use crate::governance::scope::Scope;
 use crate::metrics::{GateRecord, RunReport};
@@ -87,7 +88,22 @@ pub(crate) async fn run_loop_with(
     let budget = cfg.budgets.for_role(&role.name);
     let max_steps = cfg.agent.max_steps;
 
+    // OS sandbox for every spawned child (RUN commands + gate verify), ADR-003.
+    // Built once and shared by the RUN tool and the gate runner so both paths are
+    // confined identically. Resolves to Disabled when the config opts out.
+    let sandbox = match cfg.agent.sandbox.to_policy(agent.root(), cfg.agent.tier.enforces()) {
+        Some(policy) => Sandbox::for_policy(policy),
+        None => Sandbox::disabled(),
+    };
+
     let mut report = RunReport::new(&task.instruction);
+    // Record whether children are actually confined, so the evidence bundle can
+    // distinguish enforcement from intention. A degradation (unavailable backend)
+    // is surfaced as a blocker rather than left silent.
+    report.sandbox = sandbox.status();
+    if let Some(warning) = sandbox.warning() {
+        report.blockers.push(warning);
+    }
     let mut prior_evidence = String::new();
 
     for step_no in 1..=max_steps {
@@ -126,7 +142,7 @@ pub(crate) async fn run_loop_with(
         // role-gated and read-only, their output feeds the next attempt's context)
         let fs = FsTool::new(agent.root(), &scope, &role);
         let grep = GrepTool::new(agent.root(), &role);
-        let shell = ShellTool::new(agent.root(), &role, &cfg.commands);
+        let shell = ShellTool::new(agent.root(), &role, &cfg.commands, &sandbox);
         let mut tool_evidence = String::new();
         let actions = step::parse_actions(&resp.content);
         let action_count = actions.len();
@@ -237,7 +253,7 @@ pub(crate) async fn run_loop_with(
         // converged — rather than only the final round. Each record is tagged
         // with its step for disambiguation.
         for gate in &cfg.gates.gates {
-            let outcome = GateRunner::run(gate, agent.root());
+            let outcome = GateRunner::run(gate, agent.root(), &sandbox);
             report.gate_outcomes.push(GateRecord {
                 step: step_no,
                 gate: outcome.gate.clone(),

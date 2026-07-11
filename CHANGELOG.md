@@ -24,6 +24,45 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **OS-level sandbox — enforcement moves to the child-process boundary**
+  (slice-015, ADR-003) — until now every guarantee lived in-process:
+  `FsTool::resolve_in_root` confines the model's `WRITE`s, and `intent`
+  (ADR-001) is the human's *trust declaration* — the runtime never proved a
+  command was truly read-only. So a `<<<RUN>>>` command or a gate's `verify`,
+  once spawned, ran with Orvena's full ambient authority: it could write
+  `~/.ssh`, write anywhere outside the root, or phone home. The in-process
+  scope lock does not reach into a spawned child. This slice closes that gap at
+  the single spawn choke-point (`CommandRunner`, shared by RUN and gate): every
+  child is wrapped in a least-privilege OS sandbox — **read-only outside the
+  project root, no network by default**. On **macOS** this is enforced via
+  `sandbox-exec` + a subtractive SBPL profile and is verified end to end
+  (`tests/sandbox_confinement.rs`: an out-of-root write and a connection to an
+  open port are both blocked by the OS, while an in-root write still succeeds).
+  Config lives in `orvena.yaml`'s optional `sandbox:` block (`enabled`,
+  `network`, `filesystem: root_write|strict`, `on_unavailable`); the scaffold
+  ships `enabled: true` (new projects are confined out of the box) while the
+  struct default stays disabled (embedders/old configs are unchanged). When the
+  platform backend is unavailable the policy **fails closed** under the
+  engineering tier (refuse to run) and warns under light — never a silent
+  unconfined "enforced" claim. `RunReport.sandbox` (`enforced`/`disabled`/
+  `unavailable`) records which, additively in evidence schema v1. **Linux
+  (Landlock + seccomp re-exec shim) is deferred to a follow-up** — it currently
+  reports unavailable, so Linux engineering runs fail closed rather than run
+  unconfined. Backed by unit tests for the policy/backend/config plus the
+  containment integration test; existing `exec.rs` tests are unchanged (the
+  unconfined `CommandRunner::new` path is byte-for-byte compatible).
+- **Groundwork for the Linux sandbox backend** (slice-016 prep) — the pieces of
+  the forthcoming Landlock/seccomp backend that can be built and verified without
+  a Linux host landed early, so the follow-up shrinks to genuinely Linux-only
+  work. (1) `main` no longer uses `#[tokio::main]`: it builds the multi-threaded
+  runtime explicitly and, *before* starting it, intercepts the hidden
+  `orvena __sandbox` subcommand — so the future re-exec shim applies Landlock +
+  seccomp on a single thread (async-signal-safe) then `execvp`s the wrapped
+  command. Until that body lands, `__sandbox` **fails closed** (exits without
+  running the command unconfined); user-facing commands are unchanged. (2) CI now
+  runs the full gate set on a `[ubuntu-latest, macos-latest]` matrix — so the
+  macOS sandbox containment tests (slice-015) are verified on every push, not
+  just locally, and the Linux leg is ready for slice-016's containment tests.
 - **The governance differential, published** (slice-014) — the second external
   number, and the first on the axis Orvena exists for. Temptation set ×
   (`off`, `engineering`) × 3 runs, local `qwen3:14b`: **false-done 25% → 0%
