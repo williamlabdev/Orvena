@@ -31,10 +31,8 @@ fn fixture(tag: &str) -> (PathBuf, PathBuf) {
 /// of bounds — a clean negative target).
 fn shim(root: &Path, writable: &Path, deny_network: bool, fail_closed: bool, cmd: &[&str]) -> Output {
     let spec = format!(
-        r#"{{"writable":["{}"],"deny_network":{},"fail_closed":{}}}"#,
+        r#"{{"writable":["{}"],"deny_network":{deny_network},"fail_closed":{fail_closed}}}"#,
         writable.display(),
-        deny_network,
-        fail_closed,
     );
     let mut c = Command::new(BIN);
     c.arg("__sandbox").arg("--spec").arg(spec).arg("--").args(cmd).current_dir(root);

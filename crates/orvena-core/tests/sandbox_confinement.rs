@@ -28,6 +28,9 @@ fn s(v: &[&str]) -> Vec<String> {
 /// the sibling is genuinely out-of-bounds — a clean negative target).
 struct Fixture {
     root: PathBuf,
+    // Only the macOS tests write an out-of-root sentinel; on other platforms the
+    // field would be dead code (which `-D warnings` rejects).
+    #[cfg(target_os = "macos")]
     outside: PathBuf,
 }
 
@@ -35,12 +38,20 @@ impl Fixture {
     fn new(tag: &str) -> Self {
         let base = std::env::temp_dir().join(format!("orvena-sbx-{tag}-{}", std::process::id()));
         let root = base.join("proj");
-        let outside = base.join("outside");
         let _ = std::fs::remove_dir_all(&base);
         std::fs::create_dir_all(&root).unwrap();
-        std::fs::create_dir_all(&outside).unwrap();
-        // Canonicalize so the policy's root matches what sandbox-exec sees.
-        Self { root: root.canonicalize().unwrap(), outside: outside.canonicalize().unwrap() }
+        // Canonicalize so the policy's root matches what the sandbox sees.
+        let root = root.canonicalize().unwrap();
+        #[cfg(target_os = "macos")]
+        {
+            let outside = base.join("outside");
+            std::fs::create_dir_all(&outside).unwrap();
+            Self { root, outside: outside.canonicalize().unwrap() }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Self { root }
+        }
     }
 
     /// Policy whose ONLY writable subtree is the project root (system temp is
