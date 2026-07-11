@@ -7,7 +7,9 @@ use std::path::PathBuf;
 
 use super::{config_dir, is_initialized, load_dotenv, preflight_provider, run_timestamp};
 use anyhow::{bail, Context, Result};
-use orvena_core::benchmark::{self, BenchReport, BenchTaskSet, RepeatedReport};
+use orvena_core::benchmark::{
+    self, BenchReport, BenchTaskSet, GovernanceMode, MatrixReport, RepeatedReport,
+};
 use orvena_core::config::Config;
 
 /// The built-in task set, embedded so `orvena bench` works without a fixtures
@@ -19,6 +21,7 @@ pub async fn run(
     tasks: Option<PathBuf>,
     out: Option<PathBuf>,
     repeat: u32,
+    governance: Option<String>,
 ) -> Result<()> {
     load_dotenv();
 
@@ -45,14 +48,60 @@ pub async fn run(
         bail!("the task set is empty — nothing to benchmark");
     }
 
+    // Governance postures: default = light (the previous behavior). More than
+    // one posture runs the differential matrix.
+    let modes: Vec<GovernanceMode> = match &governance {
+        None => vec![GovernanceMode::Light],
+        Some(list) => {
+            let parsed: std::result::Result<Vec<_>, _> =
+                list.split(',').map(|m| m.parse::<GovernanceMode>()).collect();
+            let parsed = parsed?;
+            // Order-preserving dedup: a repeated mode would collide on the same
+            // per-mode workdir namespace.
+            let mut modes: Vec<GovernanceMode> = Vec::new();
+            for m in parsed {
+                if !modes.contains(&m) {
+                    modes.push(m);
+                }
+            }
+            if modes.is_empty() {
+                bail!("--governance given but no mode parsed");
+            }
+            modes
+        }
+    };
+
     let run_id = run_timestamp();
     let base = dir.join("bench");
     let kind = config.agent.provider.kind.clone();
     let report_path = base.join(&run_id).join("report.json");
 
-    if repeat <= 1 {
-        println!("running {} task(s) against provider '{kind}'…\n", set.tasks.len());
-        let report = benchmark::run_benchmark(&set, &config.agent.provider, &base, &run_id).await?;
+    if modes.len() > 1 {
+        println!(
+            "running {} task(s) × {repeat} run(s) × {} governance mode(s) against provider '{kind}'…\n",
+            set.tasks.len(),
+            modes.len()
+        );
+        let report = benchmark::run_benchmark_matrix(
+            &set,
+            &config.agent.provider,
+            &base,
+            &run_id,
+            &modes,
+            repeat,
+        )
+        .await?;
+        print_matrix(&report);
+        benchmark::write_matrix_report(&report, &report_path)?;
+        announce_report(&report_path, out.as_deref())?;
+        if let Some(out) = out {
+            benchmark::write_matrix_report(&report, &out)?;
+        }
+    } else if repeat <= 1 {
+        let mode = modes[0];
+        println!("running {} task(s) against provider '{kind}' [{mode}]…\n", set.tasks.len());
+        let report =
+            benchmark::run_benchmark(&set, &config.agent.provider, &base, &run_id, mode).await?;
         print_report(&report);
         benchmark::write_report(&report, &report_path)?;
         announce_report(&report_path, out.as_deref())?;
@@ -60,10 +109,20 @@ pub async fn run(
             benchmark::write_report(&report, &out)?;
         }
     } else {
-        println!("running {} task(s) × {repeat} run(s) against provider '{kind}'…\n", set.tasks.len());
-        let report =
-            benchmark::run_benchmark_repeated(&set, &config.agent.provider, &base, &run_id, repeat)
-                .await?;
+        let mode = modes[0];
+        println!(
+            "running {} task(s) × {repeat} run(s) against provider '{kind}' [{mode}]…\n",
+            set.tasks.len()
+        );
+        let report = benchmark::run_benchmark_repeated(
+            &set,
+            &config.agent.provider,
+            &base,
+            &run_id,
+            repeat,
+            mode,
+        )
+        .await?;
         print_repeated(&report);
         benchmark::write_repeated_report(&report, &report_path)?;
         announce_report(&report_path, out.as_deref())?;
@@ -85,7 +144,7 @@ fn announce_report(report_path: &std::path::Path, out: Option<&std::path::Path>)
 }
 
 fn print_report(r: &BenchReport) {
-    println!("── benchmark ──");
+    println!("── benchmark [{}] ──", r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
     for res in &r.results {
         if res.skipped {
@@ -108,10 +167,15 @@ fn print_report(r: &BenchReport) {
         print!(" ({} skipped)", r.skipped);
     }
     println!();
+    print!("verified (ground truth): {}/{} = {:.0}%", r.verified, ran, r.verified_rate * 100.0);
+    if r.false_done > 0 {
+        print!("  |  FALSE DONE: {}/{} claims = {:.0}%", r.false_done, r.passed, r.false_done_rate * 100.0);
+    }
+    println!();
 }
 
 fn print_repeated(r: &RepeatedReport) {
-    println!("── benchmark ({} runs/task) ──", r.repeat);
+    println!("── benchmark ({} runs/task) [{}] ──", r.repeat, r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
     for t in &r.tasks {
         if t.skipped {
@@ -132,4 +196,41 @@ fn print_repeated(r: &RepeatedReport) {
         print!("  |  {} skipped", r.skipped);
     }
     println!();
+    println!(
+        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  mean {:.1} steps, {:.0} tok",
+        r.verified_rate * 100.0,
+        r.false_done_rate * 100.0,
+        r.mean_steps,
+        r.mean_total_tokens
+    );
+}
+
+fn print_matrix(m: &MatrixReport) {
+    for mode in &m.modes {
+        print_repeated(mode);
+        println!();
+    }
+    if let Some(d) = &m.differential {
+        println!("── governance differential ({} vs {}) ──", d.governed, d.baseline);
+        println!(
+            "false-done:  {}: {:.0}% of claims  →  {}: {:.0}% of claims",
+            d.baseline,
+            d.baseline_false_done_rate * 100.0,
+            d.governed,
+            d.governed_false_done_rate * 100.0
+        );
+        println!(
+            "verified:    {}: {:.0}%  →  {}: {:.0}%",
+            d.baseline,
+            d.baseline_verified_rate * 100.0,
+            d.governed,
+            d.governed_verified_rate * 100.0
+        );
+        println!(
+            "overhead:    ×{:.2} steps, ×{:.2} tokens (governed / baseline)",
+            d.overhead_steps_ratio, d.overhead_tokens_ratio
+        );
+    } else {
+        println!("(no differential: run with both `off` and a governed mode)");
+    }
 }

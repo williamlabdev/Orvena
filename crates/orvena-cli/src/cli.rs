@@ -45,6 +45,12 @@ enum Command {
         /// model). Default 1 = single pass.
         #[arg(long = "repeat", default_value_t = 1)]
         repeat: u32,
+        /// Governance posture(s) to measure, comma-separated: off|light|engineering
+        /// (e.g. `--governance off,engineering` for the differential matrix).
+        /// `off` is a bench-only ungoverned baseline — it is not a product tier.
+        /// Default: light (the previous behavior).
+        #[arg(long = "governance")]
+        governance: Option<String>,
     },
     /// Preflight: provider readiness, config validity.
     Doctor,
@@ -58,8 +64,8 @@ pub async fn run() -> i32 {
     let result = match cli.command {
         Command::Init => commands::init::run(),
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
-        Command::Bench { provider, tasks, out, repeat } => {
-            commands::bench::run(provider, tasks, out, repeat).await
+        Command::Bench { provider, tasks, out, repeat, governance } => {
+            commands::bench::run(provider, tasks, out, repeat, governance).await
         }
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),

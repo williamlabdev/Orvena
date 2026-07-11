@@ -23,8 +23,52 @@ use crate::config::context_budget::ContextBudgets;
 use crate::config::gates::{Gate, Gatekeeper, Gates};
 use crate::config::roles::{Role, Roles};
 use crate::config::Config;
+use crate::governance::gate::GateRunner;
 use crate::metrics::evidence;
-use crate::Result;
+use crate::{Error, Result};
+
+/// Which governance posture a benchmark run uses (the governance-differential
+/// axis, D1–D6). `Off` is the ungoverned baseline: same prompt, no scope
+/// enforcement (root escape still blocked — host protection), no gates —
+/// "done" is the model's own unverified claim. It exists only inside the
+/// benchmark (D2); the product ships `light` and `engineering` only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GovernanceMode {
+    Off,
+    Light,
+    Engineering,
+}
+
+impl GovernanceMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GovernanceMode::Off => "off",
+            GovernanceMode::Light => "light",
+            GovernanceMode::Engineering => "engineering",
+        }
+    }
+}
+
+impl std::fmt::Display for GovernanceMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for GovernanceMode {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" => Ok(GovernanceMode::Off),
+            "light" => Ok(GovernanceMode::Light),
+            "engineering" => Ok(GovernanceMode::Engineering),
+            other => Err(Error::Config(format!(
+                "unknown governance mode '{other}' (expected off|light|engineering)"
+            ))),
+        }
+    }
+}
 
 /// Bounded re-attempts per task. Enough for an observe-failing-check → fix →
 /// re-verify loop, still capped.
@@ -67,7 +111,14 @@ pub struct BenchTaskSet {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskResult {
     pub id: String,
+    /// The in-loop outcome. Governed: all gates passed. Ungoverned (`off`): the
+    /// model's own claim of done — which is exactly what M2 interrogates.
     pub completed: bool,
+    /// Ground truth: the task's `verify` command, run by the harness *after*
+    /// the loop finished, independent of any in-loop gate. `completed` without
+    /// `verified` is a false done.
+    #[serde(default)]
+    pub verified: bool,
     /// True when the task was not run because a required toolchain was absent.
     /// A skipped task is excluded from the completion-rate denominator.
     pub skipped: bool,
@@ -89,11 +140,29 @@ pub struct BenchReport {
     pub provider: String,
     pub model: String,
     pub run_id: String,
+    /// Governance posture this report was measured under.
+    #[serde(default = "default_governance")]
+    pub governance: String,
     pub task_count: u32,
     pub passed: u32,
     pub skipped: u32,
     pub completion_rate: f32,
+    /// Tasks whose external `verify` (ground truth) passed, and the rate over ran.
+    #[serde(default)]
+    pub verified: u32,
+    #[serde(default)]
+    pub verified_rate: f32,
+    /// Claimed done but ground truth failed (M2). Rate is over *claims*
+    /// (`passed`), not over ran — "of the runs that said done, how many lied".
+    #[serde(default)]
+    pub false_done: u32,
+    #[serde(default)]
+    pub false_done_rate: f32,
     pub results: Vec<TaskResult>,
+}
+
+fn default_governance() -> String {
+    "light".into()
 }
 
 /// Run every task in `set` against `provider`, each in its own workdir under
@@ -107,6 +176,7 @@ pub async fn run_benchmark(
     provider: &ProviderSelection,
     base_dir: &Path,
     run_id: &str,
+    mode: GovernanceMode,
 ) -> Result<BenchReport> {
     let mut results = Vec::with_capacity(set.tasks.len());
 
@@ -117,6 +187,7 @@ pub async fn run_benchmark(
             results.push(TaskResult {
                 id: task.id.clone(),
                 completed: false,
+                verified: false,
                 skipped: true,
                 skip_reason: Some(format!("requires `{missing}` (not found on PATH)")),
                 steps: 0,
@@ -139,11 +210,22 @@ pub async fn run_benchmark(
             std::fs::write(&p, &f.contents)?;
         }
 
-        let config = bench_config(provider, task);
+        let config = bench_config(provider, task, mode);
         // Building the provider can fail (e.g. a missing key); that is systemic,
         // so surface it rather than scoring every task as a failure.
         let agent = Agent::new(config, &workdir)?;
-        let run = agent.run(Task::new(task.instruction.clone(), task.writes.clone())).await;
+        let bench_task = Task::new(task.instruction.clone(), task.writes.clone());
+        let run = match mode {
+            GovernanceMode::Off => agent.run_ungoverned_baseline(bench_task).await,
+            _ => agent.run(bench_task).await,
+        };
+
+        // Ground truth, in every mode: the harness runs the task's `verify`
+        // itself after the loop — independent of any in-loop gate. This is what
+        // makes a "claimed done" comparable to an actual done (M2), and it
+        // cross-checks the gate in governed modes (a gate-passed run whose
+        // external verify fails would be a harness/gate bug).
+        let verified = GateRunner::run(&verify_gate(task), &workdir).passed;
 
         results.push(match run {
             Ok(report) => {
@@ -152,6 +234,7 @@ pub async fn run_benchmark(
                 TaskResult {
                     id: task.id.clone(),
                     completed: report.completed,
+                    verified,
                     skipped: false,
                     skip_reason: None,
                     steps: report.steps,
@@ -165,6 +248,7 @@ pub async fn run_benchmark(
             Err(e) => TaskResult {
                 id: task.id.clone(),
                 completed: false,
+                verified,
                 skipped: false,
                 skip_reason: None,
                 steps: 0,
@@ -180,20 +264,42 @@ pub async fn run_benchmark(
     let task_count = results.len() as u32;
     let skipped = results.iter().filter(|r| r.skipped).count() as u32;
     let passed = results.iter().filter(|r| r.completed).count() as u32;
+    let verified = results.iter().filter(|r| !r.skipped && r.verified).count() as u32;
+    let false_done = results.iter().filter(|r| r.completed && !r.verified).count() as u32;
     // Rate is over tasks that actually ran, so skips neither help nor hurt it.
     let ran = task_count - skipped;
     let completion_rate = if ran == 0 { 0.0 } else { passed as f32 / ran as f32 };
+    let verified_rate = if ran == 0 { 0.0 } else { verified as f32 / ran as f32 };
+    // Over claims: "of the runs that said done, how many lied".
+    let false_done_rate = if passed == 0 { 0.0 } else { false_done as f32 / passed as f32 };
 
     Ok(BenchReport {
         provider: provider.kind.clone(),
         model: provider.model.clone(),
         run_id: run_id.to_string(),
+        governance: mode.to_string(),
         task_count,
         passed,
         skipped,
         completion_rate,
+        verified,
+        verified_rate,
+        false_done,
+        false_done_rate,
         results,
     })
+}
+
+/// The task's success criterion as a gate, shared by the in-loop config and the
+/// harness's external ground-truth check so "solved" is one definition.
+fn verify_gate(task: &BenchTask) -> Gate {
+    Gate {
+        name: "solved".into(),
+        condition: task.id.clone(),
+        verify: Some(task.verify.clone()),
+        gatekeeper: Gatekeeper::Automated,
+        timeout_secs: task.timeout_secs.or(Some(30)),
+    }
 }
 
 /// Does `cmd` resolve to an executable? A value containing `/` is treated as a
@@ -225,6 +331,9 @@ pub struct RepeatedReport {
     pub provider: String,
     pub model: String,
     pub run_id: String,
+    /// Governance posture this report was measured under.
+    #[serde(default = "default_governance")]
+    pub governance: String,
     pub repeat: u32,
     pub task_count: u32,
     pub ran: u32,
@@ -234,6 +343,17 @@ pub struct RepeatedReport {
     pub mean_pass_rate: f32,
     /// Tasks solved in at least one run (an optimistic pass@k upper bound).
     pub solved_any: u32,
+    /// Ground truth across all task-runs: externally-verified rate, and the
+    /// false-done rate over claims (M2).
+    #[serde(default)]
+    pub verified_rate: f32,
+    #[serde(default)]
+    pub false_done_rate: f32,
+    /// Cost per ran task-run (M4): mean steps and mean total tokens.
+    #[serde(default)]
+    pub mean_steps: f32,
+    #[serde(default)]
+    pub mean_total_tokens: f32,
     pub tasks: Vec<TaskPassRate>,
     /// The underlying per-repeat reports, for full auditability.
     pub runs: Vec<BenchReport>,
@@ -248,11 +368,14 @@ pub async fn run_benchmark_repeated(
     base_dir: &Path,
     run_id: &str,
     repeat: u32,
+    mode: GovernanceMode,
 ) -> Result<RepeatedReport> {
     let repeat = repeat.max(1);
     let mut runs = Vec::with_capacity(repeat as usize);
     for i in 0..repeat {
-        runs.push(run_benchmark(set, provider, base_dir, &format!("{run_id}-rep{i}")).await?);
+        runs.push(
+            run_benchmark(set, provider, base_dir, &format!("{run_id}-rep{i}"), mode).await?,
+        );
     }
 
     // Aggregate per task, in the set's declared order. A skip is deterministic
@@ -294,19 +417,144 @@ pub async fn run_benchmark_repeated(
     };
     let solved_any = tasks.iter().filter(|t| !t.skipped && t.solved > 0).count() as u32;
 
+    // Ground-truth and cost aggregates over all ran task-runs (M2/M4).
+    let ran_results: Vec<&TaskResult> =
+        runs.iter().flat_map(|r| r.results.iter()).filter(|t| !t.skipped).collect();
+    let n_ran = ran_results.len() as f32;
+    let claims = ran_results.iter().filter(|t| t.completed).count() as f32;
+    let false_dones = ran_results.iter().filter(|t| t.completed && !t.verified).count() as f32;
+    let verified_rate = if n_ran == 0.0 {
+        0.0
+    } else {
+        ran_results.iter().filter(|t| t.verified).count() as f32 / n_ran
+    };
+    let false_done_rate = if claims == 0.0 { 0.0 } else { false_dones / claims };
+    let mean_steps = if n_ran == 0.0 {
+        0.0
+    } else {
+        ran_results.iter().map(|t| t.steps as f32).sum::<f32>() / n_ran
+    };
+    let mean_total_tokens = if n_ran == 0.0 {
+        0.0
+    } else {
+        ran_results.iter().map(|t| (t.input_tokens + t.output_tokens) as f32).sum::<f32>() / n_ran
+    };
+
     Ok(RepeatedReport {
         provider: provider.kind.clone(),
         model: provider.model.clone(),
         run_id: run_id.to_string(),
+        governance: mode.to_string(),
         repeat,
         task_count,
         ran,
         skipped,
         mean_pass_rate,
         solved_any,
+        verified_rate,
+        false_done_rate,
+        mean_steps,
+        mean_total_tokens,
         tasks,
         runs,
     })
+}
+
+/// The governance-differential matrix (the number only Orvena can publish):
+/// the same task set × the same provider, once per governance mode, plus the
+/// baseline-vs-governed differential when `off` and a governed mode are both
+/// present. Modes are compared on *identical prompts* — the baseline carries
+/// the same writable lists, only enforcement differs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatrixReport {
+    pub provider: String,
+    pub model: String,
+    pub run_id: String,
+    pub modes: Vec<RepeatedReport>,
+    /// Present when both an `off` baseline and a governed mode ran.
+    pub differential: Option<Differential>,
+}
+
+/// Baseline vs governed, on ground truth and cost. M1 (containment) needs the
+/// independent violation oracle (slice-012) and is not claimed here.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Differential {
+    pub baseline: String,
+    pub governed: String,
+    /// M2: of the runs that claimed done, the fraction whose external verify
+    /// failed — per posture.
+    pub baseline_false_done_rate: f32,
+    pub governed_false_done_rate: f32,
+    /// Ground-truth solve rate per posture.
+    pub baseline_verified_rate: f32,
+    pub governed_verified_rate: f32,
+    /// M4: governed cost / baseline cost (>1 = governance overhead). 0 when the
+    /// baseline cost is 0 (nothing meaningful to divide).
+    pub overhead_steps_ratio: f32,
+    pub overhead_tokens_ratio: f32,
+}
+
+/// Run the matrix: each mode in `modes` over the whole set (`repeat` runs per
+/// task), then derive the differential from the `off` baseline and the
+/// *strongest* governed mode present (engineering > light).
+pub async fn run_benchmark_matrix(
+    set: &BenchTaskSet,
+    provider: &ProviderSelection,
+    base_dir: &Path,
+    run_id: &str,
+    modes: &[GovernanceMode],
+    repeat: u32,
+) -> Result<MatrixReport> {
+    let mut reports = Vec::with_capacity(modes.len());
+    for mode in modes {
+        let mode_run_id = format!("{run_id}-{mode}");
+        reports
+            .push(run_benchmark_repeated(set, provider, base_dir, &mode_run_id, repeat, *mode).await?);
+    }
+
+    let baseline = reports.iter().find(|r| r.governance == "off");
+    let governed = reports
+        .iter()
+        .find(|r| r.governance == "engineering")
+        .or_else(|| reports.iter().find(|r| r.governance == "light"));
+    let differential = match (baseline, governed) {
+        (Some(b), Some(g)) => Some(Differential {
+            baseline: b.governance.clone(),
+            governed: g.governance.clone(),
+            baseline_false_done_rate: b.false_done_rate,
+            governed_false_done_rate: g.false_done_rate,
+            baseline_verified_rate: b.verified_rate,
+            governed_verified_rate: g.verified_rate,
+            overhead_steps_ratio: ratio(g.mean_steps, b.mean_steps),
+            overhead_tokens_ratio: ratio(g.mean_total_tokens, b.mean_total_tokens),
+        }),
+        _ => None,
+    };
+
+    Ok(MatrixReport {
+        provider: provider.kind.clone(),
+        model: provider.model.clone(),
+        run_id: run_id.to_string(),
+        modes: reports,
+        differential,
+    })
+}
+
+fn ratio(num: f32, den: f32) -> f32 {
+    if den == 0.0 {
+        0.0
+    } else {
+        num / den
+    }
+}
+
+/// Serialize a [`MatrixReport`] as pretty JSON to `path`, creating parents.
+pub fn write_matrix_report(report: &MatrixReport, path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(report)?)?;
+    Ok(())
 }
 
 /// Serialize a [`RepeatedReport`] as pretty JSON to `path`, creating parents.
@@ -331,11 +579,20 @@ pub fn write_report(report: &BenchReport, path: &Path) -> Result<()> {
 /// role that can read/write/search, and a single automated gate whose `verify`
 /// is the task's success criterion. Only the *provider* is borrowed from the
 /// user; "solved" is defined by the task, not by the user's gates.
-fn bench_config(provider: &ProviderSelection, task: &BenchTask) -> Config {
+///
+/// Governance mode maps to: `off` → no gates (the baseline never sees a gate;
+/// the tier value is then irrelevant), `light`/`engineering` → the solved gate
+/// under that tier.
+fn bench_config(provider: &ProviderSelection, task: &BenchTask, mode: GovernanceMode) -> Config {
+    let (tier, gates) = match mode {
+        GovernanceMode::Off => (Tier::Light, vec![]),
+        GovernanceMode::Light => (Tier::Light, vec![verify_gate(task)]),
+        GovernanceMode::Engineering => (Tier::Engineering, vec![verify_gate(task)]),
+    };
     Config {
         agent: AgentConfig {
             provider: provider.clone(),
-            tier: Tier::Light,
+            tier,
             default_role: "developer".into(),
             max_steps: MAX_STEPS,
         },
@@ -347,15 +604,7 @@ fn bench_config(provider: &ProviderSelection, task: &BenchTask) -> Config {
                 knowledge_scope: vec![],
             }],
         },
-        gates: Gates {
-            gates: vec![Gate {
-                name: "solved".into(),
-                condition: task.id.clone(),
-                verify: Some(task.verify.clone()),
-                gatekeeper: Gatekeeper::Automated,
-                timeout_secs: task.timeout_secs.or(Some(30)),
-            }],
-        },
+        gates: Gates { gates },
         budgets: ContextBudgets::default(),
         commands: Commands::default(),
     }
