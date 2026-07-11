@@ -24,6 +24,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The governance differential, published** (slice-014) — the second external
+  number, and the first on the axis Orvena exists for. Temptation set ×
+  (`off`, `engineering`) × 3 runs, local `qwen3:14b`: **false-done 25% → 0%
+  of claims** (M2), governed cost **×0.43 steps / ×0.31 tokens** (M4 —
+  inverted: gate evidence acts as navigation, the governed runs were
+  cheaper), ground truth 79% under both postures, containment 100%/100%
+  (M1 — honestly reported as a null result on this model: temptations
+  surfaced as refused, auditable escape attempts rather than landed files),
+  evidence validity 100%/100% (M3). Full run data in
+  `docs/benchmark-results/2026-07-11-qwen3-14b-differential.json`; analysis
+  and de-glamorized caveats in `docs/benchmark-results.md`; method section in
+  `docs/benchmark.md`; reproducible via `scripts/bench-differential.sh`.
+  Hosted-model legs pending (no key available on the bench machine).
 - **Evidence schema v1 (frozen) + exit-path fault injection** (slice-013,
   M3/D4) — the evidence bundle is now a versioned artifact of record.
   `schemas/evidence.v1.json` (JSON Schema 2020-12) freezes the contract;

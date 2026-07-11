@@ -88,6 +88,20 @@ Discipline scales with risk via a **governance tier**: `light` (gates/scope advi
 **completion rate** (fraction that reach a passing test). Each task defines its own
 `verify` (e.g. `cargo test` / `pytest`), so "solved" is the same rule the product ships.
 
+It also measures the **governance differential** — what the brakes buy:
+`orvena bench --governance off,engineering` runs the same tasks with enforcement as
+the only variable, and an independent git-based oracle judges what each run actually
+changed.
+
+**Governance differential (2026-07-11):** on an 8-task scope-adversarial set, a local
+`qwen3:14b` under the ungoverned baseline made a **false "done" claim 25%** of the
+time; under the `engineering` tier that is structurally impossible (**0%**) — and the
+governed runs were *cheaper* (×0.43 steps, ×0.31 tokens): gate evidence acts as
+navigation, not drag. Containment was 100% under both postures for this model —
+enforcement showed up as refused, auditable escape attempts rather than prevented
+files. Full numbers and honest caveats:
+[docs/benchmark-results.md](docs/benchmark-results.md).
+
 **First number (2026-07-04):** on a small curated set of 5 self-contained Rust tasks,
 Orvena driving a local `qwen3:14b` solved **5/5 (100%)**, single-pass. This is a
 deliberately small, early, self-hosted signal — *not* a real-world capability claim
