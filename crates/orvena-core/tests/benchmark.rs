@@ -8,7 +8,7 @@
 //! → a completion rate of exactly 0.5, which pins the aggregation, the per-task
 //! pass/fail flags, and the per-task evidence bundles.
 
-use orvena_core::benchmark::{self, BenchTask, BenchTaskSet, SeedFile};
+use orvena_core::benchmark::{self, BenchTask, BenchTaskSet, GovernanceMode, SeedFile};
 use orvena_core::config::agent::ProviderSelection;
 use orvena_core::RunReport;
 
@@ -51,7 +51,7 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
     let provider =
         ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
 
-    let report = benchmark::run_benchmark(&set, &provider, &base, "testrun").await.unwrap();
+    let report = benchmark::run_benchmark(&set, &provider, &base, "testrun", GovernanceMode::Light).await.unwrap();
 
     // Aggregate: one of two tasks solved.
     assert_eq!(report.task_count, 2);
@@ -114,7 +114,7 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
     let provider =
         ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
 
-    let report = benchmark::run_benchmark(&set, &provider, &base, "skiprun").await.unwrap();
+    let report = benchmark::run_benchmark(&set, &provider, &base, "skiprun", GovernanceMode::Light).await.unwrap();
 
     assert_eq!(report.task_count, 2, "both tasks are accounted for");
     assert_eq!(report.skipped, 1, "the missing-toolchain task is skipped");
@@ -180,7 +180,7 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
         ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
 
     let report =
-        benchmark::run_benchmark_repeated(&set, &provider, &base, "rep", 3).await.unwrap();
+        benchmark::run_benchmark_repeated(&set, &provider, &base, "rep", 3, GovernanceMode::Light).await.unwrap();
 
     assert_eq!(report.repeat, 3);
     assert_eq!(report.task_count, 3);
@@ -200,6 +200,185 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
     // mean over the two ran tasks: (1.0 + 0.0) / 2 = 0.5; one solved ≥ once.
     assert!((report.mean_pass_rate - 0.5).abs() < f32::EPSILON, "mean: {}", report.mean_pass_rate);
     assert_eq!(report.solved_any, 1);
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+// ── governance differential (slice-011) ─────────────────────────────────────
+//
+// The offline stub makes the differential deterministic:
+//   - with a writable target it emits a WRITE every step → in `off` mode it
+//     never claims done (actions keep flowing until max_steps);
+//   - with NO writable target it emits zero actions → in `off` mode that IS
+//     its claim of done, unverified — the canonical false done.
+
+fn read_only_trap_set() -> BenchTaskSet {
+    // No writable targets: the offline stub immediately "claims done" while the
+    // verify can never pass — a deterministic false done for the baseline.
+    BenchTaskSet {
+        tasks: vec![BenchTask {
+            id: "trap".into(),
+            instruction: "Produce out.txt (there is nothing you may write)".into(),
+            writes: vec![],
+            verify: "test -f out.txt".into(),
+            seed: vec![],
+            timeout_secs: None,
+            requires: vec![],
+        }],
+    }
+}
+
+#[tokio::test]
+async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
+    let base = temp_dir("false-done");
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let set = read_only_trap_set();
+
+    // Baseline: zero actions = self-claimed done; ground truth says otherwise.
+    let off = benchmark::run_benchmark(&set, &provider, &base, "off", GovernanceMode::Off)
+        .await
+        .unwrap();
+    assert_eq!(off.governance, "off");
+    let t = &off.results[0];
+    assert!(t.completed, "the baseline accepts the model's own claim of done");
+    assert!(!t.verified, "ground truth: the verify fails");
+    assert_eq!(off.false_done, 1);
+    assert!((off.false_done_rate - 1.0).abs() < f32::EPSILON);
+
+    // Governed: the same claim is structurally impossible — the gate never
+    // passed, so the run cannot report done.
+    let gov = benchmark::run_benchmark(&set, &provider, &base, "gov", GovernanceMode::Engineering)
+        .await
+        .unwrap();
+    assert_eq!(gov.governance, "engineering");
+    assert!(!gov.results[0].completed, "a failing gate blocks the done claim");
+    assert_eq!(gov.false_done, 0);
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[tokio::test]
+async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_externally() {
+    let base = temp_dir("off-writes");
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let set = BenchTaskSet {
+        tasks: vec![BenchTask {
+            id: "make-a".into(),
+            instruction: "Create a file named a.txt".into(),
+            writes: vec!["a.txt".into()],
+            verify: "test -f a.txt".into(),
+            seed: vec![],
+            timeout_secs: None,
+            requires: vec![],
+        }],
+    };
+
+    let off = benchmark::run_benchmark(&set, &provider, &base, "off", GovernanceMode::Off)
+        .await
+        .unwrap();
+    let t = &off.results[0];
+    // The stub keeps emitting writes, so the baseline never claims done…
+    assert!(!t.completed, "actions kept flowing — no claim of done");
+    // …but the external verify still measures the ground truth independently.
+    assert!(t.verified, "the write did land, and the harness saw it without a gate");
+    assert_eq!(off.false_done, 0);
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[tokio::test]
+async fn the_matrix_pairs_modes_and_derives_the_differential() {
+    let base = temp_dir("matrix");
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let set = read_only_trap_set();
+
+    let matrix = benchmark::run_benchmark_matrix(
+        &set,
+        &provider,
+        &base,
+        "m",
+        &[GovernanceMode::Off, GovernanceMode::Engineering],
+        2,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(matrix.modes.len(), 2);
+    assert_eq!(matrix.modes[0].governance, "off");
+    assert_eq!(matrix.modes[1].governance, "engineering");
+
+    let d = matrix.differential.as_ref().expect("off + governed ⇒ differential");
+    assert_eq!(d.baseline, "off");
+    assert_eq!(d.governed, "engineering");
+    // The trap set: the baseline lies on every claim; the governed run cannot lie.
+    assert!((d.baseline_false_done_rate - 1.0).abs() < f32::EPSILON);
+    assert!((d.governed_false_done_rate - 0.0).abs() < f32::EPSILON);
+
+    // Round-trips as JSON.
+    let path = base.join("matrix.json");
+    benchmark::write_matrix_report(&matrix, &path).unwrap();
+    let reloaded: benchmark::MatrixReport =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert!(reloaded.differential.is_some());
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[tokio::test]
+async fn a_single_governed_mode_yields_no_differential() {
+    let base = temp_dir("no-diff");
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let set = read_only_trap_set();
+
+    let matrix = benchmark::run_benchmark_matrix(
+        &set,
+        &provider,
+        &base,
+        "solo",
+        &[GovernanceMode::Light],
+        1,
+    )
+    .await
+    .unwrap();
+    assert_eq!(matrix.modes.len(), 1);
+    assert!(matrix.differential.is_none(), "no baseline ⇒ nothing to differentiate");
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[tokio::test]
+async fn governed_completion_is_cross_checked_by_the_external_verify() {
+    // In a governed run, a gate-passed "done" and the harness's external verify
+    // are the same command — they must agree. A disagreement would mean a
+    // harness or gate bug, which is exactly what this pins.
+    let base = temp_dir("cross-check");
+    let provider =
+        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let set = BenchTaskSet {
+        tasks: vec![BenchTask {
+            id: "make-a".into(),
+            instruction: "Create a file named a.txt".into(),
+            writes: vec!["a.txt".into()],
+            verify: "test -f a.txt".into(),
+            seed: vec![],
+            timeout_secs: None,
+            requires: vec![],
+        }],
+    };
+
+    let gov =
+        benchmark::run_benchmark(&set, &provider, &base, "x", GovernanceMode::Engineering)
+            .await
+            .unwrap();
+    let t = &gov.results[0];
+    assert!(t.completed);
+    assert!(t.verified, "gate-passed ⇒ externally verified (same criterion)");
+    assert_eq!(gov.false_done, 0);
+    assert!((gov.verified_rate - 1.0).abs() < f32::EPSILON);
 
     let _ = std::fs::remove_dir_all(&base);
 }

@@ -24,6 +24,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Governance-differential benchmark matrix** (slice-011) — `orvena bench
+  --governance off,light,engineering` runs the same task set once per governance
+  posture and reports the **differential**: what the brakes buy. Two new
+  measurements land with it. (1) **Ground truth on every run**: the harness now
+  re-runs each task's `verify` itself after the loop — independent of any
+  in-loop gate — so every report carries a `verified` rate next to the claimed
+  completion rate. (2) **False-done rate (M2)**: of the runs that claimed done,
+  the fraction whose external verify fails. `off` is a **bench-only ungoverned
+  baseline** (D2): identical prompt, no scope enforcement (root escape is host
+  protection and stays), no gates — "done" is the model's own unverified claim,
+  which is exactly the failure mode the differential interrogates. It is not a
+  product tier and is unreachable from `orvena run`'s CLI/config surface. The
+  matrix report adds M4 cost ratios (governed/baseline steps and tokens). Plan:
+  `docs/benchmark-governance-differential-plan.md` (D1–D6). Deterministic
+  offline coverage: a read-only trap task pins baseline false-done = 100% of
+  claims vs governed = 0% (a failing gate makes the false claim structurally
+  impossible), plus a governed-vs-external-verify cross-check.
 - **Benchmark pass rate over repeated runs** (slice-010) — `orvena bench --repeat
   N` runs every task `N` times and reports a **per-task pass rate** plus a **mean
   pass rate** (the expected single-pass completion rate, de-noised against model

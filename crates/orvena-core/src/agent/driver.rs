@@ -52,7 +52,26 @@ fn cap_run_output(raw: &str) -> (String, String) {
     (body.trim_end().to_string(), note)
 }
 
+/// Bench-only loop options (D2: the ungoverned baseline is a bench flag, not a
+/// product tier). Crate-private — unreachable from the CLI/config surface.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct LoopOptions {
+    /// Ungoverned baseline: scope lists are not enforced (root escape still is),
+    /// gates are never consulted, and the run ends when the model emits zero
+    /// actions — its own, unverified claim of "done" — or at `max_steps`. The
+    /// prompt is identical to a governed run; only enforcement differs.
+    pub ungoverned: bool,
+}
+
 pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
+    run_loop_with(agent, task, LoopOptions::default()).await
+}
+
+pub(crate) async fn run_loop_with(
+    agent: &Agent,
+    task: Task,
+    opts: LoopOptions,
+) -> Result<RunReport> {
     let cfg = agent.config();
     let role = cfg
         .roles
@@ -60,7 +79,11 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
         .ok_or_else(|| Error::Config(format!("role '{}' not found", cfg.agent.default_role)))?
         .clone();
 
-    let scope = Scope::new(task.allowed_modifications.clone(), Vec::new(), cfg.agent.tier);
+    let scope = if opts.ungoverned {
+        Scope::unrestricted_baseline(task.allowed_modifications.clone(), cfg.agent.tier)
+    } else {
+        Scope::new(task.allowed_modifications.clone(), Vec::new(), cfg.agent.tier)
+    };
     let budget = cfg.budgets.for_role(&role.name);
     let max_steps = cfg.agent.max_steps;
 
@@ -105,7 +128,9 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
         let grep = GrepTool::new(agent.root(), &role);
         let shell = ShellTool::new(agent.root(), &role, &cfg.commands);
         let mut tool_evidence = String::new();
-        for action in step::parse_actions(&resp.content) {
+        let actions = step::parse_actions(&resp.content);
+        let action_count = actions.len();
+        for action in actions {
             report.tool_calls += 1;
             match action {
                 step::Action::Write { path, content } => {
@@ -188,6 +213,18 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
             }
         }
 
+        // Ungoverned baseline (bench-only): no gate is consulted — that is the
+        // point of the baseline. The model emitting zero actions is its own
+        // claim of "done"; `completed` here means *claimed*, not verified. The
+        // benchmark harness measures ground truth with an external verify.
+        if opts.ungoverned {
+            if action_count == 0 {
+                return Ok(report.finished(true));
+            }
+            prior_evidence = tool_evidence;
+            continue;
+        }
+
         // 4. gate check (observable evidence)
         let mut all_passed = true;
         let mut needs_human = false;
@@ -234,8 +271,10 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
         prior_evidence = format!("{tool_evidence}{evidence}");
     }
 
-    report.blockers.push(format!(
-        "reached max_steps ({max_steps}) without passing all gates"
-    ));
+    report.blockers.push(if opts.ungoverned {
+        format!("reached max_steps ({max_steps}) still emitting actions (never claimed done)")
+    } else {
+        format!("reached max_steps ({max_steps}) without passing all gates")
+    });
     Ok(report.finished(false))
 }

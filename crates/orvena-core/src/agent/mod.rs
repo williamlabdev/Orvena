@@ -58,6 +58,13 @@ impl Agent {
         driver::run_loop(self, task).await
     }
 
+    /// Bench-only ungoverned baseline (D2): identical prompt, no enforcement,
+    /// completion = the model's own unverified claim. Crate-private on purpose —
+    /// the only caller is the benchmark harness; no product path reaches this.
+    pub(crate) async fn run_ungoverned_baseline(&self, task: Task) -> Result<RunReport> {
+        driver::run_loop_with(self, task, driver::LoopOptions { ungoverned: true }).await
+    }
+
     pub(crate) fn config(&self) -> &Config {
         &self.config
     }
