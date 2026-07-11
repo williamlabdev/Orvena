@@ -9,12 +9,13 @@
 //! `sandbox-exec -p <profile>`; both platforms `exec` the target argv directly,
 //! so the RUN tool's "no shell interpretation" property (ADR-001) is preserved.
 //!
-//! Backend status by platform in this slice:
-//! - **macOS** — fully implemented via `sandbox-exec` + a subtractive SBPL
-//!   profile ("allow default, then deny writes outside root, deny network").
-//! - **Linux / other** — reported *unavailable*; behavior then follows the
-//!   policy's `on_unavailable` (fail-closed under engineering, warn under light).
-//!   The Landlock+seccomp backend is a focused follow-up (see `sandbox_linux`).
+//! Backend status by platform:
+//! - **macOS** — `sandbox-exec` + a subtractive SBPL profile ("allow default,
+//!   then deny writes outside root, deny network").
+//! - **Linux** — Landlock (filesystem) + seccomp (network) applied by a re-exec
+//!   shim (see `sandbox_linux`).
+//! - **Other** — reported *unavailable*; behavior then follows the policy's
+//!   `on_unavailable` (fail-closed under engineering, warn under light).
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -181,11 +182,6 @@ impl Sandbox {
 }
 
 enum Availability {
-    // In this slice only macOS constructs `Available`; the Linux/other arms of
-    // `backend_availability` always report `Unavailable` (the Landlock backend is
-    // a follow-up), so the variant is dead on those targets. `-D warnings` would
-    // otherwise fail the non-macOS build.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Available,
     Unavailable(String),
 }
