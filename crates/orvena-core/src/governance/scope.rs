@@ -31,6 +31,13 @@ impl Scope {
     /// Decide whether a relative path may be written.
     pub fn decision(&self, rel: &str) -> ScopeDecision {
         let rel = normalize(rel);
+        // A path that climbs out of the root (`..`) is never writable, no matter
+        // how its prefix matches the allow-list. The fs tool also hard-rejects
+        // these at the write boundary; this keeps `decision` honest on its own so
+        // an escaping path is never reported as `Allow`.
+        if rel.split('/').any(|seg| seg == "..") {
+            return ScopeDecision::ReadOnly;
+        }
         if self.excluded.iter().any(|e| path_matches(&rel, e)) {
             return ScopeDecision::Excluded;
         }

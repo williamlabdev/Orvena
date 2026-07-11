@@ -24,6 +24,46 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Benchmark pass rate over repeated runs** (slice-010) — `orvena bench --repeat
+  N` runs every task `N` times and reports a **per-task pass rate** plus a **mean
+  pass rate** (the expected single-pass completion rate, de-noised against model
+  nondeterminism) and a `solved ≥once` count; `--repeat 1` (default) is the
+  unchanged single-pass path. Core `run_benchmark_repeated`/`RepeatedReport`
+  layer over the existing single-pass runner (each repeat gets its own workdir
+  namespace, and the underlying per-repeat reports are retained for audit);
+  skips stay excluded from the denominator. Aggregation is regression-tested
+  deterministically with the offline provider. A convenience script
+  `scripts/bench-passrate.sh` runs a scratch-config + offline sanity + the real
+  repeated run for a chosen local model.
+- **Curated benchmark task set + first published number** (slice-009, MVP+1) — a
+  curated, self-contained task set (`benchmarks/realworld.yaml`) with non-trivial
+  multi-file bugs (off-by-one, empty-input, out-of-bounds, a bug in a second
+  module) verified by real `cargo test`/`pytest`, plus an `orvena bench --out
+  <path>` flag to land the JSON report where it's published. **First published
+  number** ([docs/benchmark-results.md](docs/benchmark-results.md), 2026-07-04):
+  Orvena driving a local `qwen3:14b` solved **5/5 (100%)** of the ran Rust tasks
+  single-pass (2 Python tasks skipped, `pytest` absent). The results page is
+  written to *deflate* — it states plainly that 100% on a tiny, simple, curated
+  set is a weak early signal, not a real-world capability claim, and lists the
+  path to a stronger number (harder/larger tasks, real-repo snapshots, repeated
+  runs, hosted models). README gains a Benchmark section linking it.
+- **Seeded project benchmark tasks with real test runners** (slice-008) — an
+  opt-in task set (`benchmarks/projects.yaml`, run via `orvena bench --tasks`)
+  where each task seeds a small **buggy project** and its `verify` runs a real
+  test runner — the model must fix the code so `cargo test` / `pytest` exits 0
+  (the actual "done = your tests pass" claim, not just file creation).
+  **Skip-aware:** a task declares `requires` (e.g. `cargo`, `pytest`); if a
+  required command is absent the task is **skipped**, not failed, and excluded
+  from the completion-rate denominator (`rate = passed / ran`) — a missing
+  toolchain never reads as "0% because it isn't installed". Skips are reported
+  (`BenchReport.skipped` + per-task `skip_reason`). Test files are read-only
+  (only the implementation is writable) so a task can't be gamed by deleting its
+  test; Rust fixtures carry an empty `[workspace]` so `cargo test` in the bench
+  workdir doesn't try to join a parent workspace. Regression-tested
+  deterministically (a missing-toolchain task skips and the rate is over ran
+  tasks only); demonstrated end to end against a real local `qwen3:14b` (fixed
+  the seeded Rust bug so `cargo test` passed; the Python task skipped with
+  `pytest` absent). See [docs/benchmark.md](docs/benchmark.md).
 - **Minimal benchmark harness** (slice-007, MVP+1) — `orvena bench [--provider
   <kind>] [--tasks <file>]` runs a set of hand-picked, auto-verifiable coding
   tasks through the bounded loop and reports a **completion rate** (fraction that

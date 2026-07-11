@@ -82,6 +82,19 @@ the gate's evidence back in. A `human` gate stops and reports a blocker for you 
 Discipline scales with risk via a **governance tier**: `light` (gates/scope advisory) or
 `engineering` (hard-enforced).
 
+## Benchmark
+
+`orvena bench` runs a set of hand-picked, auto-verifiable coding tasks and reports a
+**completion rate** (fraction that reach a passing test). Each task defines its own
+`verify` (e.g. `cargo test` / `pytest`), so "solved" is the same rule the product ships.
+
+**First number (2026-07-04):** on a small curated set of 5 self-contained Rust tasks,
+Orvena driving a local `qwen3:14b` solved **5/5 (100%)**, single-pass. This is a
+deliberately small, early, self-hosted signal — *not* a real-world capability claim
+(the tasks are simple and the sample is tiny). Full context, caveats, and how to
+reproduce (or run a stronger model): [docs/benchmark-results.md](docs/benchmark-results.md)
+· method: [docs/benchmark.md](docs/benchmark.md).
+
 ## Embedding
 
 All logic lives in the `orvena-core` library crate; the `orvena` CLI is a thin frontend.

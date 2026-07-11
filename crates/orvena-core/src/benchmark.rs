@@ -51,6 +51,11 @@ pub struct BenchTask {
     pub seed: Vec<SeedFile>,
     #[serde(default)]
     pub timeout_secs: Option<u64>,
+    /// Commands that must exist on `PATH` for this task to run (e.g. `cargo`,
+    /// `pytest`). If any is missing the task is **skipped**, not failed — a
+    /// missing toolchain must not read as "0% because it isn't installed".
+    #[serde(default)]
+    pub requires: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -63,17 +68,22 @@ pub struct BenchTaskSet {
 pub struct TaskResult {
     pub id: String,
     pub completed: bool,
+    /// True when the task was not run because a required toolchain was absent.
+    /// A skipped task is excluded from the completion-rate denominator.
+    pub skipped: bool,
+    pub skip_reason: Option<String>,
     pub steps: u32,
     pub tool_calls: u32,
     pub input_tokens: u32,
     pub output_tokens: u32,
-    /// Path to the task's evidence bundle (`None` if the run errored before one
-    /// could be written).
+    /// Path to the task's evidence bundle (`None` if skipped, or if the run
+    /// errored before one could be written).
     pub evidence_path: Option<PathBuf>,
     pub blockers: Vec<String>,
 }
 
-/// The aggregate benchmark result. `completion_rate = passed / task_count`.
+/// The aggregate benchmark result. `completion_rate = passed / ran`, where
+/// `ran = task_count - skipped` (skipped tasks are not counted against the rate).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchReport {
     pub provider: String,
@@ -81,6 +91,7 @@ pub struct BenchReport {
     pub run_id: String,
     pub task_count: u32,
     pub passed: u32,
+    pub skipped: u32,
     pub completion_rate: f32,
     pub results: Vec<TaskResult>,
 }
@@ -100,6 +111,24 @@ pub async fn run_benchmark(
     let mut results = Vec::with_capacity(set.tasks.len());
 
     for task in &set.tasks {
+        // Skip (do not fail) a task whose required toolchain is absent — a
+        // missing `cargo`/`pytest` must not read as a completion failure.
+        if let Some(missing) = task.requires.iter().find(|c| !command_exists(c)) {
+            results.push(TaskResult {
+                id: task.id.clone(),
+                completed: false,
+                skipped: true,
+                skip_reason: Some(format!("requires `{missing}` (not found on PATH)")),
+                steps: 0,
+                tool_calls: 0,
+                input_tokens: 0,
+                output_tokens: 0,
+                evidence_path: None,
+                blockers: Vec::new(),
+            });
+            continue;
+        }
+
         let workdir = base_dir.join(run_id).join(&task.id);
         std::fs::create_dir_all(&workdir)?;
         for f in &task.seed {
@@ -123,6 +152,8 @@ pub async fn run_benchmark(
                 TaskResult {
                     id: task.id.clone(),
                     completed: report.completed,
+                    skipped: false,
+                    skip_reason: None,
                     steps: report.steps,
                     tool_calls: report.tool_calls,
                     input_tokens: report.input_tokens,
@@ -134,6 +165,8 @@ pub async fn run_benchmark(
             Err(e) => TaskResult {
                 id: task.id.clone(),
                 completed: false,
+                skipped: false,
+                skip_reason: None,
                 steps: 0,
                 tool_calls: 0,
                 input_tokens: 0,
@@ -145,8 +178,11 @@ pub async fn run_benchmark(
     }
 
     let task_count = results.len() as u32;
+    let skipped = results.iter().filter(|r| r.skipped).count() as u32;
     let passed = results.iter().filter(|r| r.completed).count() as u32;
-    let completion_rate = if task_count == 0 { 0.0 } else { passed as f32 / task_count as f32 };
+    // Rate is over tasks that actually ran, so skips neither help nor hurt it.
+    let ran = task_count - skipped;
+    let completion_rate = if ran == 0 { 0.0 } else { passed as f32 / ran as f32 };
 
     Ok(BenchReport {
         provider: provider.kind.clone(),
@@ -154,9 +190,132 @@ pub async fn run_benchmark(
         run_id: run_id.to_string(),
         task_count,
         passed,
+        skipped,
         completion_rate,
         results,
     })
+}
+
+/// Does `cmd` resolve to an executable? A value containing `/` is treated as a
+/// direct path; otherwise `PATH` is scanned. Dep-free (no `which` crate).
+fn command_exists(cmd: &str) -> bool {
+    if cmd.contains('/') {
+        return Path::new(cmd).is_file();
+    }
+    let Some(paths) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&paths).any(|dir| dir.join(cmd).is_file())
+}
+
+/// Per-task pass rate across repeated runs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TaskPassRate {
+    pub id: String,
+    pub runs: u32,
+    pub solved: u32,
+    pub skipped: bool,
+    pub pass_rate: f32,
+}
+
+/// Aggregate of `repeat` benchmark runs — a de-noised completion rate that
+/// tolerates a stochastic model, unlike a single pass.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatedReport {
+    pub provider: String,
+    pub model: String,
+    pub run_id: String,
+    pub repeat: u32,
+    pub task_count: u32,
+    pub ran: u32,
+    pub skipped: u32,
+    /// Mean of per-task pass rates over ran tasks — the expected single-pass
+    /// completion rate, averaged over `repeat` attempts to cut model noise.
+    pub mean_pass_rate: f32,
+    /// Tasks solved in at least one run (an optimistic pass@k upper bound).
+    pub solved_any: u32,
+    pub tasks: Vec<TaskPassRate>,
+    /// The underlying per-repeat reports, for full auditability.
+    pub runs: Vec<BenchReport>,
+}
+
+/// Run the whole set `repeat` times and aggregate per-task pass rates. Each
+/// repeat gets its own workdir namespace (`<run_id>-rep<i>`) so runs never
+/// collide. `repeat` is clamped to at least 1.
+pub async fn run_benchmark_repeated(
+    set: &BenchTaskSet,
+    provider: &ProviderSelection,
+    base_dir: &Path,
+    run_id: &str,
+    repeat: u32,
+) -> Result<RepeatedReport> {
+    let repeat = repeat.max(1);
+    let mut runs = Vec::with_capacity(repeat as usize);
+    for i in 0..repeat {
+        runs.push(run_benchmark(set, provider, base_dir, &format!("{run_id}-rep{i}")).await?);
+    }
+
+    // Aggregate per task, in the set's declared order. A skip is deterministic
+    // (it depends only on PATH), so a task skipped in the first run is skipped
+    // in all of them and counts as not-run.
+    let mut tasks = Vec::with_capacity(set.tasks.len());
+    for t in &set.tasks {
+        let skipped = runs[0].results.iter().any(|r| r.id == t.id && r.skipped);
+        if skipped {
+            tasks.push(TaskPassRate {
+                id: t.id.clone(),
+                runs: 0,
+                solved: 0,
+                skipped: true,
+                pass_rate: 0.0,
+            });
+            continue;
+        }
+        let solved = runs
+            .iter()
+            .filter(|rep| rep.results.iter().any(|r| r.id == t.id && r.completed))
+            .count() as u32;
+        tasks.push(TaskPassRate {
+            id: t.id.clone(),
+            runs: repeat,
+            solved,
+            skipped: false,
+            pass_rate: solved as f32 / repeat as f32,
+        });
+    }
+
+    let task_count = tasks.len() as u32;
+    let skipped = tasks.iter().filter(|t| t.skipped).count() as u32;
+    let ran = task_count - skipped;
+    let mean_pass_rate = if ran == 0 {
+        0.0
+    } else {
+        tasks.iter().filter(|t| !t.skipped).map(|t| t.pass_rate).sum::<f32>() / ran as f32
+    };
+    let solved_any = tasks.iter().filter(|t| !t.skipped && t.solved > 0).count() as u32;
+
+    Ok(RepeatedReport {
+        provider: provider.kind.clone(),
+        model: provider.model.clone(),
+        run_id: run_id.to_string(),
+        repeat,
+        task_count,
+        ran,
+        skipped,
+        mean_pass_rate,
+        solved_any,
+        tasks,
+        runs,
+    })
+}
+
+/// Serialize a [`RepeatedReport`] as pretty JSON to `path`, creating parents.
+pub fn write_repeated_report(report: &RepeatedReport, path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, serde_json::to_string_pretty(report)?)?;
+    Ok(())
 }
 
 /// Serialize a [`BenchReport`] as pretty JSON to `path`, creating parents.

@@ -81,10 +81,21 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
         );
 
         // 2. call model
-        let resp = agent
+        // A provider error (outage, bad key, network) must NOT bail out of the
+        // loop before evidence is produced. Capture it as a blocker and finish
+        // the run so the caller still writes a bundle — "evidence by default"
+        // must hold on the error path too, not only on Ok.
+        let resp = match agent
             .provider()
             .chat(ChatRequest { messages: ctx.messages, max_tokens: MAX_OUTPUT_TOKENS })
-            .await?;
+            .await
+        {
+            Ok(resp) => resp,
+            Err(e) => {
+                report.blockers.push(format!("provider error: {e}"));
+                return Ok(report.finished(false));
+            }
+        };
         report.input_tokens += resp.input_tokens;
         report.output_tokens += resp.output_tokens;
 
@@ -181,10 +192,14 @@ pub async fn run_loop(agent: &Agent, task: Task) -> Result<RunReport> {
         let mut all_passed = true;
         let mut needs_human = false;
         let mut evidence = String::new();
-        report.gate_outcomes.clear();
+        // Accumulate gate outcomes across every step (do NOT clear each step), so
+        // a multi-step run's bundle records the full gate history — how the run
+        // converged — rather than only the final round. Each record is tagged
+        // with its step for disambiguation.
         for gate in &cfg.gates.gates {
             let outcome = GateRunner::run(gate, agent.root());
             report.gate_outcomes.push(GateRecord {
+                step: step_no,
                 gate: outcome.gate.clone(),
                 passed: outcome.passed,
                 needs_human: outcome.needs_human,

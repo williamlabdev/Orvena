@@ -42,7 +42,22 @@ pub async fn run(task_text: String, write: Vec<String>, provider: Option<String>
     };
 
     let agent = Agent::new(config, project_root())?;
-    let report = agent.run(Task::new(instruction, write)).await?;
+
+    // Evidence by default must survive an operator interrupt too: race the run
+    // against Ctrl-C and, if interrupted, still write an auditable bundle before
+    // exiting rather than leaving nothing on disk.
+    let report = tokio::select! {
+        r = agent.run(Task::new(instruction.clone(), write)) => r?,
+        _ = tokio::signal::ctrl_c() => {
+            let bundle = evidence::bundle_path(&dir, &run_timestamp());
+            let mut interrupted = orvena_core::RunReport::new(&instruction);
+            interrupted.blockers.push("run interrupted (Ctrl-C) before completion".into());
+            let interrupted = interrupted.finished(false);
+            evidence::write_bundle(&interrupted, &bundle)?;
+            eprintln!("\ninterrupted — evidence bundle: {}", bundle.display());
+            bail!("run interrupted (Ctrl-C); evidence: {}", bundle.display());
+        }
+    };
 
     print_report(&report);
 

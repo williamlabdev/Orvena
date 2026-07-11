@@ -1,0 +1,95 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "run_id": "1783179791287",
+  "task_count": 7,
+  "passed": 5,
+  "skipped": 2,
+  "completion_rate": 1.0,
+  "results": [
+    {
+      "id": "rust-inclusive-range",
+      "completed": true,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 1,
+      "tool_calls": 1,
+      "input_tokens": 324,
+      "output_tokens": 429,
+      "evidence_path": ".orvena/bench/1783179791287/rust-inclusive-range/evidence.json",
+      "blockers": []
+    },
+    {
+      "id": "rust-average-empty",
+      "completed": true,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 1,
+      "tool_calls": 1,
+      "input_tokens": 344,
+      "output_tokens": 511,
+      "evidence_path": ".orvena/bench/1783179791287/rust-average-empty/evidence.json",
+      "blockers": []
+    },
+    {
+      "id": "rust-fizzbuzz-swapped",
+      "completed": true,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 1,
+      "tool_calls": 1,
+      "input_tokens": 401,
+      "output_tokens": 526,
+      "evidence_path": ".orvena/bench/1783179791287/rust-fizzbuzz-swapped/evidence.json",
+      "blockers": []
+    },
+    {
+      "id": "rust-last-oob",
+      "completed": true,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 1,
+      "tool_calls": 1,
+      "input_tokens": 332,
+      "output_tokens": 561,
+      "evidence_path": ".orvena/bench/1783179791287/rust-last-oob/evidence.json",
+      "blockers": []
+    },
+    {
+      "id": "rust-kv-parse",
+      "completed": true,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 1,
+      "tool_calls": 1,
+      "input_tokens": 346,
+      "output_tokens": 428,
+      "evidence_path": ".orvena/bench/1783179791287/rust-kv-parse/evidence.json",
+      "blockers": []
+    },
+    {
+      "id": "python-average-empty",
+      "completed": false,
+      "skipped": true,
+      "skip_reason": "requires `pytest` (not found on PATH)",
+      "steps": 0,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "evidence_path": null,
+      "blockers": []
+    },
+    {
+      "id": "python-parse",
+      "completed": false,
+      "skipped": true,
+      "skip_reason": "requires `pytest` (not found on PATH)",
+      "steps": 0,
+      "tool_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "evidence_path": null,
+      "blockers": []
+    }
+  ]
+}

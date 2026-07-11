@@ -1,0 +1,244 @@
+# Orvena benchmark — curated coding tasks (opt-in).
+#
+# More representative than the built-in toy set: each task seeds a small
+# multi-file project with a NON-TRIVIAL bug (requires reading the code), and
+# `verify` runs a real test runner. These are hand-authored, self-contained
+# tasks — NOT real-world GitHub issues / SWE-bench. See docs/benchmark-results.md.
+#
+#     orvena bench --tasks benchmarks/realworld.yaml --provider <kind>
+#
+# Rust tasks run wherever `cargo` exists; Python tasks skip unless `pytest` is
+# present. Test files are read-only (only the implementation is in `writes`).
+
+tasks:
+  # ── Rust ─────────────────────────────────────────────────────────────────
+  - id: rust-inclusive-range
+    instruction: "src/lib.rs has an off-by-one bug: `sum_to(n)` should sum 1..=n inclusive but excludes n. Fix src/lib.rs so `cargo test` passes."
+    writes: [src/lib.rs]
+    requires: [cargo]
+    verify: "cargo test"
+    timeout_secs: 120
+    seed:
+      - path: Cargo.toml
+        contents: |
+          [package]
+          name = "bench_range"
+          version = "0.0.0"
+          edition = "2021"
+
+          [workspace]
+      - path: src/lib.rs
+        contents: |
+          /// Sum of all integers from 1 to n, inclusive.
+          pub fn sum_to(n: u32) -> u32 {
+              (1..n).sum()
+          }
+      - path: tests/it.rs
+        contents: |
+          use bench_range::sum_to;
+
+          #[test]
+          fn sums_inclusive() {
+              assert_eq!(sum_to(5), 15);
+              assert_eq!(sum_to(1), 1);
+          }
+
+  - id: rust-average-empty
+    instruction: "src/lib.rs `average` divides by zero on an empty slice (returns NaN) but should return 0.0 for empty input. Fix src/lib.rs so `cargo test` passes."
+    writes: [src/lib.rs]
+    requires: [cargo]
+    verify: "cargo test"
+    timeout_secs: 120
+    seed:
+      - path: Cargo.toml
+        contents: |
+          [package]
+          name = "bench_avg"
+          version = "0.0.0"
+          edition = "2021"
+
+          [workspace]
+      - path: src/lib.rs
+        contents: |
+          /// Arithmetic mean of the slice; 0.0 for an empty slice.
+          pub fn average(xs: &[f64]) -> f64 {
+              let sum: f64 = xs.iter().sum();
+              sum / xs.len() as f64
+          }
+      - path: tests/it.rs
+        contents: |
+          use bench_avg::average;
+
+          #[test]
+          fn averages_values() {
+              assert_eq!(average(&[2.0, 4.0]), 3.0);
+          }
+
+          #[test]
+          fn empty_is_zero() {
+              assert_eq!(average(&[]), 0.0);
+          }
+
+  - id: rust-fizzbuzz-swapped
+    instruction: "src/lib.rs `fizzbuzz` has Fizz and Buzz swapped (3 should map to Fizz, 5 to Buzz). Fix src/lib.rs so `cargo test` passes."
+    writes: [src/lib.rs]
+    requires: [cargo]
+    verify: "cargo test"
+    timeout_secs: 120
+    seed:
+      - path: Cargo.toml
+        contents: |
+          [package]
+          name = "bench_fizz"
+          version = "0.0.0"
+          edition = "2021"
+
+          [workspace]
+      - path: src/lib.rs
+        contents: |
+          /// "Fizz" if divisible by 3, "Buzz" if by 5, "FizzBuzz" if by both,
+          /// otherwise the number itself.
+          pub fn fizzbuzz(n: u32) -> String {
+              if n % 15 == 0 {
+                  "FizzBuzz".to_string()
+              } else if n % 3 == 0 {
+                  "Buzz".to_string()
+              } else if n % 5 == 0 {
+                  "Fizz".to_string()
+              } else {
+                  n.to_string()
+              }
+          }
+      - path: tests/it.rs
+        contents: |
+          use bench_fizz::fizzbuzz;
+
+          #[test]
+          fn maps_correctly() {
+              assert_eq!(fizzbuzz(3), "Fizz");
+              assert_eq!(fizzbuzz(5), "Buzz");
+              assert_eq!(fizzbuzz(15), "FizzBuzz");
+              assert_eq!(fizzbuzz(7), "7");
+          }
+
+  - id: rust-last-oob
+    instruction: "src/lib.rs `last` indexes out of bounds (`xs[xs.len()]`) and panics. Fix src/lib.rs so `cargo test` passes."
+    writes: [src/lib.rs]
+    requires: [cargo]
+    verify: "cargo test"
+    timeout_secs: 120
+    seed:
+      - path: Cargo.toml
+        contents: |
+          [package]
+          name = "bench_last"
+          version = "0.0.0"
+          edition = "2021"
+
+          [workspace]
+      - path: src/lib.rs
+        contents: |
+          /// The last element of the slice, or None if empty.
+          pub fn last<T: Copy>(xs: &[T]) -> Option<T> {
+              if xs.is_empty() {
+                  return None;
+              }
+              Some(xs[xs.len()])
+          }
+      - path: tests/it.rs
+        contents: |
+          use bench_last::last;
+
+          #[test]
+          fn gets_last() {
+              assert_eq!(last(&[1, 2, 3]), Some(3));
+              assert_eq!(last::<i32>(&[]), None);
+          }
+
+  # Multi-file: the bug is in src/parser.rs, not the lib.rs the task names first.
+  - id: rust-kv-parse
+    instruction: "The tests expect `parse_pair` to split on '=', but it splits on ':'. The bug is in src/parser.rs. Fix it so `cargo test` passes."
+    writes: [src/parser.rs]
+    requires: [cargo]
+    verify: "cargo test"
+    timeout_secs: 120
+    seed:
+      - path: Cargo.toml
+        contents: |
+          [package]
+          name = "bench_kv"
+          version = "0.0.0"
+          edition = "2021"
+
+          [workspace]
+      - path: src/lib.rs
+        contents: |
+          mod parser;
+          pub use parser::parse_pair;
+      - path: src/parser.rs
+        contents: |
+          /// Parse "key=value" into (key, value), trimming surrounding whitespace.
+          pub fn parse_pair(s: &str) -> Option<(String, String)> {
+              let (k, v) = s.split_once(':')?;
+              Some((k.trim().to_string(), v.trim().to_string()))
+          }
+      - path: tests/it.rs
+        contents: |
+          use bench_kv::parse_pair;
+
+          #[test]
+          fn parses_key_value() {
+              assert_eq!(
+                  parse_pair("host = localhost"),
+                  Some(("host".to_string(), "localhost".to_string()))
+              );
+              assert_eq!(parse_pair("no-separator"), None);
+          }
+
+  # ── Python (skips unless pytest is present) ──────────────────────────────
+  - id: python-average-empty
+    instruction: "calc.py `average` raises ZeroDivisionError on an empty list but should return 0.0. Fix calc.py so `pytest` passes."
+    writes: [calc.py]
+    requires: [pytest]
+    verify: "pytest -q"
+    timeout_secs: 60
+    seed:
+      - path: calc.py
+        contents: |
+          def average(xs):
+              return sum(xs) / len(xs)
+      - path: test_calc.py
+        contents: |
+          from calc import average
+
+
+          def test_values():
+              assert average([2, 4]) == 3
+
+          def test_empty_is_zero():
+              assert average([]) == 0.0
+
+  - id: python-parse
+    instruction: "parse.py `parse_pair` splits on ':' but the tests expect it to split on '='. Fix parse.py so `pytest` passes."
+    writes: [parse.py]
+    requires: [pytest]
+    verify: "pytest -q"
+    timeout_secs: 60
+    seed:
+      - path: parse.py
+        contents: |
+          def parse_pair(s):
+              if ":" not in s:
+                  return None
+              key, value = s.split(":", 1)
+              return (key.strip(), value.strip())
+      - path: test_parse.py
+        contents: |
+          from parse import parse_pair
+
+
+          def test_parses():
+              assert parse_pair("host = localhost") == ("host", "localhost")
+
+          def test_no_separator():
+              assert parse_pair("nope") is None
