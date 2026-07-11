@@ -38,6 +38,14 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # Re-run the Linux sandbox containment test with output visible, so the log
+      # unambiguously records whether the OS actually enforced (Landlock present)
+      # or the test self-skipped (kernel without Landlock) — a plain green check
+      # cannot distinguish the two. Look for a `SANDBOX-LINUX:` line.
+      - name: Sandbox containment signal (Linux)
+        if: runner.os == 'Linux'
+        run: cargo test -p orvena-cli --test sandbox_linux -- --nocapture
+
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
 

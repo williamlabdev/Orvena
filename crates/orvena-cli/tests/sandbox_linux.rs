@@ -50,10 +50,11 @@ fn filesystem_and_network_are_confined() {
     let probe = outside.join("probe.txt");
     let _ = shim(&root, &root, false, false, &["sh", "-c", &format!("echo x > {}", probe.display())]);
     if probe.exists() {
-        eprintln!("skipping: Landlock is not enforcing on this runner");
+        eprintln!("SANDBOX-LINUX: SKIPPED — Landlock is not enforcing on this runner");
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
         return;
     }
+    eprintln!("SANDBOX-LINUX: Landlock is enforcing — running containment assertions");
 
     // 1. Out-of-root write is denied by the OS (enforced, fail-closed policy).
     let sentinel = outside.join("pwned.txt");
@@ -78,10 +79,12 @@ fn filesystem_and_network_are_confined() {
     if control.status.success() {
         let denied = shim(&root, &root, true, true, &["sh", "-c", &connect]);
         assert!(!denied.status.success(), "network:deny must block a connection to an open port");
+        eprintln!("SANDBOX-LINUX: network:deny blocked a connection to an open port");
     } else {
-        eprintln!("skipping network assertion: control connect did not succeed");
+        eprintln!("SANDBOX-LINUX: network assertion skipped (control connect did not succeed)");
     }
 
+    eprintln!("SANDBOX-LINUX: containment VERIFIED (out-of-root write + in-root write)");
     drop(listener);
     let _ = std::fs::remove_dir_all(root.parent().unwrap());
 }
