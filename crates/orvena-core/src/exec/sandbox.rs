@@ -199,7 +199,13 @@ fn backend_availability(_policy: &SandboxPolicy) -> Availability {
     }
     #[cfg(target_os = "linux")]
     {
-        Availability::Unavailable(super::sandbox_linux::unavailable_reason())
+        if super::sandbox_linux::available() {
+            Availability::Available
+        } else {
+            Availability::Unavailable(
+                "Landlock is unavailable on this kernel (needs 5.13+ with Landlock enabled)".into(),
+            )
+        }
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
@@ -214,14 +220,42 @@ fn backend_argv_prefix(policy: &SandboxPolicy) -> Result<Vec<String>, SandboxErr
     {
         Ok(super::sandbox_macos::argv_prefix(policy))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     {
-        // `Confined` is only ever constructed when a backend is available, which
-        // today is macOS-only — so this is unreachable in practice. Fail closed
-        // rather than silently run unconfined if that invariant ever changes.
+        super::sandbox_linux::argv_prefix(policy)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        // `Confined` is only ever constructed when a backend is available, so
+        // this is unreachable in practice. Fail closed rather than silently run
+        // unconfined if that invariant ever changes.
         Err(SandboxError::Backend(
             "confined mode has no argv backend on this platform".into(),
         ))
+    }
+}
+
+/// Entry point for the hidden `orvena __sandbox` subcommand (dispatched from the
+/// CLI's `main` before the tokio runtime starts, so it is single-threaded). Parse
+/// the spec JSON and hand off to the Linux re-exec shim, which applies Landlock +
+/// seccomp and then `execvp`s the wrapped command. Never returns. On a platform
+/// with no re-exec backend it fails closed rather than run the command unconfined.
+pub fn run_linux_shim(spec_json: &str, argv: &[String]) -> ! {
+    #[cfg(target_os = "linux")]
+    {
+        match serde_json::from_str::<super::sandbox_linux::ShimSpec>(spec_json) {
+            Ok(spec) => super::sandbox_linux::run_shim(&spec, argv),
+            Err(e) => {
+                eprintln!("orvena __sandbox: invalid --spec: {e}");
+                std::process::exit(70);
+            }
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (spec_json, argv);
+        eprintln!("orvena __sandbox: no re-exec sandbox backend on this platform");
+        std::process::exit(70);
     }
 }
 
@@ -286,11 +320,12 @@ mod tests {
         assert!(matches!(s.argv_prefix(), Err(SandboxError::Refused(_))));
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     #[test]
-    fn non_macos_warn_runs_unconfined() {
+    fn no_backend_warn_runs_unconfined() {
         // On a host without a backend, `warn` degrades to running unconfined with
         // an empty prefix and a surfaced warning — never a silent enforced claim.
+        // (Linux has a backend, so `warn` there may resolve to Confined instead.)
         let s = Sandbox::for_policy(policy(OnUnavailable::Warn));
         assert_eq!(s.status(), SandboxStatus::Disabled);
         assert!(s.argv_prefix().unwrap().is_empty());

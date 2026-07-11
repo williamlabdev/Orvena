@@ -19,6 +19,32 @@
 本 slice 把這格填實:Linux 上 `Sandbox` 進 `Confined`,`argv_prefix` 回一個 re-exec shim
 前綴,shim 在**單執行緒**下套 Landlock(檔案系統)+ seccomp(網路)後 `execvp` 真命令。
 
+## 實作狀態(2026-07-12)
+
+**已實作並 compile-verified(cross-target),macOS 四道門檻全綠(102 passed/0 failed):**
+- `sandbox_linux.rs`:`ShimSpec`(serde)、`available()`(Landlock `HardRequirement` 探測、不 enforce
+  自身)、`argv_prefix()`(shim exe 按 `ORVENA_SANDBOX_SHIM`→`current_exe` 解析)、`run_shim()`
+  (Landlock「/ 唯讀可執行 + writable/`/dev` 可寫」+ seccomp 擋 `AF_INET/INET6` socket → `execvp`,
+  失敗且 fail_closed 則 exit 70 不 exec)。
+- `sandbox.rs`:`backend_availability`/`backend_argv_prefix` 的 linux 臂接真後端;新增
+  `run_linux_shim(spec_json, argv)` 匯出給 CLI。
+- `sandbox_shim.rs`:`dispatch()` 解析 `--spec`/`--` 後呼叫 `run_linux_shim`。
+- `Cargo.toml`:`[target.'cfg(target_os="linux")']` 加 `landlock`/`seccompiler`/`libc`(macOS 不拉,
+  已驗證不在 host dep tree);`Cargo.lock` 已鎖版。
+- 測試:`sandbox_linux.rs` 單元(ShimSpec round-trip、argv_prefix + env 覆寫);
+  `sandbox_confinement.rs` 的 cfg 邊界改 `not(any(macos,linux))` + 新增 linux enforced/fail-closed 測試;
+  `orvena-cli/tests/sandbox_linux.rs` 端到端(control-gated)。
+
+**compile 驗證方式(macOS 主機):** landlock 0.4.5 + seccompiler 0.4.0 的 API 全部經
+`cargo check --target x86_64-unknown-linux-gnu`(用 rustup toolchain 的 linux std)驗證 ——
+包含把**真實的** `sandbox.rs`+`sandbox_linux.rs` symlink 進一個無 reqwest 的 harness 交叉檢查
+(避開 macOS 交叉編譯 reqwest TLS C-deps 的限制)。**runtime containment 未在此驗**。
+
+**必須在 Linux 上跑才算完成(AC-V2/V3):** 真正的 Landlock/seccomp 圈禁行為只有 kernel 能證。
+落在 CI 的 ubuntu leg + `orvena-cli/tests/sandbox_linux.rs`(control-gated:runner kernel 不 enforce
+Landlock 時自動 skip 硬斷言,不 false-fail)。**尚未在真實 Linux 觀測到「寫 root 外被擋 / 網路被擋」**
+—— 這是本 slice 剩下的唯一驗證缺口,待 CI 綠或本機 Linux 跑一次確認。
+
 ## 已預先落地(macOS 可驗部分,2026-07-12,四道門檻全綠)
 
 為把本 slice 真正 Linux-only 的面縮到最小,以下**已在 macOS 上寫好並驗證**,slice-016 只需
@@ -52,7 +78,7 @@ re-exec shim 讓限制在一個**全新、單執行緒**的行程(`orvena __sand
 ```yaml
 slice_id: slice-016-os-sandbox-linux
 title: OS-level sandbox — Linux backend (Landlock + seccomp re-exec shim)
-status: DRAFT
+status: IMPLEMENTED (compile-verified cross-target from macOS; runtime containment pending Linux CI — AC-V2/V3)
 governance_tier: engineering
 dependencies:
   - slice-015-os-sandbox                # 施力點、SandboxPolicy、status/fail-closed 已就位
@@ -158,16 +184,16 @@ delivers:
 ## Acceptance Criteria
 
 ### 後端接線(`sandbox.rs` / `sandbox_linux.rs`)
-- [ ] AC-1:Linux 上 Landlock 可用時 `Sandbox::for_policy` 回 `Confined`、`status()==Enforced`;
+- [x] AC-1:Linux 上 Landlock 可用時 `Sandbox::for_policy` 回 `Confined`、`status()==Enforced`;
       不可用時維持 slice-015 的 `Unavailable` + `on_unavailable`(fail_closed/warn)語意。
-- [ ] AC-2:`argv_prefix` 回 `[shim, "__sandbox", "--spec", <json>, "--"]` + base argv;
+- [x] AC-2:`argv_prefix` 回 `[shim, "__sandbox", "--spec", <json>, "--"]` + base argv;
       shim 執行檔按「env → current_exe → Backend error」順序解析。
-- [ ] AC-3:`ShimSpec` 只帶 `writable`/`deny_network`/`fail_closed`;`writable` == `policy.
+- [x] AC-3:`ShimSpec` 只帶 `writable`/`deny_network`/`fail_closed`;`writable` == `policy.
       writable_paths()`;JSON round-trip 可反序列化回相等值。
-- [ ] AC-4:`run_shim` 施加失敗 + `fail_closed` → 非 0 退出且**不 execvp**;`warn` → 印警告後
+- [x] AC-4:`run_shim` 施加失敗 + `fail_closed` → 非 0 退出且**不 execvp**;`warn` → 印警告後
       execvp;成功 → `execvp` `--` 後 argv(exit code / stdio 由真命令決定,parent 的 timeout
       仍有效)。
-- [ ] AC-5:RUN 的「不經 shell 解譯」保留 —— shim `execvp` 目標 argv 逐字,不引入 shell;
+- [x] AC-5:RUN 的「不經 shell 解譯」保留 —— shim `execvp` 目標 argv 逐字,不引入 shell;
       `run_shell`(gate)仍是 `["sh","-c",str]`,一樣被 shim 包。
 
 ### CLI 分派(async-signal-safety)
@@ -178,22 +204,22 @@ delivers:
       `block_on` 不改變任何使用者可見行為。**已驗證**。
 
 ### 平台隔離 / 相容
-- [ ] AC-8:`landlock`/`seccompiler` 為 `cfg(target_os="linux")` target 依賴;**macOS
+- [x] AC-8:`landlock`/`seccompiler` 為 `cfg(target_os="linux")` target 依賴;**macOS
       `cargo build/test/clippy` 不拉、不編這兩個 crate**,slice-015 的 macOS 路徑零回歸。
-- [ ] AC-9:更新 `tests/sandbox_confinement.rs` —— 原 `#[cfg(not(target_os = "macos"))]` 的
+- [x] AC-9:更新 `tests/sandbox_confinement.rs` —— 原 `#[cfg(not(target_os = "macos"))]` 的
       fail-closed 測試收窄成 `#[cfg(not(any(target_os="macos", target_os="linux")))]`;Linux 改由
       新的端到端 containment 測試涵蓋(否則 Linux 上「預期 Unavailable」會與新 Enforced 相矛盾)。
 
 ### Verification(gate 證據)
-- [ ] AC-V1:單元測試(linux-gated)—— `ShimSpec` serde round-trip、`argv_prefix` 形狀 +
+- [x] AC-V1:單元測試(linux-gated)—— `ShimSpec` serde round-trip、`argv_prefix` 形狀 +
       env 覆寫解析、`available()` 冒煙。
-- [ ] AC-V2:**containment 端到端(關鍵,`crates/orvena-cli/tests/sandbox_linux.rs`,
+- [ ] AC-V2(**runtime 待 Linux 驗**;測試已寫、compile-verified):**containment 端到端(關鍵,`crates/orvena-cli/tests/sandbox_linux.rs`,
       `#[cfg(target_os = "linux")]`)** —— 驅動真 `orvena` binary:
       ①`orvena __sandbox --spec <deny,root-only> -- sh -c 'echo pwned > <root外>'` → 命令失敗、
       sentinel 不存在;②`… -- sh -c 'echo hi > <root內>'` → 成功、檔案存在;
       ③開一個 `TcpListener` 取 port,`… -- <連該 port>` → 失敗(control:同命令無 shim 前綴 →
       成功;control 不成立則 skip,不 false-fail)。
-- [ ] AC-V3:**dogfood** —— 在 Linux 上 `enabled:true, network:deny(vendored deps 或 offline
+- [ ] AC-V3(**待 Linux 驗**):**dogfood** —— 在 Linux 上 `enabled:true, network:deny(vendored deps 或 offline
       gate), root_write` 跑一次真 `orvena run`,`RunReport.sandbox == enforced` 且 loop 照常完成、
       落地 evidence bundle(對稱 macOS 的 `first_run.rs`)。
 - [~] AC-V4:**CI 兩平台 matrix 已就緒**(`ubuntu-latest` + `macos-latest`,四道門檻),

@@ -135,12 +135,13 @@ fail-closed —— because:
      + `(deny file-write* (subpath "/"))` + `(allow file-write* (subpath
      "<root_canon>"))` + temp;`network: deny` 時加 `(deny network*)`。root
      路徑 canonical 化並跳脫引號。
-   - **Linux** — `[current_exe, "__sandbox", "--policy", <json>]`,一個隱藏
-     CLI 子命令:套 Landlock(root 子樹 + temp 可寫、其餘唯讀)+ seccomp(deny
-     `socket(2)`)後 `execvp` 剩餘 argv。**刻意不用 `pre_exec`** —— fork 後
-     exec 前只能呼叫 async-signal-safe 函式,而 tokio 多執行緒 + Landlock crate
-     會配置記憶體,`pre_exec` 施加 Landlock 有 UB 風險;re-exec shim 完全避開,
-     且與 macOS 的外部 `sandbox-exec` 對稱。
+   - **Linux** — `[<shim>, "__sandbox", "--spec", <json>, "--"]`,一個隱藏
+     CLI 子命令:套 Landlock(root 子樹 + temp + `/dev` 可寫、其餘唯讀可讀可執行)
+     + seccomp(deny `socket(AF_INET/AF_INET6)`)後 `execvp` 剩餘 argv。**刻意不用
+     `pre_exec`** —— fork 後 exec 前只能呼叫 async-signal-safe 函式,而 tokio 多執行緒
+     + Landlock crate 會配置記憶體,`pre_exec` 施加 Landlock 有 UB 風險;re-exec shim
+     完全避開,且與 macOS 的外部 `sandbox-exec` 對稱。**已於 slice-016 實作**
+     (`landlock` + `seccompiler`,cross-target compile-verified;runtime 待 Linux CI)。
 
 3. **策略** — `SandboxPolicy { root_canon, network: Deny|Allow, filesystem:
    RootWrite|Strict{writable}, extra_writable, on_unavailable }`。預設
