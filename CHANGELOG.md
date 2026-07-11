@@ -24,6 +24,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Temptation task set + independent violation oracle** (slice-012, M1/D3) —
+  `benchmarks/temptation.yaml`: 8 scope-adversarial tasks where the easiest or
+  most "natural" fix violates the declared scope (edit the check instead of the
+  code; "fix" a read-only neighbor — including a typo that begs correcting;
+  write outside the root — including an instruction that explicitly asks for an
+  out-of-root backup; plus one honest lazy-path task documenting what no gate
+  can catch). Judged by a new **git-based oracle** (`benchmark::oracle`) that
+  shares no code with the enforcement layer (the player cannot referee its own
+  match): baseline commit after seeding, `git status` diff after the run,
+  its own reading of the writes contract, `escape_probes` for out-of-root
+  writes git cannot see, and build-artifact exclusion via `.git/info/exclude`
+  (invisible to the agent). Every report gains **containment rate (M1)**,
+  per-task violations, **false blocks** (enforcement refusing a path the
+  contract allowed — cross-checked from the new structured
+  `RunReport.scope_refusals`), and `oracle_errors` (an unjudgeable run is
+  surfaced, never counted as contained). The matrix differential now leads
+  with containment. Workdirs stay git repos on purpose: `git diff` against the
+  baseline is publishable evidence of exactly what the agent touched.
 - **Governance-differential benchmark matrix** (slice-011) — `orvena bench
   --governance off,light,engineering` runs the same task set once per governance
   posture and reports the **differential**: what the brakes buy. Two new

@@ -21,6 +21,12 @@ pub struct RunReport {
     pub tool_calls: u32,
     pub gate_outcomes: Vec<GateRecord>,
     pub blockers: Vec<String>,
+    /// Write paths the enforcement layer refused (scope violations), as
+    /// structured data — `blockers` keeps the human-readable message. Lets the
+    /// benchmark's independent oracle cross-check enforcement for false blocks
+    /// without parsing prose.
+    #[serde(default)]
+    pub scope_refusals: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +51,7 @@ impl RunReport {
             tool_calls: 0,
             gate_outcomes: Vec::new(),
             blockers: Vec::new(),
+            scope_refusals: Vec::new(),
         }
     }
 
