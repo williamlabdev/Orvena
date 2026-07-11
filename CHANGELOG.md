@@ -51,18 +51,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unconfined. Backed by unit tests for the policy/backend/config plus the
   containment integration test; existing `exec.rs` tests are unchanged (the
   unconfined `CommandRunner::new` path is byte-for-byte compatible).
-- **Groundwork for the Linux sandbox backend** (slice-016 prep) — the pieces of
-  the forthcoming Landlock/seccomp backend that can be built and verified without
-  a Linux host landed early, so the follow-up shrinks to genuinely Linux-only
-  work. (1) `main` no longer uses `#[tokio::main]`: it builds the multi-threaded
-  runtime explicitly and, *before* starting it, intercepts the hidden
-  `orvena __sandbox` subcommand — so the future re-exec shim applies Landlock +
-  seccomp on a single thread (async-signal-safe) then `execvp`s the wrapped
-  command. Until that body lands, `__sandbox` **fails closed** (exits without
-  running the command unconfined); user-facing commands are unchanged. (2) CI now
-  runs the full gate set on a `[ubuntu-latest, macos-latest]` matrix — so the
-  macOS sandbox containment tests (slice-015) are verified on every push, not
-  just locally, and the Linux leg is ready for slice-016's containment tests.
+- **OS sandbox — Linux backend (Landlock + seccomp)** (slice-016) — the Linux
+  half of ADR-003's child-process confinement. The hidden `orvena __sandbox`
+  subcommand is a **re-exec shim**: dispatched from `main` *before* the tokio
+  runtime starts (so it runs single-threaded, which is async-signal-safe), it
+  applies **Landlock** to itself — read + execute everywhere, write only under the
+  project root + system temp + `/dev` — plus, under `network: deny`, a **seccomp**
+  filter that fails `socket(AF_INET|AF_INET6)` with `EACCES` (AF_UNIX untouched),
+  then `execvp`s the wrapped command. A re-exec shim is used instead of
+  `Command::pre_exec` because applying Landlock between fork and exec in a
+  multi-threaded process is not async-signal-safe. If the kernel does not enforce
+  Landlock, the shim **fails closed** (never runs the command unconfined) — so
+  Linux engineering runs are safe whether or not the backend is available. `main`
+  no longer uses `#[tokio::main]` (it builds the runtime explicitly to intercept
+  `__sandbox` first), and CI runs the full gate set on a
+  `[ubuntu-latest, macos-latest]` matrix so both backends are exercised on every
+  push. The Landlock/seccomp deps are Linux-target-gated (macOS pulls neither).
+  The backend is **compile-verified cross-target** (`cargo check
+  --target x86_64-unknown-linux-gnu` against the real `landlock`/`seccompiler`
+  APIs); **runtime containment is verified on the Linux CI leg**
+  (`orvena-cli/tests/sandbox_linux.rs`, control-gated so it skips rather than
+  false-fails where a runner's kernel does not enforce Landlock), not on macOS.
 - **The governance differential, published** (slice-014) — the second external
   number, and the first on the axis Orvena exists for. Temptation set ×
   (`off`, `engineering`) × 3 runs, local `qwen3:14b`: **false-done 25% → 0%

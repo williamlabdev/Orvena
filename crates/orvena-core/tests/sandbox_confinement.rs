@@ -141,11 +141,12 @@ fn macos_network_deny_blocks_a_reachable_port() {
     fx.cleanup();
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 #[test]
 fn without_a_backend_enforced_runs_fail_closed() {
-    // The fail-closed contract: where no OS sandbox backend exists yet, an
-    // enforced policy must refuse to spawn — never run a child unconfined.
+    // The fail-closed contract on a platform with NO sandbox backend: an enforced
+    // policy must refuse to spawn — never run a child unconfined. (Linux now has a
+    // backend, so it is covered by the Landlock-aware test below instead.)
     let fx = Fixture::new("failclosed");
     let sandbox = Sandbox::for_policy(fx.policy(NetworkPolicy::Deny));
     assert_eq!(sandbox.status(), SandboxStatus::Unavailable);
@@ -154,5 +155,33 @@ fn without_a_backend_enforced_runs_fail_closed() {
     let err = runner.run_argv(&s(&["echo", "hi"])).unwrap_err();
     assert!(matches!(err, RunError::Sandbox(_)), "must refuse via a sandbox error, got {err:?}");
 
+    fx.cleanup();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn linux_backend_is_enforced_or_fails_closed_never_unconfined() {
+    // The Landlock backend's outcome depends on the kernel: available → enforced;
+    // absent → fail-closed refusal. Either way an enabled+enforced policy must
+    // never degrade to a silently-unconfined run. Real end-to-end containment (an
+    // out-of-root write / a socket actually blocked) is proven against the real
+    // `orvena` binary in `orvena-cli/tests/sandbox_linux.rs`, since the shim needs
+    // the CLI's `__sandbox` dispatch, not this test binary.
+    let fx = Fixture::new("linux");
+    let sandbox = Sandbox::for_policy(fx.policy(NetworkPolicy::Deny));
+    match sandbox.status() {
+        SandboxStatus::Enforced => {
+            // Backend present: the prefix must build cleanly. We do not spawn here
+            // — that would re-exec *this* test binary with `__sandbox`.
+            let runner = CommandRunner::with_sandbox(&fx.root, Duration::from_secs(5), sandbox);
+            let _ = runner;
+        }
+        SandboxStatus::Unavailable => {
+            let runner = CommandRunner::with_sandbox(&fx.root, Duration::from_secs(5), sandbox);
+            let err = runner.run_argv(&s(&["echo", "hi"])).unwrap_err();
+            assert!(matches!(err, RunError::Sandbox(_)), "fail-closed must refuse, got {err:?}");
+        }
+        SandboxStatus::Disabled => panic!("an enabled policy must not resolve to Disabled on linux"),
+    }
     fx.cleanup();
 }
