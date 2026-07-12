@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-12
+
 ### Fixed
 
 - **Verify-gate feedback no longer goes silent** (slice-004) — a `verify` command
