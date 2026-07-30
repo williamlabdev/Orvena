@@ -131,7 +131,12 @@ pub(crate) async fn run_loop_with(
         {
             Ok(resp) => resp,
             Err(e) => {
+                // Both forms, deliberately: the blocker is what a human reads,
+                // `provider_error` is what a consumer branches on. A benchmark
+                // must be able to tell "the model answered badly" from "the
+                // model never answered" without parsing this string.
                 report.blockers.push(format!("provider error: {e}"));
+                report.provider_error = Some(e.to_string());
                 return Ok(report.finished(false));
             }
         };

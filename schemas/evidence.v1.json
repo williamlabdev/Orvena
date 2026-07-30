@@ -72,6 +72,10 @@
       "type": "string",
       "enum": ["enforced", "disabled", "unavailable"],
       "description": "Whether this run's spawned children (RUN commands + gate verify) were confined by an OS sandbox (ADR-003). 'enforced' = confined; 'disabled' = no sandbox applied; 'unavailable' = sandbox required but the platform backend was unavailable and the policy failed closed (commands refused). Additive optional field; absent in bundles written before slice-015 (read back as 'disabled')."
+    },
+    "provider_error": {
+      "type": ["string", "null"],
+      "description": "Set when the run ended because the model provider failed (outage, bad key, exhausted quota) rather than because of anything the agent or the enforcement layer did. The prose also appears in blockers; this is the structured flag, so a consumer never pattern-matches prose to tell 'the model misbehaved' from 'the model never answered'. A run carrying this measures the provider, not the agent — the benchmark excludes it from its denominators. Additive optional field; absent in bundles written before slice-017 (read back as null)."
     }
   }
 }

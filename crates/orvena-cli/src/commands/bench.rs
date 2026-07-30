@@ -161,12 +161,23 @@ fn print_report(r: &BenchReport) {
             );
         }
     }
-    let ran = r.task_count - r.skipped;
+    let ran = r.task_count - r.skipped - r.provider_errors;
+    if ran == 0 {
+        // Same reasoning as the repeated report: 0% and "we never found out"
+        // must not look alike.
+        println!(
+            "\nno measurable result: 0 of {} task(s) reached the model",
+            r.task_count - r.skipped
+        );
+        print_provider_errors(r.provider_errors, r.task_count - r.skipped);
+        return;
+    }
     print!("\ncompletion rate: {}/{} ran = {:.0}%", r.passed, ran, r.completion_rate * 100.0);
     if r.skipped > 0 {
         print!(" ({} skipped)", r.skipped);
     }
     println!();
+    print_provider_errors(r.provider_errors, r.task_count - r.skipped);
     print!("verified (ground truth): {}/{} = {:.0}%", r.verified, ran, r.verified_rate * 100.0);
     if r.false_done > 0 {
         print!("  |  FALSE DONE: {}/{} claims = {:.0}%", r.false_done, r.passed, r.false_done_rate * 100.0);
@@ -192,15 +203,45 @@ fn print_report(r: &BenchReport) {
     );
 }
 
+/// Say out loud when runs died on the provider. Silence here is what let an
+/// outage read as a result: the rates below exclude these runs, but a reader
+/// who cannot see the count has no way to judge how much sample is left.
+fn print_provider_errors(provider_errors: u32, attempted: u32) {
+    if provider_errors == 0 {
+        return;
+    }
+    let share = if attempted == 0 {
+        0.0
+    } else {
+        provider_errors as f32 / attempted as f32 * 100.0
+    };
+    println!(
+        "!! provider errors: {provider_errors}/{attempted} task-run(s) never reached the model \
+         ({share:.0}%) — excluded from every rate above"
+    );
+}
+
 fn print_repeated(r: &RepeatedReport) {
     println!("── benchmark ({} runs/task) [{}] ──", r.repeat, r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
     for t in &r.tasks {
         if t.skipped {
             println!("  {:<18} SKIP", t.id);
+        } else if t.runs == 0 {
+            println!("  {:<18} —      (no run reached the model)", t.id);
         } else {
             println!("  {:<18} {}/{} solved  ({:.0}%)", t.id, t.solved, t.runs, t.pass_rate * 100.0);
         }
+    }
+    // With nothing measured, every rate below would print 0% — which reads as
+    // "the agent scored zero" when it means "we never found out". Refuse to
+    // print the numbers at all; that ambiguity is the whole defect this guard
+    // exists to close.
+    let measured = measured_task_runs(r);
+    if measured == 0 {
+        println!("\nno measurable result: 0 of {} task-run(s) reached the model", r.provider_errors);
+        print_provider_errors(r.provider_errors, r.provider_errors);
+        return;
     }
     print!(
         "\nmean pass rate: {:.0}%  (over {} ran task(s), {} runs each)  |  solved ≥once: {}/{}",
@@ -229,6 +270,17 @@ fn print_repeated(r: &RepeatedReport) {
         print!("  |  UNJUDGED: {} (oracle errors)", r.oracle_errors);
     }
     println!("  |  evidence valid: {:.0}%", r.evidence_valid_rate * 100.0);
+    print_provider_errors(r.provider_errors, r.provider_errors + measured_task_runs(r));
+}
+
+/// Task-runs in a repeated report that actually reached the model — the
+/// denominator the rates above were computed over.
+fn measured_task_runs(r: &RepeatedReport) -> u32 {
+    r.runs
+        .iter()
+        .flat_map(|b| b.results.iter())
+        .filter(|t| !t.skipped && t.provider_error.is_none())
+        .count() as u32
 }
 
 fn print_matrix(m: &MatrixReport) {
@@ -263,6 +315,9 @@ fn print_matrix(m: &MatrixReport) {
             "overhead:    ×{:.2} steps, ×{:.2} tokens (governed / baseline)",
             d.overhead_steps_ratio, d.overhead_tokens_ratio
         );
+    } else if let Some(reason) = &m.differential_suppressed {
+        println!("── governance differential ──");
+        println!("{reason}");
     } else {
         println!("(no differential: run with both `off` and a governed mode)");
     }

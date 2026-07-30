@@ -48,6 +48,17 @@ pub struct RunReport {
     /// `disabled` (they were).
     #[serde(default)]
     pub sandbox: crate::exec::sandbox::SandboxStatus,
+    /// Set when the run ended because the *provider* failed — an outage, a bad
+    /// key, an exhausted quota — rather than because of anything the agent or
+    /// the enforcement layer did. `blockers` keeps the human-readable message;
+    /// this is the structured flag, so a consumer never has to pattern-match
+    /// prose to tell "the model misbehaved" from "the model never answered".
+    /// The benchmark uses it to exclude such runs from its denominators: a run
+    /// that never reached the model is evidence about the API, not about
+    /// governance. Additive optional field — bundles written before it existed
+    /// read back as `None` (they had no such flag).
+    #[serde(default)]
+    pub provider_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +86,7 @@ impl RunReport {
             blockers: Vec::new(),
             scope_refusals: Vec::new(),
             sandbox: crate::exec::sandbox::SandboxStatus::default(),
+            provider_error: None,
         }
     }
 

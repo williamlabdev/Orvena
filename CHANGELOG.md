@@ -8,6 +8,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A benchmark run that mostly failed no longer reports a headline number**
+  (slice-017) — `orvena bench` folded provider-error runs into every denominator
+  and printed rates regardless, so an API outage could masquerade as a result.
+  The 2026-07-30 hosted attempt had **39 of 48 task-runs die on 429 quota
+  exhaustion** and still produced `false-done 100% → 0%` (resting on a single
+  surviving claim) and `×0.41 tokens` (a ratio of two mostly-zero means) — with
+  nothing in the report to distinguish it from a real measurement. Now: the
+  driver records a **structured `provider_error`** on the run report at the
+  capture site (not a string match on `blockers`; additive field, so the evidence
+  schema stays v1), the benchmark **excludes such runs from every rate** —
+  completion, verified, false-done, containment, evidence-validity, and the
+  per-task pass rate — and reports the count so the exclusion is visible instead
+  of silent. Above a **20% dead-run share in either posture** the matrix
+  **refuses to publish a differential at all** and states why: a weak number gets
+  caveats, an invalid one gets withheld. The summary also stops printing `0%`
+  when nothing was measured — `0%` read as "the agent scored zero" where it meant
+  "we never found out". Aggregation was extracted into a pure function, covered
+  by 8 unit tests over the counting and suppression rules, plus driver-level
+  coverage that a provider failure sets the flag and that it survives the bundle
+  round-trip.
+
 - **Hosted providers no longer die on a rate limit** — the OpenAI-compatible
   provider surfaced HTTP 429 as a **fatal** error mid-run, so a capped key (a
   free-tier Gemini key via the OpenAI-compat endpoint) hitting its limit killed
