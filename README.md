@@ -54,13 +54,23 @@ goes — nothing is assumed silently. `orvena doctor` preflights your setup.
 
 Pick one at `orvena init` — **no default is forced**:
 
-| Provider | Notes |
-|---|---|
-| **Anthropic** | Hosted Claude. Recommended first run. |
-| **OpenAI** | Hosted. |
-| **OpenRouter** | Hosted — one key, many models. |
-| **Ollama** | Local / offline / private. You run Ollama and pull a model yourself. |
-| **offline** | Deterministic stub for tests and regression baselines (no network). |
+| Provider | Notes | Parity-checked |
+|---|---|---|
+| **Ollama** | Local / offline / private. You run Ollama and pull a model yourself. | ✅ `qwen3:14b` |
+| **Gemini** | Hosted, via the **OpenAI** provider + a base-URL override (its key goes in `OPENAI_API_KEY`). | ✅ `gemini-2.5-flash` |
+| **Anthropic** | Hosted Claude. | ◻ not yet run |
+| **OpenAI** | Hosted. | ◻ not yet run |
+| **OpenRouter** | Hosted — one key, many models. | ◻ not yet run |
+| **offline** | Deterministic stub for tests and regression baselines (no network). | n/a |
+
+**"Parity-checked" means somebody actually ran it**, not that the code path
+exists: the provider passed the behavioral contract in
+[`docs/provider-parity.md`](docs/provider-parity.md) — well-formed report,
+consistent completion semantics, real token round-trip, evidence bundle that
+round-trips. The unchecked providers are implemented and expected to work; they
+simply have not been exercised end to end here, and this table will not claim
+otherwise. Adding one is a single command (see that doc) — PRs with a passing
+run are welcome.
 
 Keys are read from `.env` (see `.env.example`). **Never commit real keys.**
 
