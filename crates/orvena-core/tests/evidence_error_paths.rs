@@ -23,7 +23,11 @@ fn temp_dir(tag: &str) -> std::path::PathBuf {
 fn dev_config() -> Config {
     Config {
         agent: AgentConfig {
-            provider: ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None },
+            provider: ProviderSelection {
+                kind: "offline".into(),
+                model: "stub".into(),
+                base_url: None,
+            },
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps: 3,
@@ -95,8 +99,8 @@ async fn provider_error_still_yields_a_report_and_bundle() {
     let path = evidence::bundle_path(&root, "err-run-id");
     evidence::write_bundle(&report, &path).expect("bundle should write on the error path");
     assert!(path.exists(), "evidence bundle must land even when the provider failed");
-    let reloaded: RunReport =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).expect("bundle deserializes");
+    let reloaded: RunReport = serde_json::from_str(&std::fs::read_to_string(&path).unwrap())
+        .expect("bundle deserializes");
     assert!(!reloaded.completed);
     assert!(reloaded.blockers.iter().any(|b| b.contains("provider error")));
     assert_eq!(

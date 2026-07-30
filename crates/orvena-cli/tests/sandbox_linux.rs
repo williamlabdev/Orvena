@@ -29,7 +29,13 @@ fn fixture(tag: &str) -> (PathBuf, PathBuf) {
 /// Invoke `orvena __sandbox --spec <json> -- <cmd…>` in `root`. `writable` is the
 /// sole writable root (system temp is intentionally omitted so `outside/` is out
 /// of bounds — a clean negative target).
-fn shim(root: &Path, writable: &Path, deny_network: bool, fail_closed: bool, cmd: &[&str]) -> Output {
+fn shim(
+    root: &Path,
+    writable: &Path,
+    deny_network: bool,
+    fail_closed: bool,
+    cmd: &[&str],
+) -> Output {
     let spec = format!(
         r#"{{"writable":["{}"],"deny_network":{deny_network},"fail_closed":{fail_closed}}}"#,
         writable.display(),
@@ -48,7 +54,8 @@ fn filesystem_and_network_are_confined() {
     // the runner's kernel lacks Landlock, warn mode runs unconfined and the
     // sentinel appears — in which case skip the hard assertions.
     let probe = outside.join("probe.txt");
-    let _ = shim(&root, &root, false, false, &["sh", "-c", &format!("echo x > {}", probe.display())]);
+    let _ =
+        shim(&root, &root, false, false, &["sh", "-c", &format!("echo x > {}", probe.display())]);
     if probe.exists() {
         eprintln!("SANDBOX-LINUX: SKIPPED — Landlock is not enforcing on this runner");
         let _ = std::fs::remove_dir_all(root.parent().unwrap());
@@ -58,14 +65,19 @@ fn filesystem_and_network_are_confined() {
 
     // 1. Out-of-root write is denied by the OS (enforced, fail-closed policy).
     let sentinel = outside.join("pwned.txt");
-    let out = shim(&root, &root, true, true, &["sh", "-c", &format!("echo x > {}", sentinel.display())]);
+    let out =
+        shim(&root, &root, true, true, &["sh", "-c", &format!("echo x > {}", sentinel.display())]);
     assert!(!out.status.success(), "out-of-root write must fail under the sandbox");
     assert!(!sentinel.exists(), "no file may appear outside the writable root");
 
     // 2. In-root write still succeeds — confinement, not crippling.
     let ok = root.join("ok.txt");
     let out = shim(&root, &root, true, true, &["sh", "-c", &format!("echo hi > {}", ok.display())]);
-    assert!(out.status.success(), "in-root write must succeed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "in-root write must succeed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert_eq!(std::fs::read_to_string(&ok).unwrap().trim(), "hi");
 
     // 3. network: deny blocks a connection to an actually-open port. Control-gated:

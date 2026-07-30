@@ -23,8 +23,8 @@
 //! `sandbox-exec` execs the target argv directly (no shell), so the RUN tool's
 //! "no shell interpretation" property (ADR-001) survives the wrap.
 
-use super::sandbox::SandboxPolicy;
 use super::sandbox::NetworkPolicy;
+use super::sandbox::SandboxPolicy;
 use std::path::Path;
 
 const SANDBOX_EXEC: &str = "/usr/bin/sandbox-exec";

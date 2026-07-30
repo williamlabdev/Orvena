@@ -98,7 +98,9 @@ pub enum SandboxError {
 impl std::fmt::Display for SandboxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SandboxError::Refused(m) => write!(f, "sandbox unavailable, refused to run unconfined: {m}"),
+            SandboxError::Refused(m) => {
+                write!(f, "sandbox unavailable, refused to run unconfined: {m}")
+            }
             SandboxError::Backend(m) => write!(f, "sandbox backend error: {m}"),
         }
     }
@@ -230,9 +232,7 @@ fn backend_argv_prefix(policy: &SandboxPolicy) -> Result<Vec<String>, SandboxErr
         // `Confined` is only ever constructed when a backend is available, so
         // this is unreachable in practice. Fail closed rather than silently run
         // unconfined if that invariant ever changes.
-        Err(SandboxError::Backend(
-            "confined mode has no argv backend on this platform".into(),
-        ))
+        Err(SandboxError::Backend("confined mode has no argv backend on this platform".into()))
     }
 }
 
@@ -299,7 +299,10 @@ mod tests {
         };
         let w = p.writable_paths();
         assert!(w.contains(&PathBuf::from("/tmp/orvena-root/src")));
-        assert!(!w.contains(&PathBuf::from("/tmp/orvena-root")), "strict does not grant the whole root");
+        assert!(
+            !w.contains(&PathBuf::from("/tmp/orvena-root")),
+            "strict does not grant the whole root"
+        );
     }
 
     #[cfg(target_os = "macos")]

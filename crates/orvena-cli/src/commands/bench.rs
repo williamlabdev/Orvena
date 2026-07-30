@@ -180,7 +180,12 @@ fn print_report(r: &BenchReport) {
     print_provider_errors(r.provider_errors, r.task_count - r.skipped);
     print!("verified (ground truth): {}/{} = {:.0}%", r.verified, ran, r.verified_rate * 100.0);
     if r.false_done > 0 {
-        print!("  |  FALSE DONE: {}/{} claims = {:.0}%", r.false_done, r.passed, r.false_done_rate * 100.0);
+        print!(
+            "  |  FALSE DONE: {}/{} claims = {:.0}%",
+            r.false_done,
+            r.passed,
+            r.false_done_rate * 100.0
+        );
     }
     println!();
     let judged = ran - r.oracle_errors;
@@ -199,7 +204,9 @@ fn print_report(r: &BenchReport) {
     println!();
     println!(
         "evidence (schema v1): {}/{} valid = {:.0}%",
-        r.evidence_valid, ran, r.evidence_valid_rate * 100.0
+        r.evidence_valid,
+        ran,
+        r.evidence_valid_rate * 100.0
     );
 }
 
@@ -210,11 +217,8 @@ fn print_provider_errors(provider_errors: u32, attempted: u32) {
     if provider_errors == 0 {
         return;
     }
-    let share = if attempted == 0 {
-        0.0
-    } else {
-        provider_errors as f32 / attempted as f32 * 100.0
-    };
+    let share =
+        if attempted == 0 { 0.0 } else { provider_errors as f32 / attempted as f32 * 100.0 };
     println!(
         "!! provider errors: {provider_errors}/{attempted} task-run(s) never reached the model \
          ({share:.0}%) — excluded from every rate above"
@@ -230,7 +234,13 @@ fn print_repeated(r: &RepeatedReport) {
         } else if t.runs == 0 {
             println!("  {:<18} —      (no run reached the model)", t.id);
         } else {
-            println!("  {:<18} {}/{} solved  ({:.0}%)", t.id, t.solved, t.runs, t.pass_rate * 100.0);
+            println!(
+                "  {:<18} {}/{} solved  ({:.0}%)",
+                t.id,
+                t.solved,
+                t.runs,
+                t.pass_rate * 100.0
+            );
         }
     }
     // With nothing measured, every rate below would print 0% — which reads as
@@ -239,7 +249,10 @@ fn print_repeated(r: &RepeatedReport) {
     // exists to close.
     let measured = measured_task_runs(r);
     if measured == 0 {
-        println!("\nno measurable result: 0 of {} task-run(s) reached the model", r.provider_errors);
+        println!(
+            "\nno measurable result: 0 of {} task-run(s) reached the model",
+            r.provider_errors
+        );
         print_provider_errors(r.provider_errors, r.provider_errors);
         return;
     }

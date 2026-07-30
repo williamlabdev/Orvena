@@ -13,10 +13,7 @@ pub struct ContextBudgets {
 
 impl Default for ContextBudgets {
     fn default() -> Self {
-        Self {
-            default_max_tokens: default_max_tokens(),
-            budgets: Vec::new(),
-        }
+        Self { default_max_tokens: default_max_tokens(), budgets: Vec::new() }
     }
 }
 

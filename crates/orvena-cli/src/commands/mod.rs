@@ -81,10 +81,7 @@ pub fn preflight_provider(kind: &str) -> Result<()> {
 /// ADR-002. Shared by `run` and `bench`.
 pub fn run_timestamp() -> String {
     static SEQ: AtomicU64 = AtomicU64::new(0);
-    let ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     format!("{ms}-{}-{seq}", std::process::id())
 }

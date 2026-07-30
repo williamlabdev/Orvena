@@ -173,7 +173,7 @@ fn apply_seccomp_deny_inet() -> Result<(), SandboxError> {
 
     let filter = SeccompFilter::new(
         rules,
-        SeccompAction::Allow,                      // default: everything else allowed
+        SeccompAction::Allow, // default: everything else allowed
         SeccompAction::Errno(libc::EACCES as u32), // matched inet socket() → EACCES
         std::env::consts::ARCH
             .try_into()

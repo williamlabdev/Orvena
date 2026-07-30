@@ -17,10 +17,7 @@ impl Ollama {
         Self {
             client: reqwest::Client::new(),
             model: sel.model.clone(),
-            base_url: sel
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "http://localhost:11434".to_string()),
+            base_url: sel.base_url.clone().unwrap_or_else(|| "http://localhost:11434".to_string()),
         }
     }
 }
@@ -44,12 +41,8 @@ impl Provider for Ollama {
             "stream": false,
         });
 
-        let resp = self
-            .client
-            .post(format!("{}/api/chat", self.base_url))
-            .json(&body)
-            .send()
-            .await?;
+        let resp =
+            self.client.post(format!("{}/api/chat", self.base_url)).json(&body).send().await?;
 
         if !resp.status().is_success() {
             let status = resp.status();

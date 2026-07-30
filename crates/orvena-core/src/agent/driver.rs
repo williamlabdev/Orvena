@@ -117,6 +117,7 @@ pub(crate) async fn run_loop_with(
             budget,
             &task.instruction,
             &prior_evidence,
+            &cfg.commands,
         );
 
         // 2. call model
@@ -213,7 +214,8 @@ pub(crate) async fn run_loop_with(
                             };
                             let raw = format!("{}{}", out.stdout, out.stderr);
                             let (body, capped) = cap_run_output(&raw);
-                            tool_evidence.push_str(&format!("RUN '{name}' → exit {exit}:\n{body}\n"));
+                            tool_evidence
+                                .push_str(&format!("RUN '{name}' → exit {exit}:\n{body}\n"));
                             if !capped.is_empty() {
                                 tool_evidence.push_str(&capped);
                             }

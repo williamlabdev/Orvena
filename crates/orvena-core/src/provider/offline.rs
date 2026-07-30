@@ -50,12 +50,8 @@ impl Provider for Offline {
     }
 
     async fn chat(&self, req: ChatRequest) -> Result<ChatResponse> {
-        let prompt: String = req
-            .messages
-            .iter()
-            .map(|m| m.content.as_str())
-            .collect::<Vec<_>>()
-            .join("\n");
+        let prompt: String =
+            req.messages.iter().map(|m| m.content.as_str()).collect::<Vec<_>>().join("\n");
 
         let content = match Self::first_writable(&prompt) {
             Some(path) => format!(

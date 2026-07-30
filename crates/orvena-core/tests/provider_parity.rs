@@ -128,8 +128,7 @@ async fn provider_satisfies_the_parity_contract() {
             report.gate_outcomes
         );
     } else {
-        let unmet =
-            report.gate_outcomes.iter().any(|g| !g.passed) || !report.blockers.is_empty();
+        let unmet = report.gate_outcomes.iter().any(|g| !g.passed) || !report.blockers.is_empty();
         assert!(unmet, "not completed ⇒ a gate failed or a blocker was recorded");
     }
 
@@ -139,8 +138,8 @@ async fn provider_satisfies_the_parity_contract() {
     // Contract 4 — evidence by default: the bundle exports and round-trips.
     let path = evidence::bundle_path(&root, "parity");
     evidence::write_bundle(&report, &path).expect("evidence bundle writes");
-    let reloaded: RunReport =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).expect("bundle deserializes");
+    let reloaded: RunReport = serde_json::from_str(&std::fs::read_to_string(&path).unwrap())
+        .expect("bundle deserializes");
     assert_eq!(reloaded.completed, report.completed);
     assert_eq!(reloaded.gate_outcomes.len(), report.gate_outcomes.len());
     assert_eq!(reloaded.task, report.task);

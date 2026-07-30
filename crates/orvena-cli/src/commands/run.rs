@@ -88,7 +88,13 @@ fn print_report(report: &orvena_core::RunReport) {
     if !report.gate_outcomes.is_empty() {
         println!("gates:");
         for g in &report.gate_outcomes {
-            let mark = if g.passed { "pass" } else if g.needs_human { "human" } else { "fail" };
+            let mark = if g.passed {
+                "pass"
+            } else if g.needs_human {
+                "human"
+            } else {
+                "fail"
+            };
             println!("  - {:<20} {}", g.gate, mark);
         }
     }

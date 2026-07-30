@@ -53,12 +53,18 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
     let provider =
         ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
 
-    let report = benchmark::run_benchmark(&set, &provider, &base, "testrun", GovernanceMode::Light).await.unwrap();
+    let report = benchmark::run_benchmark(&set, &provider, &base, "testrun", GovernanceMode::Light)
+        .await
+        .unwrap();
 
     // Aggregate: one of two tasks solved.
     assert_eq!(report.task_count, 2);
     assert_eq!(report.passed, 1);
-    assert!((report.completion_rate - 0.5).abs() < f32::EPSILON, "rate: {}", report.completion_rate);
+    assert!(
+        (report.completion_rate - 0.5).abs() < f32::EPSILON,
+        "rate: {}",
+        report.completion_rate
+    );
     assert_eq!(report.provider, "offline");
 
     // Per-task flags are correct.
@@ -118,7 +124,9 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
     let provider =
         ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
 
-    let report = benchmark::run_benchmark(&set, &provider, &base, "skiprun", GovernanceMode::Light).await.unwrap();
+    let report = benchmark::run_benchmark(&set, &provider, &base, "skiprun", GovernanceMode::Light)
+        .await
+        .unwrap();
 
     assert_eq!(report.task_count, 2, "both tasks are accounted for");
     assert_eq!(report.skipped, 1, "the missing-toolchain task is skipped");
@@ -187,7 +195,9 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
         ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
 
     let report =
-        benchmark::run_benchmark_repeated(&set, &provider, &base, "rep", 3, GovernanceMode::Light).await.unwrap();
+        benchmark::run_benchmark_repeated(&set, &provider, &base, "rep", 3, GovernanceMode::Light)
+            .await
+            .unwrap();
 
     assert_eq!(report.repeat, 3);
     assert_eq!(report.task_count, 3);
@@ -244,9 +254,8 @@ async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
     let set = read_only_trap_set();
 
     // Baseline: zero actions = self-claimed done; ground truth says otherwise.
-    let off = benchmark::run_benchmark(&set, &provider, &base, "off", GovernanceMode::Off)
-        .await
-        .unwrap();
+    let off =
+        benchmark::run_benchmark(&set, &provider, &base, "off", GovernanceMode::Off).await.unwrap();
     assert_eq!(off.governance, "off");
     let t = &off.results[0];
     assert!(t.completed, "the baseline accepts the model's own claim of done");
@@ -284,9 +293,8 @@ async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_exter
         }],
     };
 
-    let off = benchmark::run_benchmark(&set, &provider, &base, "off", GovernanceMode::Off)
-        .await
-        .unwrap();
+    let off =
+        benchmark::run_benchmark(&set, &provider, &base, "off", GovernanceMode::Off).await.unwrap();
     let t = &off.results[0];
     // The stub keeps emitting writes, so the baseline never claims done…
     assert!(!t.completed, "actions kept flowing — no claim of done");
@@ -380,10 +388,9 @@ async fn governed_completion_is_cross_checked_by_the_external_verify() {
         }],
     };
 
-    let gov =
-        benchmark::run_benchmark(&set, &provider, &base, "x", GovernanceMode::Engineering)
-            .await
-            .unwrap();
+    let gov = benchmark::run_benchmark(&set, &provider, &base, "x", GovernanceMode::Engineering)
+        .await
+        .unwrap();
     let t = &gov.results[0];
     assert!(t.completed);
     assert!(t.verified, "gate-passed ⇒ externally verified (same criterion)");
@@ -449,9 +456,8 @@ async fn a_root_escape_attempt_is_refused_and_is_not_a_false_block() {
         }],
     };
 
-    let report = benchmark::run_benchmark(&set, &provider, &base, "e", GovernanceMode::Off)
-        .await
-        .unwrap();
+    let report =
+        benchmark::run_benchmark(&set, &provider, &base, "e", GovernanceMode::Off).await.unwrap();
     let t = &report.results[0];
     assert!(t.oracle_error.is_none());
     assert!(t.contained, "the escape never landed: {:?}", t.violations);

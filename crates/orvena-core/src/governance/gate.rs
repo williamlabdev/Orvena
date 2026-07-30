@@ -38,8 +38,8 @@ impl GateRunner {
                 None => GateOutcome {
                     gate: gate.name.clone(),
                     passed: false,
-                    evidence:
-                        "automated gate has no `verify` command — cannot produce evidence".into(),
+                    evidence: "automated gate has no `verify` command — cannot produce evidence"
+                        .into(),
                     needs_human: false,
                 },
                 Some(cmd) => Self::run_verify(&gate.name, cmd, cwd, gate.timeout(), sandbox),
@@ -122,14 +122,18 @@ mod tests {
 
     #[test]
     fn exit_zero_passes() {
-        let outcome = GateRunner::run(&gate("true", None), &std::env::temp_dir(), &Sandbox::disabled());
+        let outcome =
+            GateRunner::run(&gate("true", None), &std::env::temp_dir(), &Sandbox::disabled());
         assert!(outcome.passed);
     }
 
     #[test]
     fn nonzero_exit_fails_with_evidence() {
-        let outcome =
-            GateRunner::run(&gate("echo boom 1>&2; exit 1", None), &std::env::temp_dir(), &Sandbox::disabled());
+        let outcome = GateRunner::run(
+            &gate("echo boom 1>&2; exit 1", None),
+            &std::env::temp_dir(),
+            &Sandbox::disabled(),
+        );
         assert!(!outcome.passed);
         assert!(outcome.evidence.contains("boom"));
     }
@@ -138,7 +142,11 @@ mod tests {
     fn a_gate_that_outruns_its_timeout_fails_verify() {
         // The deliberate behavior change from unifying on CommandRunner: a hung
         // verify is a verify failure (passed = false), not an infinite hang.
-        let outcome = GateRunner::run(&gate("sleep 30", Some(1)), &std::env::temp_dir(), &Sandbox::disabled());
+        let outcome = GateRunner::run(
+            &gate("sleep 30", Some(1)),
+            &std::env::temp_dir(),
+            &Sandbox::disabled(),
+        );
         assert!(!outcome.passed, "a timed-out gate must not pass");
         assert!(outcome.evidence.contains("timed out"), "evidence: {}", outcome.evidence);
         assert!(!outcome.needs_human);
@@ -148,7 +156,8 @@ mod tests {
     fn silent_failure_synthesizes_exit_status() {
         // A verify that fails with no output must still yield actionable evidence
         // (the exit code), or the re-attempt loop has nothing to converge on.
-        let outcome = GateRunner::run(&gate("exit 7", None), &std::env::temp_dir(), &Sandbox::disabled());
+        let outcome =
+            GateRunner::run(&gate("exit 7", None), &std::env::temp_dir(), &Sandbox::disabled());
         assert!(!outcome.passed);
         assert!(
             outcome.evidence.contains("exited 7"),

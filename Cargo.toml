@@ -8,6 +8,19 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/williamlabdev/Orvena"
 
+# Orvena ships as a single binary installed from source (`cargo install`), so the
+# release profile is part of what users get. Defaults leave both size and startup
+# on the table for a CLI that is invoked once per task.
+#
+# `panic` is deliberately left at the default (unwind): the sandbox shim and the
+# gate runner spawn and reap children, and abort-on-panic would skip their
+# cleanup — evidence-bundle-on-every-exit-path (ADR, docs/next) depends on the
+# unwind path running.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+
 [workspace.dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

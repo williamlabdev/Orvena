@@ -153,9 +153,7 @@ mod tests {
 
         let sentinel = root.parent().unwrap().join("orvena-escape-sentinel.txt");
         let _ = std::fs::remove_file(&sentinel);
-        let err = fs
-            .write("src/../../orvena-escape-sentinel.txt", "pwned")
-            .unwrap_err();
+        let err = fs.write("src/../../orvena-escape-sentinel.txt", "pwned").unwrap_err();
         assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
         assert!(!sentinel.exists(), "escaping write must not create a file outside root");
         let _ = std::fs::remove_dir_all(&root);

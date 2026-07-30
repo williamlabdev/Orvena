@@ -116,7 +116,9 @@ mod tests {
     fn read_only_command_runs_and_captures_output() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("ok").unwrap();
+        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled())
+            .run("ok")
+            .unwrap();
         assert!(out.success());
         assert_eq!(out.stdout, "out");
         assert_eq!(out.stderr, "err");
@@ -126,7 +128,9 @@ mod tests {
     fn nonzero_exit_is_returned_not_errored() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("fail").unwrap();
+        let out = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled())
+            .run("fail")
+            .unwrap();
         assert!(!out.success());
         assert_eq!(out.exit_code, Some(7));
     }
@@ -135,7 +139,9 @@ mod tests {
     fn role_without_shell_run_is_denied_with_scope_error() {
         let cmds = commands();
         let role = role(vec!["fs.read"]);
-        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("ok").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled())
+            .run("ok")
+            .unwrap_err();
         assert!(matches!(err, Error::Scope(_)));
     }
 
@@ -143,7 +149,9 @@ mod tests {
     fn undeclared_name_is_a_scope_error() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("deploy").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled())
+            .run("deploy")
+            .unwrap_err();
         assert!(matches!(err, Error::Scope(_)));
         assert!(err.to_string().contains("not declared"));
     }
@@ -152,7 +160,9 @@ mod tests {
     fn mutating_command_is_denied_even_when_declared() {
         let cmds = commands();
         let role = role(vec!["shell.run"]);
-        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("fmt-fix").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled())
+            .run("fmt-fix")
+            .unwrap_err();
         assert!(matches!(err, Error::Scope(_)));
         assert!(err.to_string().contains("mutating"));
     }
@@ -163,8 +173,9 @@ mod tests {
         // denial — the boundary check comes first.
         let cmds = commands();
         let role = role(vec!["fs.read"]);
-        let err =
-            ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled()).run("does-not-exist").unwrap_err();
+        let err = ShellTool::new(std::env::temp_dir(), &role, &cmds, &Sandbox::disabled())
+            .run("does-not-exist")
+            .unwrap_err();
         assert!(err.to_string().contains("not allowed to use 'shell.run'"));
     }
 }

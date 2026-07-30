@@ -91,7 +91,12 @@ fn assert_valid_both_ways(path: &std::path::Path) {
     assert!(errors.is_empty(), "schema engine rejected the bundle: {errors:?}");
 }
 
-async fn offline_run(gates: Gates, tier: Tier, writes: Vec<String>, tag: &str) -> std::path::PathBuf {
+async fn offline_run(
+    gates: Gates,
+    tier: Tier,
+    writes: Vec<String>,
+    tag: &str,
+) -> std::path::PathBuf {
     let root = temp_dir(tag);
     let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
     let cfg = config(gates, tier);

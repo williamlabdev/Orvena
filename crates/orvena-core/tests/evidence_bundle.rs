@@ -63,7 +63,10 @@ fn offline_agent(root: &std::path::Path, config: Config) -> Agent {
 }
 
 /// Export `report` under `root` and read it straight back off disk.
-fn export_and_reload(report: &RunReport, root: &std::path::Path) -> (std::path::PathBuf, RunReport) {
+fn export_and_reload(
+    report: &RunReport,
+    root: &std::path::Path,
+) -> (std::path::PathBuf, RunReport) {
     // A fixed timestamp keeps the test deterministic; the CLI supplies a real
     // clock value at runtime.
     let path = evidence::bundle_path(root, "fixed-run-id");
@@ -81,18 +84,30 @@ async fn completed_run_exports_a_roundtrippable_bundle() {
 
     let task = Task::new("Create a greeting file", vec!["hello.txt".into()]);
     let report = agent.run(task).await.unwrap();
-    assert!(report.completed, "precondition: this run should complete; blockers: {:?}", report.blockers);
+    assert!(
+        report.completed,
+        "precondition: this run should complete; blockers: {:?}",
+        report.blockers
+    );
 
     let (path, reloaded) = export_and_reload(&report, &root);
 
     // Written under runs/<timestamp>/evidence.json.
-    assert!(path.ends_with("runs/fixed-run-id/evidence.json"), "unexpected layout: {}", path.display());
+    assert!(
+        path.ends_with("runs/fixed-run-id/evidence.json"),
+        "unexpected layout: {}",
+        path.display()
+    );
     // Key evidence fields survive the round-trip.
     assert!(reloaded.completed, "a completed run must serialize as completed");
     assert_eq!(reloaded.task, report.task);
     assert_eq!(reloaded.gate_outcomes.len(), 1, "the single gate must be recorded");
     assert!(reloaded.gate_outcomes.iter().all(|g| g.gate == "file-exists" && g.passed));
-    assert!(reloaded.blockers.is_empty(), "a completed run has no blockers: {:?}", reloaded.blockers);
+    assert!(
+        reloaded.blockers.is_empty(),
+        "a completed run has no blockers: {:?}",
+        reloaded.blockers
+    );
     // Counters carry over too.
     assert_eq!(reloaded.steps, report.steps);
     assert_eq!(reloaded.tool_calls, report.tool_calls);
