@@ -17,3 +17,8 @@ clap.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
+
+[dev-dependencies]
+# Evidence bundles are read back as raw JSON in tests — deliberately not through
+# the `RunReport` derive, whose defaults would repair a bundle missing a field.
+serde_json.workspace = true

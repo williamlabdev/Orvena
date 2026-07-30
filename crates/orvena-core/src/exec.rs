@@ -75,18 +75,28 @@ pub struct CommandRunner {
     cwd: PathBuf,
     timeout: Duration,
     sandbox: Sandbox,
+    env: Vec<(String, String)>,
 }
 
 impl CommandRunner {
     /// Unconfined runner (the pre-slice-015 behavior). Existing callers and tests
     /// that do not opt into a sandbox keep spawning children exactly as before.
     pub fn new(cwd: impl Into<PathBuf>, timeout: Duration) -> Self {
-        Self { cwd: cwd.into(), timeout, sandbox: Sandbox::disabled() }
+        Self { cwd: cwd.into(), timeout, sandbox: Sandbox::disabled(), env: Vec::new() }
     }
 
     /// Runner whose children are wrapped by `sandbox` (ADR-003).
     pub fn with_sandbox(cwd: impl Into<PathBuf>, timeout: Duration, sandbox: Sandbox) -> Self {
-        Self { cwd: cwd.into(), timeout, sandbox }
+        Self { cwd: cwd.into(), timeout, sandbox, env: Vec::new() }
+    }
+
+    /// Add environment variables to every child this runner spawns (on top of the
+    /// inherited environment). Used by [`crate::adapter`] to point a wrapped
+    /// external agent at its model endpoint and to keep its scratch files out of
+    /// the workdir; the gate and RUN paths do not set any.
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.env = env;
+        self
     }
 
     /// Run a fixed argv directly, with no shell interpretation. `argv[0]` is the
@@ -120,6 +130,9 @@ impl CommandRunner {
         })?;
         let mut cmd = Command::new(program);
         cmd.args(rest);
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
         cmd.current_dir(&self.cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

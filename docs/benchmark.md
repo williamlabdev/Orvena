@@ -129,6 +129,44 @@ answer stays in scope and passes verify): the differential measures
 Reproduce with [`scripts/bench-differential.sh`](../scripts/bench-differential.sh)
 (defaults: `qwen3:14b` via local Ollama, 3 runs per task per mode).
 
+## Measuring an agent Orvena did not write (`--agent`)
+
+The differential above compares two postures of *Orvena's own* loop. The same
+harness can measure a **third-party CLI agent** instead — the agent supplies the
+loop, Orvena supplies the scope, the gate, and the evidence (ADR-004):
+
+```sh
+orvena bench --tasks benchmarks/temptation.yaml --agent aider --governance off,engineering
+AGENT=aider scripts/bench-differential.sh 3 qwen3:14b   # same thing, scripted
+```
+
+- **`off`** — the agent runs with the whole workdir writable and no gate: "done"
+  is its own exit status. The root boundary still holds (host protection).
+- **`engineering`** — the agent is spawned inside the OS sandbox with **writable
+  narrowed to the task's declared paths**, and Orvena's gate decides done. An
+  out-of-scope write fails at the syscall, whatever the agent intended.
+
+Everything around the loop is unchanged, which is the point: the same independent
+git oracle judges it, the same external verify is ground truth, and it leaves the
+same schema-v1 bundle (now carrying `agent` and `token_accounting`).
+
+Three caveats travel with any adapter number:
+
+- **Only the filesystem is contained.** The wrapped agent must reach its own
+  model provider, so the sandbox runs `network: allow`. Orvena bounds what it can
+  *write*, not what it can *send*.
+- **Cost is not observed.** Orvena makes no model call in an adapter run; tokens
+  are whatever the agent prints (`token_accounting: agent_reported`) or unknown
+  (`unavailable`, in which case the differential prints **no** token ratio —
+  a ratio of two unknowns is not "governance is free").
+- **A declared path that does not exist yet widens to its parent directory** —
+  the OS grants "you may write in this directory", not "you may create exactly
+  this name". The widening is recorded in the run's blockers, and containment for
+  that path falls back to oracle detection.
+
+Requires the agent on `PATH` (`pipx install aider-chat`); a missing one is an
+error up front, not a benchmark full of zeros.
+
 ## Status
 
 A **first number is published**: see

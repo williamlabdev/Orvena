@@ -51,6 +51,13 @@ enum Command {
         /// Default: light (the previous behavior).
         #[arg(long = "governance")]
         governance: Option<String>,
+        /// Which agent to measure: `native` (Orvena's own bounded loop, default)
+        /// or a wrapped third-party CLI agent — `aider`. A wrapped agent is
+        /// confined by the OS sandbox to the task's declared paths; Orvena
+        /// supplies the scope, the gate, and the evidence, the agent supplies
+        /// the loop.
+        #[arg(long = "agent", default_value = "native")]
+        agent: String,
     },
     /// Preflight: provider readiness, config validity.
     Doctor,
@@ -64,8 +71,8 @@ pub async fn run() -> i32 {
     let result = match cli.command {
         Command::Init => commands::init::run(),
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
-        Command::Bench { provider, tasks, out, repeat, governance } => {
-            commands::bench::run(provider, tasks, out, repeat, governance).await
+        Command::Bench { provider, tasks, out, repeat, governance, agent } => {
+            commands::bench::run(provider, tasks, out, repeat, governance, agent).await
         }
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),

@@ -113,6 +113,15 @@ enforcement showed up as refused, auditable escape attempts rather than prevente
 files. Full numbers and honest caveats:
 [docs/benchmark-results.md](docs/benchmark-results.md).
 
+The same harness can measure **an agent Orvena did not write**:
+`orvena bench --agent aider` runs the tasks with a third-party CLI agent doing the
+coding, spawned inside the OS sandbox with writes narrowed to the paths the task
+declared — the agent supplies the loop, Orvena supplies the scope, the gate, and the
+evidence ([ADR-004](docs/adr/ADR-004-external-agent-adapter.md)). Only the filesystem
+is contained (the wrapped agent must reach its own model provider), and its token
+counts are self-reported rather than observed; both caveats travel with any number
+from it. Method: [docs/benchmark.md](docs/benchmark.md#measuring-an-agent-orvena-did-not-write---agent).
+
 **First number (2026-07-04):** on a small curated set of 5 self-contained Rust tasks,
 Orvena driving a local `qwen3:14b` solved **5/5 (100%)**, single-pass. This is a
 deliberately small, early, self-hosted signal — *not* a real-world capability claim

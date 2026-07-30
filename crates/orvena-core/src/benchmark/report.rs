@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::metrics::TokenAccounting;
 use crate::Result;
 
 /// The outcome of one task in the set.
@@ -61,6 +62,12 @@ pub struct TaskResult {
     /// auditable rather than invisible.
     #[serde(default)]
     pub provider_error: Option<String>,
+    /// Where this run's token counts came from. Orvena observes its own model
+    /// calls; a wrapped external agent makes its own, so its counts are relayed
+    /// or missing. Carried up so a cost comparison never mixes a measured number
+    /// with a claimed one.
+    #[serde(default)]
+    pub token_accounting: TokenAccounting,
 }
 
 /// The aggregate benchmark result. Every rate divides by `measured`, i.e.
@@ -85,6 +92,11 @@ pub struct BenchReport {
     /// Governance posture this report was measured under.
     #[serde(default = "default_governance")]
     pub governance: String,
+    /// Which agent drove the runs: `native` (Orvena's own bounded loop) or a
+    /// wrapped external agent and its version (`crate::adapter`). Reports
+    /// written before adapters existed read back as `native` (they were).
+    #[serde(default = "default_agent")]
+    pub agent: String,
     pub task_count: u32,
     pub passed: u32,
     pub skipped: u32,
@@ -128,6 +140,10 @@ fn default_governance() -> String {
     "light".into()
 }
 
+pub(super) fn default_agent() -> String {
+    "native".into()
+}
+
 /// Per-task pass rate across repeated runs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskPassRate {
@@ -157,6 +173,9 @@ pub struct RepeatedReport {
     /// Governance posture this report was measured under.
     #[serde(default = "default_governance")]
     pub governance: String,
+    /// Which agent drove the runs (`native`, or a wrapped agent + version).
+    #[serde(default = "default_agent")]
+    pub agent: String,
     pub repeat: u32,
     pub task_count: u32,
     pub ran: u32,
@@ -193,6 +212,12 @@ pub struct RepeatedReport {
     pub mean_steps: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
+    /// Provenance of `mean_total_tokens` — the weakest accounting among the
+    /// measured runs. `unavailable` means the mean is **0 because nobody
+    /// counted**, not because the runs were free; a reader must be able to tell
+    /// those apart without knowing which agent produced the report.
+    #[serde(default)]
+    pub token_accounting: TokenAccounting,
     pub tasks: Vec<TaskPassRate>,
     /// The underlying per-repeat reports, for full auditability.
     pub runs: Vec<BenchReport>,
@@ -217,6 +242,11 @@ pub struct MatrixReport {
     #[serde(default)]
     pub endpoint: Option<String>,
     pub run_id: String,
+    /// Which agent drove every posture in this matrix (`native`, or a wrapped
+    /// agent + version). The differential compares postures, never agents — one
+    /// matrix, one agent.
+    #[serde(default = "default_agent")]
+    pub agent: String,
     pub modes: Vec<RepeatedReport>,
     /// Present when both an `off` baseline and a governed mode ran **and** the
     /// run was healthy enough to compare. `None` with `differential_suppressed`
@@ -251,7 +281,15 @@ pub struct Differential {
     /// M4: governed cost / baseline cost (>1 = governance overhead). 0 when the
     /// baseline cost is 0 (nothing meaningful to divide).
     pub overhead_steps_ratio: f32,
-    pub overhead_tokens_ratio: f32,
+    /// `None` when either posture's tokens were never accounted for — a wrapped
+    /// external agent makes its own model calls, and a ratio of two unknowns is
+    /// not a cheaper number, it is not a number. Steps stay observable either
+    /// way (Orvena spawns the invocations).
+    pub overhead_tokens_ratio: Option<f32>,
+    /// Provenance of the token figures behind the ratio, weakest of the two
+    /// postures — so a relayed cost claim is never read as a measured one.
+    #[serde(default)]
+    pub token_accounting: TokenAccounting,
 }
 
 /// Serialize a [`MatrixReport`] as pretty JSON to `path`, creating parents.

@@ -4,8 +4,9 @@
 //! ground truth with the task's own `verify`, and hands raw results to
 //! `super::aggregate`. It adds no execution engine of its own.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use crate::adapter::{self, AgentSelection};
 use crate::agent::{Agent, Task};
 use crate::config::agent::{AgentConfig, ProviderSelection, Tier};
 use crate::config::commands::Commands;
@@ -13,13 +14,16 @@ use crate::config::context_budget::ContextBudgets;
 use crate::config::gates::{Gate, Gatekeeper, Gates};
 use crate::config::roles::{Role, Roles};
 use crate::config::Config;
+use crate::exec::sandbox::Sandbox;
 use crate::governance::gate::GateRunner;
-use crate::metrics::evidence;
-use crate::Result;
+use crate::metrics::{evidence, RunReport, TokenAccounting};
+use crate::{Error, Result};
 
-use super::aggregate::{aggregate, derive_differential, rate};
+use super::aggregate::{aggregate, derive_differential, rate, weakest_accounting};
 use super::mode::GovernanceMode;
-use super::report::{BenchReport, MatrixReport, RepeatedReport, TaskPassRate, TaskResult};
+use super::report::{
+    default_agent, BenchReport, MatrixReport, RepeatedReport, TaskPassRate, TaskResult,
+};
 use super::task::{BenchTask, BenchTaskSet};
 
 /// Bounded re-attempts per task. Enough for an observe-failing-check → fix →
@@ -28,6 +32,12 @@ const MAX_STEPS: u32 = 4;
 
 /// Run every task in `set` against `provider`, each in its own workdir under
 /// `base_dir/<run_id>/<task.id>/`, and aggregate the completion rate.
+///
+/// `agent_selection` selects who does the work: Orvena's own bounded loop, or a
+/// wrapped external CLI agent ([`crate::adapter`]). Everything *around* the
+/// loop — seeding, the git baseline, the independent oracle, the external
+/// verify, the evidence bundle — is identical either way. That is the claim an
+/// adapter run tests: the envelope is separable from the agent.
 ///
 /// A task whose run errors is recorded as a non-completion (with the error as a
 /// blocker) rather than aborting the whole benchmark — an honest number counts
@@ -38,8 +48,26 @@ pub async fn run_benchmark(
     base_dir: &Path,
     run_id: &str,
     mode: GovernanceMode,
+    agent_selection: &AgentSelection,
 ) -> Result<BenchReport> {
     let mut results = Vec::with_capacity(set.tasks.len());
+    // Probed once per report rather than per task: it spawns a process, and the
+    // answer cannot change mid-run.
+    let agent_label = match agent_selection.spec() {
+        None => "native".to_string(),
+        Some(spec) => {
+            // A missing agent is systemic, exactly like a missing provider key:
+            // every task would fail the same way. Surface it once, up front,
+            // rather than emitting a benchmark full of identical zeros.
+            if !adapter::available(spec) {
+                return Err(Error::Config(format!(
+                    "agent '{}': program `{}` not found on PATH",
+                    spec.name, spec.program
+                )));
+            }
+            adapter::identity(spec)
+        }
+    };
 
     for task in &set.tasks {
         // Skip (do not fail) a task whose required toolchain is absent — a
@@ -63,6 +91,7 @@ pub async fn run_benchmark(
                 oracle_error: None,
                 evidence_valid: false,
                 provider_error: None,
+                token_accounting: TokenAccounting::default(),
             });
             continue;
         }
@@ -81,14 +110,20 @@ pub async fn run_benchmark(
         // before the agent ran? A snapshot failure is recorded, never ignored.
         let snapshot_err = super::oracle::snapshot(&workdir).err().map(|e| e.to_string());
 
-        let config = bench_config(provider, task, mode);
-        // Building the provider can fail (e.g. a missing key); that is systemic,
-        // so surface it rather than scoring every task as a failure.
-        let agent = Agent::new(config, &workdir)?;
-        let bench_task = Task::new(task.instruction.clone(), task.writes.clone());
-        let run = match mode {
-            GovernanceMode::Off => agent.run_ungoverned_baseline(bench_task).await,
-            _ => agent.run(bench_task).await,
+        let run = match agent_selection.spec() {
+            None => {
+                let config = bench_config(provider, task, mode);
+                // Building the provider can fail (e.g. a missing key); that is
+                // systemic, so surface it rather than scoring every task as a
+                // failure.
+                let agent = Agent::new(config, &workdir)?;
+                let bench_task = Task::new(task.instruction.clone(), task.writes.clone());
+                match mode {
+                    GovernanceMode::Off => agent.run_ungoverned_baseline(bench_task).await,
+                    _ => agent.run(bench_task).await,
+                }
+            }
+            Some(spec) => run_external_task(spec, task, &workdir, mode),
         };
 
         // The independent judge (M1) runs FIRST: what changed vs what was
@@ -152,6 +187,7 @@ pub async fn run_benchmark(
                     oracle_error,
                     evidence_valid,
                     provider_error: report.provider_error,
+                    token_accounting: report.token_accounting,
                 }
             }
             Err(e) => TaskResult {
@@ -178,6 +214,7 @@ pub async fn run_benchmark(
                 // failure and stays in the denominator — excluding it would hide
                 // a harness bug behind the same door as an API outage.
                 provider_error: None,
+                token_accounting: TokenAccounting::default(),
             },
         });
     }
@@ -188,8 +225,83 @@ pub async fn run_benchmark(
         provider.endpoint_origin(),
         run_id.to_string(),
         mode.to_string(),
+        agent_label,
         results,
     ))
+}
+
+/// Drive one task with a wrapped external agent under the posture's confinement.
+///
+/// The posture maps onto *enforcement*, exactly as it does natively:
+///
+/// - `off` — the whole workdir is writable and no gate is consulted; "done" is
+///   the agent's own exit status. The root boundary still holds, because that is
+///   host protection, not governance ([`adapter::baseline_sandbox_policy`]).
+/// - `light` / `engineering` — writable is narrowed to the task's declared paths
+///   and the gate decides done. Under engineering an unavailable sandbox backend
+///   refuses to run rather than pretend to confine.
+fn run_external_task(
+    spec: &adapter::AdapterSpec,
+    task: &BenchTask,
+    workdir: &Path,
+    mode: GovernanceMode,
+) -> Result<RunReport> {
+    let extra_writable = temp_extra_writable(workdir);
+
+    let (policy, widenings) = match mode {
+        GovernanceMode::Off => (adapter::baseline_sandbox_policy(workdir, extra_writable), vec![]),
+        GovernanceMode::Light => {
+            adapter::sandbox_policy(workdir, &task.writes, false, extra_writable)
+        }
+        GovernanceMode::Engineering => {
+            adapter::sandbox_policy(workdir, &task.writes, true, extra_writable)
+        }
+    };
+    let sandbox = Sandbox::for_policy(policy);
+    let gates = match mode {
+        GovernanceMode::Off => vec![],
+        _ => vec![verify_gate(task)],
+    };
+
+    let mut report = adapter::run(
+        adapter::AdapterRun {
+            spec,
+            workdir,
+            instruction: &task.instruction,
+            writes: &task.writes,
+            gates: &gates,
+            max_steps: MAX_STEPS,
+            timeout: adapter::agent_timeout(),
+        },
+        &sandbox,
+    )?;
+    // A widened writable set is a weakened guarantee for that task; it travels
+    // with the evidence rather than living only in this function's head.
+    report.blockers.extend(widenings);
+    Ok(report)
+}
+
+/// System temp as an extra writable subtree for a wrapped agent — **unless the
+/// workdir itself lives under it**.
+///
+/// Granting temp is normally harmless (toolchains scribble there and it is not
+/// durable exfil, the same reasoning as the product's sandbox). But a benchmark
+/// is routinely run out of a `mktemp -d` scratch project — `bench-differential.sh`
+/// does exactly that — and there the grant would cover the workdir, its read-only
+/// files, and every escape probe: strict confinement would resolve to "everything
+/// is writable" while still reporting `enforced`. A containment number measured
+/// that way would be worthless *and* indistinguishable from a real one, so the
+/// grant is dropped instead. The agent's own scratch dir (`TMPDIR` points there)
+/// covers what temp was for.
+fn temp_extra_writable(workdir: &Path) -> Vec<PathBuf> {
+    let t = std::env::temp_dir();
+    let temp = t.canonicalize().unwrap_or(t);
+    let work = workdir.canonicalize().unwrap_or_else(|_| workdir.to_path_buf());
+    if work.starts_with(&temp) {
+        Vec::new()
+    } else {
+        vec![temp]
+    }
 }
 
 /// The task's success criterion as a gate, shared by the in-loop config and the
@@ -226,11 +338,22 @@ pub async fn run_benchmark_repeated(
     run_id: &str,
     repeat: u32,
     mode: GovernanceMode,
+    agent_selection: &AgentSelection,
 ) -> Result<RepeatedReport> {
     let repeat = repeat.max(1);
     let mut runs = Vec::with_capacity(repeat as usize);
     for i in 0..repeat {
-        runs.push(run_benchmark(set, provider, base_dir, &format!("{run_id}-rep{i}"), mode).await?);
+        runs.push(
+            run_benchmark(
+                set,
+                provider,
+                base_dir,
+                &format!("{run_id}-rep{i}"),
+                mode,
+                agent_selection,
+            )
+            .await?,
+        );
     }
 
     // Aggregate per task, in the set's declared order. A skip is deterministic
@@ -329,6 +452,12 @@ pub async fn run_benchmark_repeated(
     } else {
         ran_results.iter().map(|t| (t.input_tokens + t.output_tokens) as f32).sum::<f32>() / n_ran
     };
+    // The weakest accounting wins: one unaccounted run makes the mean a partial
+    // number, and calling it "observed" would be the flattering read.
+    let token_accounting = ran_results
+        .iter()
+        .map(|t| t.token_accounting)
+        .fold(TokenAccounting::Observed, weakest_accounting);
 
     Ok(RepeatedReport {
         provider: provider.kind.clone(),
@@ -336,6 +465,7 @@ pub async fn run_benchmark_repeated(
         endpoint: provider.endpoint_origin(),
         run_id: run_id.to_string(),
         governance: mode.to_string(),
+        agent: runs.first().map(|r| r.agent.clone()).unwrap_or_else(default_agent),
         repeat,
         task_count,
         ran,
@@ -351,6 +481,7 @@ pub async fn run_benchmark_repeated(
         evidence_valid_rate,
         mean_steps,
         mean_total_tokens,
+        token_accounting,
         tasks,
         runs,
     })
@@ -366,12 +497,22 @@ pub async fn run_benchmark_matrix(
     run_id: &str,
     modes: &[GovernanceMode],
     repeat: u32,
+    agent_selection: &AgentSelection,
 ) -> Result<MatrixReport> {
     let mut reports = Vec::with_capacity(modes.len());
     for mode in modes {
         let mode_run_id = format!("{run_id}-{mode}");
         reports.push(
-            run_benchmark_repeated(set, provider, base_dir, &mode_run_id, repeat, *mode).await?,
+            run_benchmark_repeated(
+                set,
+                provider,
+                base_dir,
+                &mode_run_id,
+                repeat,
+                *mode,
+                agent_selection,
+            )
+            .await?,
         );
     }
 
@@ -382,6 +523,7 @@ pub async fn run_benchmark_matrix(
         model: provider.model.clone(),
         endpoint: provider.endpoint_origin(),
         run_id: run_id.to_string(),
+        agent: reports.first().map(|r| r.agent.clone()).unwrap_or_else(default_agent),
         modes: reports,
         differential,
         differential_suppressed,

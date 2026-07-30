@@ -14,7 +14,14 @@
 //!
 //! Two meta-mechanisms: **config-first** (everything behavioral is YAML) and a
 //! minimal **tiered governance** ([`config::agent::Tier`]).
+//!
+//! The same guarantees can also be applied to an agent Orvena did not write:
+//! [`adapter`] spawns a third-party CLI agent inside the OS sandbox and feeds it
+//! through the identical gate / oracle / evidence path (ADR-004). The native
+//! loop stays the reference implementation — deterministic, offline-reproducible,
+//! and dependency-free.
 
+pub mod adapter;
 pub mod agent;
 pub mod benchmark;
 pub mod config;
