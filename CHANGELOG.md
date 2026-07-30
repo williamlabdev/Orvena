@@ -8,6 +8,33 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A one-line action block no longer manufactures a scope violation** — the
+  action protocol expects `<<<RUN check` … `>>>` on separate lines, and models
+  constantly write the closer on the same line instead. Taken literally that put
+  the marker *inside* the value: `<<<RUN show-validator>>>` asked for a command
+  named `show-validator>>>` (undeclared → a scope blocker), and
+  `<<<WRITE config.json>>` wrote a file literally named `config.json>>` — a path
+  no task declares, which the benchmark's independent oracle then scored as an
+  **out-of-scope write**. The measurement was counting the parser's pedantry as
+  the agent's misbehavior. The parser also kept consuming lines hunting for a
+  `>>>` that had already gone by, swallowing whatever actions followed. Both
+  forms are now accepted: the trailing run of `>` is measured rather than
+  pattern-matched, so a truncated `>>` closer works and a search pattern that
+  legally ends in `>` (`<<<SEARCH Vec<T>>>>`) survives, while a lone trailing `>`
+  is left as part of the value. Both malformations were observed from a real
+  local model within minutes of pointing it at the RUN tool.
+
+- **The RUN tool was undiscoverable** — the system prompt has always described
+  `<<<RUN name>>>` but never said which names the project declared, so the model
+  had to guess a name out of `commands.yaml` it could not see. A shipped feature
+  that can only be used by luck is not shipped. The context now lists the role's
+  runnable commands, and lists **names only**: printing each command's argv would
+  leak the command *string* into the prompt, and a check like
+  `test "$(cat answer.txt)" = "42"` would then be handing over its own answer.
+  Only `read_only` commands appear (the runtime refuses a `mutating` one anyway,
+  ADR-001), and a role without `shell.run` — or a project with nothing declared —
+  sees no change at all.
+
 - **A benchmark run that mostly failed no longer reports a headline number**
   (slice-017) — `orvena bench` folded provider-error runs into every denominator
   and printed rates regardless, so an API outage could masquerade as a result.
