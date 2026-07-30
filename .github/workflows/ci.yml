@@ -24,10 +24,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust (stable + clippy)
+      - name: Install Rust (stable + clippy + rustfmt)
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -46,11 +46,27 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo test -p orvena-cli --test sandbox_linux -- --nocapture
 
+      - name: Formatting (rustfmt.toml is tuned to this codebase's style)
+        run: cargo fmt --all --check
+
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Boundary check (no research leaks)
         run: ./scripts/boundary-check.sh
+
+  # Orvena ships a binary built from source, and its only network-facing surface
+  # is the provider client (reqwest + rustls). An advisory against that chain is
+  # something users inherit on `cargo install`, so it gates rather than informs.
+  # Runs once, not per-OS: the lockfile is platform-independent.
+  audit:
+    name: supply chain (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   install-smoke:
     name: clean-machine install
