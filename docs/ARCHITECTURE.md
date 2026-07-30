@@ -37,7 +37,7 @@ flowchart TB
     end
     TOOLS["tools/ — fs · grep · shell"]
     EXEC["exec/ — CommandRunner<br/>+ OS sandbox backends"]
-    PROV["provider/ — trait + registry<br/>anthropic · ollama · openai_compat · offline"]
+    PROV["provider/ — trait + registry<br/>modules: anthropic · ollama · offline<br/>openai_compat serves 3 kinds:<br/>openai · openrouter · openai_compat"]
     CFG["config/ — orvena.yaml · roles ·<br/>gates · context-budgets · commands · sandbox"]
     MET["metrics/ — RunReport ·<br/>baseline · evidence exporter"]
     SKILL["skills/ — discover → resolve → apply"]

@@ -71,6 +71,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   scaffold now names macOS and Linux as enforced and Windows (or a kernel
   without Landlock) as the `on_unavailable` path.
 
+- **Stale provider lists across the docs.** A sweep for every enumeration of
+  provider kinds found three that predated `openai_compat`: the
+  `ARCHITECTURE.md` component diagram (which listed *module* names, so it also
+  silently omitted `openai`/`openrouter` — it now says which is which),
+  `MVP-SCOPE.md`'s subsystem table, and `scripts/bench-differential.sh`, whose
+  header both omitted the kind and still taught the Gemini key-masquerade. That
+  script also gained `API_KEY_ENV`, so it can drive `openai_compat` — with a
+  named key var, or none at all against a keyless local server.
+
 - **A one-line action block no longer manufactures a scope violation** — the
   action protocol expects `<<<RUN check` … `>>>` on separate lines, and models
   constantly write the closer on the same line instead. Taken literally that put
