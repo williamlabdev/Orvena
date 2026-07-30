@@ -23,6 +23,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it). Verified end-to-end against Ollama's own OpenAI-compatible endpoint:
   real token usage, gate passed, evidence bundle round-tripped.
 
+- **Evidence bundles and benchmark reports now name the backend that produced
+  them.** `provider` alone answered "which endpoint?" only while every kind had
+  a fixed one; `openai_compat` is deliberately endpoint-agnostic, so a local
+  llama.cpp and a hosted aggregator serving the same open-weight model produced
+  byte-identical provenance. Bundles gain `provider` / `model` / `endpoint` and
+  reports gain `endpoint`, where endpoint is the **origin only**
+  (`scheme://host[:port]`) — userinfo, path, and query are stripped, because a
+  user-supplied `base_url` can carry a token and these files get published.
+  Additive fields, so v1 stands and older bundles still read.
+- **Parity runs can leave a committed artifact.** `ORVENA_PARITY_EVIDENCE_OUT`
+  writes the run's evidence bundle to a path you choose; the first is
+  `docs/parity-results/2026-07-31-openai_compat-qwen3-14b.json`. Published
+  benchmark numbers already had raw JSON behind them while parity's
+  "somebody actually ran it" rested on a number retyped into a table. A test
+  keeps every committed bundle schema-valid and self-describing.
+
+### Changed
+
+- **`orvena init` no longer recommends a provider nobody has run.** The picker
+  called Anthropic "Recommended first run" while `docs/provider-parity.md`
+  claimed that recommendation had been removed — it had been, from the README
+  only. Each entry now states its parity status, which is what the README does.
+
 ### Fixed
 
 - **`orvena doctor` no longer reports "All checks passed" on configs that
@@ -41,6 +64,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   OpenAI-compatible builder also lists its kinds explicitly instead of falling
   through a catch-all arm that would have silently handed a future kind
   OpenAI's endpoint and key — and mislabeled it `openai` in the evidence.
+
+- **The `orvena init` scaffold no longer ships an outdated sandbox note.** Its
+  comments still said Linux reports "unavailable" and referred to a Landlock
+  backend that "ships" in the future — that backend landed in slice-016. The
+  scaffold now names macOS and Linux as enforced and Windows (or a kernel
+  without Landlock) as the `on_unavailable` path.
 
 - **A one-line action block no longer manufactures a scope violation** — the
   action protocol expects `<<<RUN check` … `>>>` on separate lines, and models

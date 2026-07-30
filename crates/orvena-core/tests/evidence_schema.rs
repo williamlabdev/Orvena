@@ -229,3 +229,36 @@ fn a_pre_v1_bundle_without_the_schema_field_still_deserializes_as_v1() {
     // But as a FILE on disk it predates the frozen contract and the validator
     // reports the missing fields — honesty over leniency.
 }
+
+// The committed parity artifact is only worth committing if it is a valid
+// bundle AND identifies its own backend — a bundle that cannot say which
+// provider produced it cannot back a parity claim.
+#[test]
+fn the_committed_parity_artifact_is_valid_and_self_describing() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/parity-results");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return; // no artifacts committed yet — nothing to check
+    };
+    let mut checked = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "json") {
+            continue;
+        }
+        let problems = orvena_core::metrics::evidence::validate_bundle(&path)
+            .unwrap_or_else(|e| panic!("{} is not readable as a bundle: {e}", path.display()));
+        assert!(problems.is_empty(), "{} fails schema v1: {problems:?}", path.display());
+
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        for field in ["provider", "model"] {
+            assert!(
+                v[field].as_str().is_some_and(|s| !s.is_empty()),
+                "{} has no '{field}' — it cannot identify what produced it",
+                path.display()
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked > 0, "docs/parity-results exists but holds no bundles");
+}

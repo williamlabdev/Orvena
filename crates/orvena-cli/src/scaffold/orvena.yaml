@@ -35,8 +35,10 @@ max_steps: 3
 # write outside this project or open the network is stopped by the OS, not merely
 # trusted.
 #
-# Platform support in this release: macOS (via `sandbox-exec`) is enforced.
-# Linux/other report "unavailable" for now, and then follow `on_unavailable`.
+# Platform support in this release: macOS (via `sandbox-exec`) and Linux (via
+# Landlock + seccomp) are enforced. Windows has no native backend and reports
+# "unavailable", as does a Linux kernel without Landlock — both then follow
+# `on_unavailable` below.
 sandbox:
   enabled: true
 
@@ -56,7 +58,7 @@ sandbox:
   #   - node_modules
 
   # on_unavailable: fail_closed | warn — what to do when the OS sandbox mechanism
-  # is not available on this host (e.g. Linux until the Landlock backend ships).
+  # is not available on this host (e.g. Windows, or a kernel without Landlock).
   # Omit to derive from `tier`: engineering → fail_closed (refuse to run children
   # unconfined), light → warn (run unconfined, but record the degradation).
   # on_unavailable: fail_closed

@@ -31,6 +31,7 @@ const MAX_DEAD_RUN_SHARE: f32 = 0.2;
 pub(super) fn aggregate(
     provider: String,
     model: String,
+    endpoint: Option<String>,
     run_id: String,
     governance: String,
     results: Vec<TaskResult>,
@@ -67,6 +68,7 @@ pub(super) fn aggregate(
     BenchReport {
         provider,
         model,
+        endpoint,
         run_id,
         governance,
         task_count,
@@ -224,7 +226,7 @@ mod tests {
     }
 
     fn report(results: Vec<TaskResult>) -> BenchReport {
-        aggregate("offline".into(), "m".into(), "r".into(), "off".into(), results)
+        aggregate("offline".into(), "m".into(), None, "r".into(), "off".into(), results)
     }
 
     #[test]
@@ -270,6 +272,7 @@ mod tests {
         RepeatedReport {
             provider: "offline".into(),
             model: "m".into(),
+            endpoint: None,
             run_id: "r".into(),
             governance: governance.into(),
             repeat: 1,

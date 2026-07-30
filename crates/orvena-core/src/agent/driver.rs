@@ -96,7 +96,7 @@ pub(crate) async fn run_loop_with(
         None => Sandbox::disabled(),
     };
 
-    let mut report = RunReport::new(&task.instruction);
+    let mut report = RunReport::new(&task.instruction).with_provenance(&cfg.agent.provider);
     // Record whether children are actually confined, so the evidence bundle can
     // distinguish enforcement from intention. A degradation (unavailable backend)
     // is surfaced as a blocker rather than left silent.

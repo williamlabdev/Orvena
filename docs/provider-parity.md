@@ -92,12 +92,27 @@ header is sent at all). With no `ORVENA_PARITY_PROVIDER` set the test skips
 cleanly, so `cargo test -- --ignored` never fails just because parity env is
 absent.
 
+Set `ORVENA_PARITY_EVIDENCE_OUT` to an **absolute** path to keep the run's
+evidence bundle (`cargo test` runs with the cwd at `crates/orvena-core`, so a
+relative path lands there, not where you expect — the test prints the absolute
+path it wrote). Committing that bundle under `docs/parity-results/` is what
+turns a ✅ below from a retyped number into an artifact someone else can check;
+each bundle records its own `provider`, `model`, and `endpoint`.
+
+```sh
+ORVENA_PARITY_PROVIDER=openai_compat \
+  ORVENA_PARITY_BASE_URL=http://localhost:11434/v1 \
+  ORVENA_PARITY_MODEL=qwen3:14b \
+  ORVENA_PARITY_EVIDENCE_OUT="$PWD/docs/parity-results/<date>-<kind>-<model>.json" \
+  cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
+```
+
 ## Current status
 
 | Provider  | Status | Evidence |
 | :-------- | :----- | :------- |
 | **Ollama** (local model) | ✅ demonstrated · re-verified 2026-07-30 | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported (`steps=1`, 373 tok), evidence bundle round-trips |
-| **openai_compat** (generic, checked via Ollama's OpenAI-compat endpoint) | ✅ demonstrated 2026-07-31 | `qwen3:14b` via `http://localhost:11434/v1`, no `api_key_env` set (unauthenticated), passes the same contract (`steps=1`, 403 tok, gate `hello-exists` passes) |
+| **openai_compat** (generic, checked via Ollama's OpenAI-compat endpoint) | ✅ demonstrated 2026-07-31 | `qwen3:14b` via `http://localhost:11434/v1`, no `api_key_env` set (unauthenticated), passes the same contract (`steps=1`, gate `hello-exists` passes). **Committed artifact:** [`docs/parity-results/2026-07-31-openai_compat-qwen3-14b.json`](parity-results/2026-07-31-openai_compat-qwen3-14b.json) — the bundle names its own `provider`/`model`/`endpoint` |
 | **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated · re-verified 2026-07-30 | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (`steps=1`, 281 tok). Run on the pre-`openai_compat` route — kind `openai` with the Gemini key in `OPENAI_API_KEY`. The recipe above now uses `openai_compat` + `api_key_env`; that cleaner path has **not** been re-run, so this row records what was actually executed |
 | **Anthropic** (hosted)   | ◻ **never run** | no `ANTHROPIC_API_KEY` has been available on a bench machine to date. The code path exists and is expected to work — but nobody has executed it, and this table will not imply otherwise |
 | **OpenAI** (hosted, native endpoint) | ◻ never run | exercised only via the base-URL override above (Gemini), never against OpenAI's own endpoint |

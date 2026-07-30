@@ -27,6 +27,19 @@ pub struct RunReport {
     /// existed read back as v1 (they are).
     #[serde(default = "evidence_schema_v1")]
     pub schema: String,
+    /// What produced this run: provider kind, model id, and — when the config
+    /// set an explicit `base_url` — the endpoint origin. A bundle is meant to
+    /// "say what it is without its producer on hand", and `provider` alone
+    /// stopped identifying the backend once `openai_compat` made the kind
+    /// endpoint-agnostic. Credentials never appear here (see
+    /// `ProviderSelection::endpoint_origin`). Additive fields — bundles written
+    /// before they existed still read as v1.
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
     pub task: String,
     /// True when all gates passed (the run reached "done").
     pub completed: bool,
@@ -76,6 +89,9 @@ impl RunReport {
     pub fn new(task: impl Into<String>) -> Self {
         Self {
             schema: EVIDENCE_SCHEMA_V1.into(),
+            provider: None,
+            model: None,
+            endpoint: None,
             task: task.into(),
             completed: false,
             steps: 0,
@@ -88,6 +104,14 @@ impl RunReport {
             sandbox: crate::exec::sandbox::SandboxStatus::default(),
             provider_error: None,
         }
+    }
+
+    /// Stamp what produced this run, so the bundle identifies its own backend.
+    pub fn with_provenance(mut self, sel: &crate::config::agent::ProviderSelection) -> Self {
+        self.provider = Some(sel.kind.clone());
+        self.model = Some(sel.model.clone());
+        self.endpoint = sel.endpoint_origin();
+        self
     }
 
     /// Seal the report with its completion status.

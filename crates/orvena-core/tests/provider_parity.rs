@@ -160,5 +160,23 @@ async fn provider_satisfies_the_parity_contract() {
     assert_eq!(reloaded.gate_outcomes.len(), report.gate_outcomes.len());
     assert_eq!(reloaded.task, report.task);
 
+    // Keep the bundle when asked, so a parity claim can rest on a committed
+    // artifact instead of a number retyped into a table. `docs/benchmark-results/`
+    // already holds raw JSON for the published benchmark figures; parity had no
+    // equivalent, which left "somebody actually ran it" resting on self-report.
+    if let Ok(out) = std::env::var("ORVENA_PARITY_EVIDENCE_OUT") {
+        let out = std::path::PathBuf::from(out);
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent).expect("evidence output directory");
+        }
+        std::fs::copy(&path, &out).expect("evidence bundle copies to ORVENA_PARITY_EVIDENCE_OUT");
+        // Absolute, because `cargo test` runs with the cwd at the *package*
+        // root (`crates/orvena-core`), not the workspace root — a relative path
+        // here lands somewhere the caller did not expect. Prefer an absolute
+        // `ORVENA_PARITY_EVIDENCE_OUT`.
+        let shown = std::fs::canonicalize(&out).unwrap_or(out);
+        eprintln!("parity[{kind}]: evidence bundle written to {}", shown.display());
+    }
+
     let _ = std::fs::remove_dir_all(&root);
 }

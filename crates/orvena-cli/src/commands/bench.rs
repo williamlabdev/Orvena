@@ -146,6 +146,9 @@ fn announce_report(report_path: &std::path::Path, out: Option<&std::path::Path>)
 fn print_report(r: &BenchReport) {
     println!("── benchmark [{}] ──", r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
+    if let Some(endpoint) = &r.endpoint {
+        println!("endpoint:  {endpoint}");
+    }
     for res in &r.results {
         if res.skipped {
             let why = res.skip_reason.as_deref().unwrap_or("skipped");
@@ -228,6 +231,9 @@ fn print_provider_errors(provider_errors: u32, attempted: u32) {
 fn print_repeated(r: &RepeatedReport) {
     println!("── benchmark ({} runs/task) [{}] ──", r.repeat, r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
+    if let Some(endpoint) = &r.endpoint {
+        println!("endpoint:  {endpoint}");
+    }
     for t in &r.tasks {
         if t.skipped {
             println!("  {:<18} SKIP", t.id);

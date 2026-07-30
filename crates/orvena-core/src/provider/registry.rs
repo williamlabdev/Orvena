@@ -33,7 +33,7 @@ pub fn known() -> Vec<ProviderInfo> {
         ProviderInfo {
             kind: "anthropic",
             env_key: Some("ANTHROPIC_API_KEY"),
-            description: "Anthropic Claude (hosted). Recommended first run.",
+            description: "Anthropic Claude (hosted). Not yet parity-checked.",
             local: false,
             requires_base_url: false,
             honors_api_key_env: false,
@@ -41,7 +41,7 @@ pub fn known() -> Vec<ProviderInfo> {
         ProviderInfo {
             kind: "openai",
             env_key: Some("OPENAI_API_KEY"),
-            description: "OpenAI (hosted).",
+            description: "OpenAI (hosted). Not yet parity-checked.",
             local: false,
             requires_base_url: false,
             honors_api_key_env: true,
@@ -49,7 +49,7 @@ pub fn known() -> Vec<ProviderInfo> {
         ProviderInfo {
             kind: "openrouter",
             env_key: Some("OPENROUTER_API_KEY"),
-            description: "OpenRouter (hosted) — one key, many models.",
+            description: "OpenRouter (hosted) — one key, many models. Not yet parity-checked.",
             local: false,
             requires_base_url: false,
             honors_api_key_env: true,
@@ -57,7 +57,8 @@ pub fn known() -> Vec<ProviderInfo> {
         ProviderInfo {
             kind: "ollama",
             env_key: None,
-            description: "Local via Ollama (offline/private). You run Ollama yourself.",
+            description:
+                "Local via Ollama (offline/private). You run Ollama yourself. Parity-checked.",
             local: true,
             requires_base_url: false,
             honors_api_key_env: false,
@@ -67,7 +68,8 @@ pub fn known() -> Vec<ProviderInfo> {
             env_key: None,
             description: "Generic OpenAI-compatible endpoint — self-hosted OSS servers \
                 (vLLM, llama.cpp server, LM Studio, TGI, SGLang) or hosted open-weight \
-                aggregators (Groq, Together, Fireworks). Needs base_url; API key optional.",
+                aggregators (Groq, Together, Fireworks). Needs base_url; API key \
+                optional. Parity-checked via Ollama's compat endpoint.",
             local: true,
             requires_base_url: true,
             honors_api_key_env: true,

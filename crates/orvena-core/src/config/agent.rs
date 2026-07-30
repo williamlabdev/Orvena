@@ -56,6 +56,33 @@ pub struct ProviderSelection {
     pub api_key_env: Option<String>,
 }
 
+impl ProviderSelection {
+    /// Origin of the configured endpoint (`scheme://host[:port]`), for
+    /// provenance in published reports — or `None` when no `base_url` is set
+    /// and the kind therefore uses its own fixed endpoint.
+    ///
+    /// `kind` alone used to identify the endpoint, but `openai_compat` is
+    /// deliberately endpoint-agnostic: a local llama.cpp and Groq serving the
+    /// same open-weight model would otherwise produce byte-identical
+    /// provenance. Origin restores the distinction.
+    ///
+    /// Deliberately **not** the full URL. `base_url` is user-supplied and may
+    /// carry credentials in userinfo (`https://user:token@host/v1`) or a query
+    /// string, and benchmark reports are committed and published — so userinfo,
+    /// path, query, and fragment are all dropped rather than trusted.
+    pub fn endpoint_origin(&self) -> Option<String> {
+        let raw = self.base_url.as_deref()?.trim();
+        let (scheme, rest) = raw.split_once("://")?;
+        let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+        // Anything before '@' is userinfo — credentials. Drop it.
+        let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+        if scheme.is_empty() || host.is_empty() {
+            return None;
+        }
+        Some(format!("{}://{}", scheme.to_ascii_lowercase(), host.to_ascii_lowercase()))
+    }
+}
+
 /// Discipline scales with risk (Tiered Governance). v0.1 minimal set.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -85,4 +112,61 @@ fn default_role() -> String {
 
 fn default_max_steps() -> u32 {
     3
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sel(base_url: Option<&str>) -> ProviderSelection {
+        ProviderSelection {
+            kind: "openai_compat".into(),
+            model: "m".into(),
+            base_url: base_url.map(Into::into),
+            api_key_env: None,
+        }
+    }
+
+    #[test]
+    fn endpoint_origin_distinguishes_backends() {
+        assert_eq!(
+            sel(Some("http://localhost:11434/v1")).endpoint_origin().as_deref(),
+            Some("http://localhost:11434")
+        );
+        assert_eq!(
+            sel(Some("https://api.groq.com/openai/v1")).endpoint_origin().as_deref(),
+            Some("https://api.groq.com")
+        );
+        assert_eq!(sel(None).endpoint_origin(), None);
+    }
+
+    // Reports are committed and published — a token in the URL must never
+    // ride along into one.
+    #[test]
+    fn endpoint_origin_strips_credentials_and_query() {
+        assert_eq!(
+            sel(Some("https://user:s3cret@api.example.com/v1")).endpoint_origin().as_deref(),
+            Some("https://api.example.com")
+        );
+        assert_eq!(
+            sel(Some("https://host/v1?api-key=s3cret")).endpoint_origin().as_deref(),
+            Some("https://host")
+        );
+        for raw in ["https://user:s3cret@api.example.com/v1", "https://host/v1?api-key=s3cret"] {
+            assert!(
+                !sel(Some(raw)).endpoint_origin().unwrap().contains("s3cret"),
+                "secret leaked from {raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn endpoint_origin_handles_ipv6_and_rejects_schemeless() {
+        assert_eq!(
+            sel(Some("http://[::1]:8000/v1")).endpoint_origin().as_deref(),
+            Some("http://[::1]:8000")
+        );
+        assert_eq!(sel(Some("localhost:11434")).endpoint_origin(), None);
+        assert_eq!(sel(Some("   ")).endpoint_origin(), None);
+    }
 }

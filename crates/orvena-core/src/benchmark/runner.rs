@@ -185,6 +185,7 @@ pub async fn run_benchmark(
     Ok(aggregate(
         provider.kind.clone(),
         provider.model.clone(),
+        provider.endpoint_origin(),
         run_id.to_string(),
         mode.to_string(),
         results,
@@ -332,6 +333,7 @@ pub async fn run_benchmark_repeated(
     Ok(RepeatedReport {
         provider: provider.kind.clone(),
         model: provider.model.clone(),
+        endpoint: provider.endpoint_origin(),
         run_id: run_id.to_string(),
         governance: mode.to_string(),
         repeat,
@@ -378,6 +380,7 @@ pub async fn run_benchmark_matrix(
     Ok(MatrixReport {
         provider: provider.kind.clone(),
         model: provider.model.clone(),
+        endpoint: provider.endpoint_origin(),
         run_id: run_id.to_string(),
         modes: reports,
         differential,

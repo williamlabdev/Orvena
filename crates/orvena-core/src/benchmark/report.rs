@@ -72,6 +72,15 @@ pub struct TaskResult {
 pub struct BenchReport {
     pub provider: String,
     pub model: String,
+    /// Endpoint origin (`scheme://host[:port]`) when the run used an explicit
+    /// `base_url`. `provider` alone stopped identifying the backend once
+    /// `openai_compat` made the kind endpoint-agnostic — a local llama.cpp and
+    /// a hosted aggregator serving the same open-weight model are otherwise
+    /// indistinguishable in a published report. Credentials are stripped
+    /// (`ProviderSelection::endpoint_origin`). Additive: keeps the report
+    /// readable by consumers that predate the field.
+    #[serde(default)]
+    pub endpoint: Option<String>,
     pub run_id: String,
     /// Governance posture this report was measured under.
     #[serde(default = "default_governance")]
@@ -135,6 +144,15 @@ pub struct TaskPassRate {
 pub struct RepeatedReport {
     pub provider: String,
     pub model: String,
+    /// Endpoint origin (`scheme://host[:port]`) when the run used an explicit
+    /// `base_url`. `provider` alone stopped identifying the backend once
+    /// `openai_compat` made the kind endpoint-agnostic — a local llama.cpp and
+    /// a hosted aggregator serving the same open-weight model are otherwise
+    /// indistinguishable in a published report. Credentials are stripped
+    /// (`ProviderSelection::endpoint_origin`). Additive: keeps the report
+    /// readable by consumers that predate the field.
+    #[serde(default)]
+    pub endpoint: Option<String>,
     pub run_id: String,
     /// Governance posture this report was measured under.
     #[serde(default = "default_governance")]
@@ -189,6 +207,15 @@ pub struct RepeatedReport {
 pub struct MatrixReport {
     pub provider: String,
     pub model: String,
+    /// Endpoint origin (`scheme://host[:port]`) when the run used an explicit
+    /// `base_url`. `provider` alone stopped identifying the backend once
+    /// `openai_compat` made the kind endpoint-agnostic — a local llama.cpp and
+    /// a hosted aggregator serving the same open-weight model are otherwise
+    /// indistinguishable in a published report. Credentials are stripped
+    /// (`ProviderSelection::endpoint_origin`). Additive: keeps the report
+    /// readable by consumers that predate the field.
+    #[serde(default)]
+    pub endpoint: Option<String>,
     pub run_id: String,
     pub modes: Vec<RepeatedReport>,
     /// Present when both an `off` baseline and a governed mode ran **and** the
