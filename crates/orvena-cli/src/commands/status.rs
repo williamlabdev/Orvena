@@ -15,10 +15,7 @@ pub fn run() -> Result<()> {
     let config = Config::load_dir(&dir)?;
 
     println!("Orvena status");
-    println!(
-        "  provider:  {} (model {})",
-        config.agent.provider.kind, config.agent.provider.model
-    );
+    println!("  provider:  {} (model {})", config.agent.provider.kind, config.agent.provider.model);
     println!("  tier:      {:?}", config.agent.tier);
     println!("  max_steps: {}", config.agent.max_steps);
 

@@ -1,0 +1,11 @@
+# Tuned to the style the codebase was already written in, rather than the other
+# way round. `use_small_heuristics = "Max"` is what keeps single-line struct
+# patterns, match arms and short call chains intact — with the default
+# ("Default") rustfmt explodes them onto one line per field.
+#
+# Measured on the 0.1.0 tree: default config wanted 268 diff hunks, this one 89.
+# Widening max_width makes it worse, not better (110 → 128 hunks, 120 → 160),
+# because a wider budget lets rustfmt re-join lines that were deliberately
+# broken. 100 is both the rustfmt default and the width this code targets.
+use_small_heuristics = "Max"
+max_width = 100

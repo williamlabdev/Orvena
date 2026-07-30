@@ -36,10 +36,7 @@ impl Scope {
 
     /// Benchmark-only ungoverned baseline (D2): same lists (same prompt), no
     /// enforcement. Crate-private so no product path can construct it.
-    pub(crate) fn unrestricted_baseline(
-        allowed_modifications: Vec<String>,
-        tier: Tier,
-    ) -> Self {
+    pub(crate) fn unrestricted_baseline(allowed_modifications: Vec<String>, tier: Tier) -> Self {
         Self { allowed_modifications, excluded: Vec::new(), tier, unrestricted: true }
     }
 

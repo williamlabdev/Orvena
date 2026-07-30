@@ -14,9 +14,8 @@ pub struct Anthropic {
 
 impl Anthropic {
     pub fn from_env(sel: &ProviderSelection) -> Result<Self> {
-        let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
-            Error::Provider("ANTHROPIC_API_KEY is not set — put it in .env".into())
-        })?;
+        let api_key = std::env::var("ANTHROPIC_API_KEY")
+            .map_err(|_| Error::Provider("ANTHROPIC_API_KEY is not set — put it in .env".into()))?;
         Ok(Self {
             client: reqwest::Client::new(),
             api_key,

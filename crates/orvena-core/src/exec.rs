@@ -14,10 +14,10 @@
 //! pipes inline while waiting can deadlock if the child fills a pipe buffer).
 
 pub mod sandbox;
-#[cfg(target_os = "macos")]
-mod sandbox_macos;
 #[cfg(target_os = "linux")]
 mod sandbox_linux;
+#[cfg(target_os = "macos")]
+mod sandbox_macos;
 
 pub use sandbox::{Sandbox, SandboxError, SandboxStatus};
 
@@ -141,16 +141,16 @@ impl CommandRunner {
             buf
         });
 
-        let (exit_code, timed_out) = match child.wait_timeout(self.timeout).map_err(RunError::Spawn)?
-        {
-            Some(status) => (status.code(), false),
-            None => {
-                // Outran the timeout: kill and reap so the drain threads can finish.
-                let _ = child.kill();
-                let _ = child.wait();
-                (None, true)
-            }
-        };
+        let (exit_code, timed_out) =
+            match child.wait_timeout(self.timeout).map_err(RunError::Spawn)? {
+                Some(status) => (status.code(), false),
+                None => {
+                    // Outran the timeout: kill and reap so the drain threads can finish.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    (None, true)
+                }
+            };
 
         let stdout = out_handle.join().unwrap_or_default();
         let stderr = err_handle.join().unwrap_or_default();

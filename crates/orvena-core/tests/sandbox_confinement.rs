@@ -95,9 +95,8 @@ fn macos_write_outside_root_is_denied_but_in_root_write_succeeds() {
     // 2. A write INSIDE the root must still succeed — the sandbox confines, it
     //    does not cripple legitimate build/test writes (AC-V3 dogfood shape).
     let allowed = fx.root.join("ok.txt");
-    let out = runner
-        .run_argv(&s(&["sh", "-c", &format!("echo hi > {}", allowed.display())]))
-        .unwrap();
+    let out =
+        runner.run_argv(&s(&["sh", "-c", &format!("echo hi > {}", allowed.display())])).unwrap();
     assert!(out.success(), "an in-root write must succeed: {}{}", out.stdout, out.stderr);
     assert_eq!(std::fs::read_to_string(&allowed).unwrap().trim(), "hi");
 
@@ -119,8 +118,14 @@ fn macos_network_deny_blocks_a_reachable_port() {
 
     // Control: without the sandbox, connecting to the open port must succeed. If
     // it does not (missing `nc`, odd environment), skip rather than false-fail.
-    let control = CommandRunner::new(&fx.root, Duration::from_secs(5))
-        .run_argv(&s(&["nc", "-z", "-w", "2", "127.0.0.1", &port.to_string()]));
+    let control = CommandRunner::new(&fx.root, Duration::from_secs(5)).run_argv(&s(&[
+        "nc",
+        "-z",
+        "-w",
+        "2",
+        "127.0.0.1",
+        &port.to_string(),
+    ]));
     let control_ok = matches!(&control, Ok(o) if o.success());
     if !control_ok {
         eprintln!("skipping network-deny assertion: control connect did not succeed ({control:?})");
@@ -181,7 +186,9 @@ fn linux_backend_is_enforced_or_fails_closed_never_unconfined() {
             let err = runner.run_argv(&s(&["echo", "hi"])).unwrap_err();
             assert!(matches!(err, RunError::Sandbox(_)), "fail-closed must refuse, got {err:?}");
         }
-        SandboxStatus::Disabled => panic!("an enabled policy must not resolve to Disabled on linux"),
+        SandboxStatus::Disabled => {
+            panic!("an enabled policy must not resolve to Disabled on linux")
+        }
     }
     fx.cleanup();
 }

@@ -60,14 +60,10 @@ pub fn validate_bundle_value(value: &serde_json::Value) -> Vec<String> {
         return vec!["bundle is not a JSON object".into()];
     };
 
-    let mut require = |field: &str, check: fn(&Value) -> bool, want: &str| {
-        match obj.get(field) {
-            None => problems.push(format!("missing required field `{field}`")),
-            Some(v) if !check(v) => {
-                problems.push(format!("field `{field}` is not {want}"))
-            }
-            Some(_) => {}
-        }
+    let mut require = |field: &str, check: fn(&Value) -> bool, want: &str| match obj.get(field) {
+        None => problems.push(format!("missing required field `{field}`")),
+        Some(v) if !check(v) => problems.push(format!("field `{field}` is not {want}")),
+        Some(_) => {}
     };
 
     fn is_uint(v: &Value) -> bool {

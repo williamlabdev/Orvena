@@ -146,10 +146,8 @@ impl Provider for OpenAiCompat {
             let status = resp.status();
             if status.is_success() {
                 let v: serde_json::Value = resp.json().await?;
-                let content = v["choices"][0]["message"]["content"]
-                    .as_str()
-                    .unwrap_or_default()
-                    .to_string();
+                let content =
+                    v["choices"][0]["message"]["content"].as_str().unwrap_or_default().to_string();
                 let input_tokens = v["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32;
                 let output_tokens = v["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32;
                 return Ok(ChatResponse { content, input_tokens, output_tokens });
@@ -219,7 +217,8 @@ mod tests {
         let structured = r#"{"error":{"details":[{"retryDelay":"11.5s"}]}}"#;
         assert_eq!(retry_delay_from_body(structured), Some(Duration::from_secs_f64(11.5)));
 
-        let plain = "You exceeded your quota. Please retry in 11.993681175s. status RESOURCE_EXHAUSTED";
+        let plain =
+            "You exceeded your quota. Please retry in 11.993681175s. status RESOURCE_EXHAUSTED";
         let got = retry_delay_from_body(plain).unwrap();
         assert!((got.as_secs_f64() - 11.993681175).abs() < 1e-6, "got {got:?}");
     }

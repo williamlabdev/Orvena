@@ -96,11 +96,8 @@ async fn search_results_drive_the_next_write() {
     let root = temp_dir("search-roundtrip");
     std::fs::write(root.join("notes.txt"), "TODO: greet politely\n").unwrap();
 
-    let agent = Agent::with_provider(
-        config(),
-        &root,
-        Box::new(Scripted { calls: AtomicUsize::new(0) }),
-    );
+    let agent =
+        Agent::with_provider(config(), &root, Box::new(Scripted { calls: AtomicUsize::new(0) }));
     let task = Task::new("Find the TODO and write the greeting", vec!["hello.txt".into()]);
     let report = agent.run(task).await.unwrap();
 

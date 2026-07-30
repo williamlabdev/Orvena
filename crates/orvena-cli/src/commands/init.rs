@@ -32,8 +32,7 @@ fn deploy_scaffold(dir: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(&path, f.contents)
-            .with_context(|| format!("writing {}", path.display()))?;
+        std::fs::write(&path, f.contents).with_context(|| format!("writing {}", path.display()))?;
     }
     Ok(())
 }
@@ -84,8 +83,7 @@ fn choose_provider(dir: &Path) -> Result<()> {
 /// Minimal targeted rewrite of the provider block in orvena.yaml.
 fn write_provider(dir: &Path, kind: &str, model: Option<&str>) -> Result<()> {
     let path = dir.join("orvena.yaml");
-    let mut value: serde_yaml::Value =
-        serde_yaml::from_str(&std::fs::read_to_string(&path)?)?;
+    let mut value: serde_yaml::Value = serde_yaml::from_str(&std::fs::read_to_string(&path)?)?;
     if let Some(provider) = value.get_mut("provider").and_then(|p| p.as_mapping_mut()) {
         provider.insert("kind".into(), kind.into());
         if let Some(m) = model {

@@ -72,7 +72,9 @@ fn missing_key_fails_fast_with_actionable_guidance() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("not ready"), "guidance names the problem: {stderr}");
     assert!(
-        stderr.contains("doctor") || stderr.contains(".env") || stderr.contains("--provider offline"),
+        stderr.contains("doctor")
+            || stderr.contains(".env")
+            || stderr.contains("--provider offline"),
         "guidance points somewhere actionable: {stderr}"
     );
     // Fail-fast: it must not have produced an evidence bundle from a real run.

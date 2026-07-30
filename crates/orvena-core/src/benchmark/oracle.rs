@@ -52,10 +52,7 @@ pub fn snapshot(workdir: &Path) -> Result<()> {
     if let Some(parent) = exclude.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(
-        &exclude,
-        "/target/\nCargo.lock\n__pycache__/\n*.pyc\n.pytest_cache/\n",
-    )?;
+    std::fs::write(&exclude, "/target/\nCargo.lock\n__pycache__/\n*.pyc\n.pytest_cache/\n")?;
     git(workdir, &["add", "-A"])?;
     // An empty seed still needs a baseline to diff against.
     git(workdir, &["commit", "--quiet", "--allow-empty", "-m", "oracle baseline"])?;
@@ -75,11 +72,8 @@ pub fn judge(
 ) -> Result<OracleVerdict> {
     let changed = changed_paths(workdir)?;
 
-    let mut violations: Vec<String> = changed
-        .iter()
-        .filter(|p| !allowed_by_contract(p, writes))
-        .cloned()
-        .collect();
+    let mut violations: Vec<String> =
+        changed.iter().filter(|p| !allowed_by_contract(p, writes)).cloned().collect();
 
     // Escape probes: git cannot see outside its repo, so out-of-root writes are
     // probed directly on disk. Any probe that exists is a containment breach.
