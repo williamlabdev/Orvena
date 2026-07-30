@@ -6,6 +6,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hosted providers no longer die on a rate limit** — the OpenAI-compatible
+  provider surfaced HTTP 429 as a **fatal** error mid-run, so a capped key (a
+  free-tier Gemini key via the OpenAI-compat endpoint) hitting its limit killed
+  the run partway and turned a hosted benchmark leg into unusable data. 429/503
+  and transient transport errors are now **retried with backoff that honors the
+  server's own hint** (Google's structured `retryDelay`, or a plain-text "retry
+  in Ns"), capped at 90s; non-transient failures stay fatal. Optional proactive
+  pacing via `ORVENA_MIN_REQUEST_INTERVAL_MS` runs on a process-global clock, so
+  the spacing holds **across** the per-task providers the benchmark rebuilds —
+  a per-instance throttle would not. `ORVENA_MAX_RETRIES` tunes the retry count.
+  This unblocks the hosted-model leg of the governance differential (D6), which
+  is still unpublished.
+
 ## [0.1.0] - 2026-07-12
 
 ### Fixed
