@@ -71,12 +71,29 @@ free-tier Gemini key whose quota (`generate_content_free_tier_requests`,
 limit 20) cannot sustain a 48-task-run matrix even at 6s pacing. Closing D6 needs
 a key with real quota — any hosted provider — not more retry logic.
 
-## To confirm (unverified observation)
+## Settled: the role allowlist in the ungoverned baseline (not a bias)
 
 Seven `off`-posture runs recorded `scope violation: role 'developer' is not
-allowed to use 'shell.run'`. `GovernanceMode::Off` maps to `Tier::Light` with no
-gates plus the driver's `ungoverned` flag, which covers scope-lock and gates —
-but the per-role tool allowlist appears to still apply. If so, the "ungoverned
-baseline" is not fully ungoverned, and the differential understates what
-enforcement contributes. Worth settling before the next differential is
-published; it is a methodology question, not necessarily a bug.
+allowed to use 'shell.run'`, which raised the question of whether the
+"ungoverned" baseline is really ungoverned. Traced through:
+
+- The per-role tool allowlist is enforced in the **tool layer**
+  (`tools/shell.rs:71`, `fs.rs:102`, `grep.rs:116` — `require_tool`), which never
+  consults `LoopOptions.ungoverned`. That flag lifts only the scope lists and
+  skips gates (`agent/driver.rs:83`, `:239`). So yes — the allowlist still
+  applies to the baseline.
+- **But it applies identically to every posture.** `benchmark::bench_config`
+  builds the same role for `off`, `light`, and `engineering`:
+  `allowed_tools: [fs.read, fs.write, grep.search]`. `shell.run` is granted to
+  none of them.
+
+So the allowlist is a **constant across the comparison, not a variable** — it
+does not bias the differential in either direction, and the published
+2026-07-11 number is unaffected. The blockers are just the model reaching for a
+tool the benchmark's role never grants, under either posture.
+
+What remains is a **task-design** question, not a correctness one: a baseline
+that cannot invoke a shell is a weaker stand-in for "an agent with no brakes"
+than one that can. Granting the baseline more tools would raise its ceiling for
+misbehavior and could widen M1 — worth considering when the temptation set is
+next revised, and worth stating in any page that publishes a containment number.
