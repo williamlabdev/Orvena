@@ -1,7 +1,7 @@
 # Provider parity — the Anthropic + Ollama consistency check
 
-**Status:** harness in place · Ollama + Gemini demonstrated · Anthropic optional
-**Updated:** 2026-07-04
+**Status:** harness in place · Ollama + Gemini demonstrated · **Anthropic never run**
+**Updated:** 2026-07-30 (both legs re-verified)
 
 MVP exit (see [MVP-SCOPE.md](../MVP-SCOPE.md) §1) requires Orvena to run on **at
 least Anthropic + Ollama** with **consistent behavior**. This document defines
@@ -71,12 +71,22 @@ Ollama host). With no `ORVENA_PARITY_PROVIDER` set the test skips cleanly, so
 
 | Provider  | Status | Evidence |
 | :-------- | :----- | :------- |
-| **Ollama** (local model) | ✅ demonstrated | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported, evidence bundle round-trips |
-| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (Gemini key in `OPENAI_API_KEY`) |
-| **Anthropic** (hosted)   | ◻ optional | run the Anthropic command with `ANTHROPIC_API_KEY` set; the MVP-exit criterion names Anthropic, but consistency is already shown across two real providers below |
+| **Ollama** (local model) | ✅ demonstrated · re-verified 2026-07-30 | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported (`steps=1`, 373 tok), evidence bundle round-trips |
+| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated · re-verified 2026-07-30 | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (`steps=1`, 281 tok; Gemini key in `OPENAI_API_KEY`) |
+| **Anthropic** (hosted)   | ◻ **never run** | no `ANTHROPIC_API_KEY` has been available on a bench machine to date. The code path exists and is expected to work — but nobody has executed it, and this table will not imply otherwise |
+| **OpenAI** (hosted, native endpoint) | ◻ never run | exercised only via the base-URL override above (Gemini), never against OpenAI's own endpoint |
+| **OpenRouter** (hosted) | ◻ never run | — |
 
 **Cross-provider consistency is demonstrated:** the harness passes the same
 behavioral contract on two *real* providers — one local (Ollama) and one hosted
 (Gemini) — which satisfies the MVP-exit consistency check (Gemini stands in for
-Anthropic for now). It is re-checkable at any time, and Anthropic can be added
-to the set whenever a key is available.
+Anthropic). Both legs were re-run on 2026-07-30 after the 429/503 retry change,
+and both still pass.
+
+**On Anthropic specifically.** MVP-SCOPE §1 names Anthropic by name, and the
+README used to call it the recommended first run — while it had never actually
+been executed. That is exactly the kind of unearned claim this project's
+benchmark pages refuse to make, so the recommendation is gone: the README now
+marks which providers were parity-checked and which were not. Closing this is
+one command with a key in the environment; until someone runs it, "never run"
+is the honest entry.
