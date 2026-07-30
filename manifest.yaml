@@ -10,5 +10,7 @@ depends_on:
 produces:
   - orvena-cli + orvena-core(agent loop:context→model→scope-gated apply→gates)
   - 已發表第一個誠實(弱)benchmark
+architecture:
+  - docs/ARCHITECTURE.md
 notes: MVP-exit 已達成;crash recovery/多 agent 編排明列 defer;更強 benchmark 需真實 repo 快照。advanced 子系統(RAG/委派)明列 out of scope——都在 lab runtime。
-updated: 2026-07-10
+updated: 2026-07-31
