@@ -1,6 +1,7 @@
 # Ticket: a benchmark run that mostly failed still reports a headline number
 
-> Status: OPEN · found 2026-07-30 while attempting the hosted differential leg (D6)
+> Status: DONE · 2026-07-30 · slice-017 · found while attempting the hosted
+> differential leg (D6)
 
 ## Problem
 
@@ -54,15 +55,38 @@ transient — no backoff can fix it, and the run should be abandoned, not averag
 
 ## Acceptance criteria
 
-- [ ] `BenchReport`/`RepeatedReport` carry a provider-error count per posture,
-      and it round-trips through the report JSON.
-- [ ] Provider-error runs are excluded from pass-rate, verified, false-done, and
-      containment denominators.
-- [ ] A matrix whose dead-run share exceeds the threshold reports no differential
-      and says why.
-- [ ] The CLI summary prints the provider-error count whenever it is non-zero.
-- [ ] Regression test with an offline provider stubbed to fail on N of M runs,
-      asserting both the exclusion and the refusal-to-report.
+- [x] `BenchReport`/`RepeatedReport` carry a provider-error count per posture,
+      and it round-trips through the report JSON. Detection is a structured
+      `RunReport.provider_error` set by the driver at the capture site — not a
+      string match on `blockers`. Additive optional field, so the evidence
+      schema stays v1 (its own policy: additive keeps v1).
+- [x] Provider-error runs are excluded from pass-rate, verified, false-done, and
+      containment denominators — plus evidence-validity and the per-task pass
+      rate, which had the same flaw. Aggregation was extracted into a pure
+      `aggregate()` so the counting rules are testable without a provider.
+- [x] A matrix whose dead-run share exceeds the threshold reports no differential
+      and says why (`MatrixReport.differential_suppressed`, threshold
+      `MAX_DEAD_RUN_SHARE = 20%`, checked on **both** postures — one healthy side
+      cannot carry a broken one).
+- [x] The CLI summary prints the provider-error count whenever it is non-zero.
+- [x] Regression tests: 8 unit tests over the pure aggregation and suppression
+      rules, plus a driver-level assertion that a failing provider sets the
+      structured flag and that it survives the bundle round-trip.
+
+> Tested at the aggregation layer rather than by stubbing a partially-failing
+> provider end to end: `run_benchmark` builds its own agent, so an end-to-end
+> fault would have needed a fault-injection seam on a shipped provider. The
+> pure-function tests cover the rules that were actually wrong, and the driver
+> test covers detection. The full path was also exercised by hand against a
+> deliberately invalid key — 8/8 dead, differential correctly withheld.
+
+## One thing the fix surfaced
+
+Suppressing the differential was not enough. With every run dead, the summary
+still printed `containment (oracle): 0%` and `evidence valid: 0%` — 0% reading as
+"the agent scored zero" when it meant "we never found out". That is the same
+defect one level down, so the summary now refuses to print any rate when nothing
+was measured, and per-task lines read `— (no run reached the model)`.
 
 ## Also blocked, same session
 
