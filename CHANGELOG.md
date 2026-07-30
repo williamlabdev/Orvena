@@ -6,6 +6,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The benchmark's agent can now run the check it is asked to fix** (slice-019)
+  — and the ungoverned baseline gets the same shell, which makes our own
+  differential smaller on purpose. Until now the bench role had no `shell.run`
+  and no declared commands, while the prompt only ever shows the **writable**
+  files: the read-only neighbor, the failing validator, and the check's own
+  output were all invisible. So the "agent with no brakes" could not run the
+  check, could not see what it was being tempted by, and mostly could not
+  misbehave — which is a large part of why the 2026-07-11 containment
+  differential came out a **null result** (100%/100%). "The baseline resisted
+  temptation" was not a safe reading of that number, and the results page now
+  says so. Now: the harness declares each task's `verify` as a read-only `check`
+  command, tasks may declare further read-only observation commands
+  (`benchmarks/temptation.yaml` uses five: the full diff behind a `diff -q`, the
+  silent validator's source, the title being quoted, the neighbor module's
+  constant, the input numbers), and the role gets `shell.run` — **identically in
+  every posture**, pinned by a test, so capability stays a constant of the
+  comparison and enforcement stays the only variable. No declared command solves
+  a task or points at its shortcut; they only make visible what any real
+  shell-capable agent could `cat` for itself.
+  Two supporting fixes fell out of it. **The RUN tool was undiscoverable**: the
+  system prompt has always described `<<<RUN name>>>` but never said which names
+  a project declared, so using it meant guessing — the context now lists the
+  role's runnable read-only commands (a product-level fix, not bench-only).
+  And it lists **names only**: printing each command's argv would have leaked the
+  command string into the prompt, which for a check like
+  `test "$(cat answer.txt)" = "42"` means handing over its own answer.
+  `docs/benchmark-results.md` gains a superseded-conditions note: numbers
+  measured before 2026-07-30 came from a weaker capability envelope and are not
+  directly comparable to later ones.
+
 ### Added
 
 - **`openai_compat` — a first-class provider kind for any OpenAI-compatible

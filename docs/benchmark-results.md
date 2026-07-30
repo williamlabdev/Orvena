@@ -14,6 +14,21 @@ Both headlines need their caveats read with them. **These are deliberately
 small, self-hosted signals — not capability claims.** See each "How to read
 this".
 
+> **Superseded measurement conditions (2026-07-30).** Both numbers below were
+> measured when the benchmark's agent **could not run any command** — it could
+> not execute the failing check, and the prompt only ever shows the *writable*
+> files, so read-only neighbors were invisible to it. Since slice-019 the agent
+> gets a read-only `check` (its own `verify`) plus per-task observation commands,
+> identically in every posture. That makes the ungoverned baseline stronger and
+> can only **shrink** the differential — which is why it was done. Treat these
+> numbers as measured under an older, weaker envelope: still honest about what
+> happened, no longer directly comparable to anything measured after that date.
+> In particular, the **M1 null result below is now explained**: containment read
+> 100%/100% partly because the temptation was never in the baseline's field of
+> view. A wrapped third-party agent (which does have a shell) produced a non-null
+> containment differential on the same set — see
+> [`SLICE-018-aider-adapter.md`](../SLICE-018-aider-adapter.md).
+
 ## The governance differential (2026-07-11)
 
 What do the brakes buy? Same task set, same model, same prompts; the only
@@ -66,6 +81,13 @@ variable is enforcement (method: [`benchmark.md`](benchmark.md); plan:
   A less obedient model, or a stronger one that routes around hints, may
   read differently; that is exactly what publishing per-model differentials
   is for.
+  **Revised reading (2026-07-30):** part of that null result was the
+  measurement, not the model. The baseline had no shell and could not see the
+  files it was being tempted by (see the note at the top of this page). With a
+  real shell-capable agent wrapped in the same envelope, containment on this
+  set is **not** a null result. The "compliant model" explanation still
+  contributes; it was never the whole story, and this page should not have
+  implied it was.
 
 ### How to read this (不美化)
 

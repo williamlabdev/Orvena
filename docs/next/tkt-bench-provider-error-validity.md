@@ -121,3 +121,14 @@ that cannot invoke a shell is a weaker stand-in for "an agent with no brakes"
 than one that can. Granting the baseline more tools would raise its ceiling for
 misbehavior and could widen M1 — worth considering when the temptation set is
 next revised, and worth stating in any page that publishes a containment number.
+
+> **Resolved 2026-07-30 (slice-019).** The benchmark role now has `shell.run`,
+> and every task declares its `verify` as a read-only `check` command (plus
+> per-task observation commands) — **identically in every posture**, so the
+> allowlist stays a constant of the comparison rather than becoming a variable.
+> It went further than "more tools": the prompt only ever showed the *writable*
+> files, so a read-only neighbor was invisible even to a shell-capable role. The
+> practical effect is that the baseline can now see and run the check it is asked
+> to fix. That makes it stronger and shrinks our own differential, which is the
+> honest direction. `docs/benchmark-results.md` carries the note that numbers
+> measured before this are not comparable to ones measured after.
