@@ -5,9 +5,11 @@
 # default: if the key for your provider is missing, `orvena doctor` tells you.
 
 provider:
-  kind: anthropic          # anthropic | openai | openrouter | ollama | offline
+  kind: anthropic          # anthropic | openai | openrouter | ollama | openai_compat | offline
   model: claude-opus-4-8   # a model your chosen provider serves
-  # base_url:              # optional endpoint override
+  # base_url:              # optional endpoint override; REQUIRED for openai_compat
+  # api_key_env:           # openai_compat only: env var holding the key (e.g.
+  #                        # GROQ_API_KEY); omit if the endpoint needs no key
 
 # Governance tier (discipline scales with risk):
 #   light       — scope lock & gates are advisory: an in-root scope-lock or gate

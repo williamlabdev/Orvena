@@ -33,7 +33,7 @@ pub async fn run(
     if let Some(kind) = provider {
         config.agent.provider.kind = kind;
     }
-    preflight_provider(&config.agent.provider.kind)?;
+    preflight_provider(&config.agent.provider)?;
 
     let set: BenchTaskSet = match &tasks {
         Some(path) => {

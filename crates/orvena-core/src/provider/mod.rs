@@ -59,12 +59,15 @@ pub trait Provider: Send + Sync {
 pub fn build_chat_provider(sel: &ProviderSelection) -> Result<Box<dyn Provider>> {
     match sel.kind.as_str() {
         "anthropic" => Ok(Box::new(anthropic::Anthropic::from_env(sel)?)),
-        "openai" | "openrouter" => Ok(Box::new(openai_compat::OpenAiCompat::from_env(sel)?)),
+        "openai" | "openrouter" | "openai_compat" => {
+            Ok(Box::new(openai_compat::OpenAiCompat::from_env(sel)?))
+        }
         "ollama" => Ok(Box::new(ollama::Ollama::new(sel))),
         "offline" => Ok(Box::new(offline::Offline::new(sel))),
         other => Err(Error::Provider(format!(
             "unknown provider '{other}'. Choose one explicitly (run `orvena init`): \
-             anthropic | openai | openrouter | ollama | offline. No default is assumed."
+             anthropic | openai | openrouter | ollama | openai_compat | offline. \
+             No default is assumed."
         ))),
     }
 }

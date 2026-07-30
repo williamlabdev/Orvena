@@ -27,6 +27,21 @@
 //! ANTHROPIC_API_KEY=sk-... ORVENA_PARITY_PROVIDER=anthropic \
 //!   ORVENA_PARITY_MODEL=claude-opus-4-8 \
 //!   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
+//!
+//! # Generic OpenAI-compatible endpoint (self-hosted OSS server or a hosted
+//! # open-weight aggregator) — e.g. Ollama's own OpenAI-compat endpoint,
+//! # no key needed:
+//! ORVENA_PARITY_PROVIDER=openai_compat ORVENA_PARITY_MODEL=qwen3:14b \
+//!   ORVENA_PARITY_BASE_URL=http://localhost:11434/v1 \
+//!   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
+//!
+//! # ...or a keyed endpoint (vLLM behind auth, Groq, Together, ...): set
+//! # ORVENA_PARITY_API_KEY_ENV to the env var holding the key.
+//! GROQ_API_KEY=gsk_... ORVENA_PARITY_PROVIDER=openai_compat \
+//!   ORVENA_PARITY_MODEL=llama-3.3-70b-versatile \
+//!   ORVENA_PARITY_BASE_URL=https://api.groq.com/openai/v1 \
+//!   ORVENA_PARITY_API_KEY_ENV=GROQ_API_KEY \
+//!   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 //! ```
 
 use orvena_core::config::agent::{AgentConfig, ProviderSelection, Tier};
@@ -60,12 +75,13 @@ async fn provider_satisfies_the_parity_contract() {
     let model = std::env::var("ORVENA_PARITY_MODEL")
         .expect("ORVENA_PARITY_MODEL must name a model the provider serves");
     let base_url = std::env::var("ORVENA_PARITY_BASE_URL").ok();
+    let api_key_env = std::env::var("ORVENA_PARITY_API_KEY_ENV").ok();
     eprintln!("parity: running the golden task against '{kind}' / '{model}'");
 
     let root = temp_dir(&kind);
     let config = Config {
         agent: AgentConfig {
-            provider: ProviderSelection { kind: kind.clone(), model, base_url },
+            provider: ProviderSelection { kind: kind.clone(), model, base_url, api_key_env },
             tier: Tier::Light,
             default_role: "developer".into(),
             max_steps: MAX_STEPS,

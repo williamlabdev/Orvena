@@ -69,10 +69,44 @@ fn choose_provider(dir: &Path) -> Result<()> {
     std::io::stdin().read_line(&mut model)?;
     let model = model.trim().to_string();
 
-    write_provider(dir, p.kind, model.as_deref_or_none())?;
+    let mut base_url = String::new();
+    if p.requires_base_url {
+        loop {
+            print!("base_url for {} (required, e.g. http://localhost:8000/v1): ", p.kind);
+            std::io::stdout().flush()?;
+            base_url.clear();
+            std::io::stdin().read_line(&mut base_url)?;
+            if !base_url.trim().is_empty() {
+                break;
+            }
+            println!(
+                "base_url cannot be empty for '{}' — there is no default to fall back to.",
+                p.kind
+            );
+        }
+    }
+
+    let mut api_key_env = String::new();
+    if p.requires_base_url {
+        print!("Env var to read the API key from [press enter if {} needs no key]: ", p.kind);
+        std::io::stdout().flush()?;
+        std::io::stdin().read_line(&mut api_key_env)?;
+    }
+
+    let base_url = base_url.trim();
+    let key_env = api_key_env.trim();
+    write_provider(
+        dir,
+        p.kind,
+        model.as_deref_or_none(),
+        (!base_url.is_empty()).then_some(base_url),
+        (!key_env.is_empty()).then_some(key_env),
+    )?;
     println!("Set provider to '{}'.", p.kind);
 
-    if let Some(key) = p.env_key {
+    if !key_env.is_empty() {
+        println!("Next: put your key in .env as  {key_env}=<your-key>  (never commit .env).");
+    } else if let Some(key) = p.env_key {
         println!("Next: put your key in .env as  {key}=<your-key>  (never commit .env).");
     } else {
         println!("This provider needs no API key.");
@@ -81,13 +115,25 @@ fn choose_provider(dir: &Path) -> Result<()> {
 }
 
 /// Minimal targeted rewrite of the provider block in orvena.yaml.
-fn write_provider(dir: &Path, kind: &str, model: Option<&str>) -> Result<()> {
+fn write_provider(
+    dir: &Path,
+    kind: &str,
+    model: Option<&str>,
+    base_url: Option<&str>,
+    api_key_env: Option<&str>,
+) -> Result<()> {
     let path = dir.join("orvena.yaml");
     let mut value: serde_yaml::Value = serde_yaml::from_str(&std::fs::read_to_string(&path)?)?;
     if let Some(provider) = value.get_mut("provider").and_then(|p| p.as_mapping_mut()) {
         provider.insert("kind".into(), kind.into());
         if let Some(m) = model {
             provider.insert("model".into(), m.into());
+        }
+        if let Some(b) = base_url {
+            provider.insert("base_url".into(), b.into());
+        }
+        if let Some(e) = api_key_env {
+            provider.insert("api_key_env".into(), e.into());
         }
     }
     std::fs::write(&path, serde_yaml::to_string(&value)?)?;

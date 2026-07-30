@@ -57,6 +57,7 @@ Pick one at `orvena init` — **no default is forced**:
 | Provider | Notes | Parity-checked |
 |---|---|---|
 | **Ollama** | Local / offline / private. You run Ollama and pull a model yourself. | ✅ `qwen3:14b` |
+| **openai_compat** | Generic OpenAI-compatible endpoint — self-hosted OSS servers (vLLM, llama.cpp server, LM Studio, TGI, SGLang) or hosted open-weight aggregators (Groq, Together, Fireworks). Needs `base_url`; `api_key_env` names your own key var, or omit it for no-auth local servers. | ✅ via Ollama's own OpenAI-compat endpoint |
 | **Gemini** | Hosted, via the **OpenAI** provider + a base-URL override (its key goes in `OPENAI_API_KEY`). | ✅ `gemini-2.5-flash` |
 | **Anthropic** | Hosted Claude. | ◻ not yet run |
 | **OpenAI** | Hosted. | ◻ not yet run |

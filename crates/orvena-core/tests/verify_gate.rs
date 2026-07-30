@@ -49,6 +49,7 @@ fn config(gates: Gates, max_steps: u32) -> Config {
                 kind: "offline".into(),
                 model: "stub".into(),
                 base_url: None,
+                api_key_env: None,
             },
             tier: Tier::Engineering,
             default_role: "developer".into(),
@@ -70,7 +71,12 @@ fn config(gates: Gates, max_steps: u32) -> Config {
 }
 
 fn offline_agent(root: &std::path::Path, config: Config) -> Agent {
-    let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let sel = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     Agent::with_provider(config, root, Box::new(Offline::new(&sel)))
 }
 

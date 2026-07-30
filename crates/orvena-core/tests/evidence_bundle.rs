@@ -58,7 +58,12 @@ fn dev_config(provider: ProviderSelection) -> Config {
 }
 
 fn offline_agent(root: &std::path::Path, config: Config) -> Agent {
-    let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let sel = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     Agent::with_provider(config, root, Box::new(Offline::new(&sel)))
 }
 
@@ -138,5 +143,10 @@ async fn incomplete_run_still_exports_a_bundle() {
 }
 
 fn sel() -> ProviderSelection {
-    ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None }
+    ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    }
 }

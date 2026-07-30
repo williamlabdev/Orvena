@@ -31,7 +31,9 @@ fn pacing_clock() -> &'static Mutex<Option<Instant>> {
 
 pub struct OpenAiCompat {
     client: reqwest::Client,
-    api_key: String,
+    /// `None` means the endpoint is unauthenticated — no `Authorization`
+    /// header is sent (typical for self-hosted OSS servers with no auth).
+    api_key: Option<String>,
     model: String,
     base_url: String,
     id: &'static str,
@@ -43,12 +45,30 @@ pub struct OpenAiCompat {
 
 impl OpenAiCompat {
     pub fn from_env(sel: &ProviderSelection) -> Result<Self> {
-        let (env_key, default_base, id) = match sel.kind.as_str() {
-            "openrouter" => ("OPENROUTER_API_KEY", "https://openrouter.ai/api/v1", "openrouter"),
-            _ => ("OPENAI_API_KEY", "https://api.openai.com/v1", "openai"),
+        let (default_env_key, default_base, id): (Option<&str>, Option<&str>, &'static str) =
+            match sel.kind.as_str() {
+                "openrouter" => {
+                    (Some("OPENROUTER_API_KEY"), Some("https://openrouter.ai/api/v1"), "openrouter")
+                }
+                "openai_compat" => (None, None, "openai_compat"),
+                _ => (Some("OPENAI_API_KEY"), Some("https://api.openai.com/v1"), "openai"),
+            };
+        let base_url =
+            sel.base_url.clone().or_else(|| default_base.map(str::to_string)).ok_or_else(|| {
+                Error::Provider(
+                    "provider 'openai_compat' requires base_url in orvena.yaml — \
+                     no default for a self-hosted/generic OpenAI-compatible endpoint"
+                        .into(),
+                )
+            })?;
+        let env_key = sel.api_key_env.as_deref().or(default_env_key);
+        let api_key = match env_key {
+            Some(key) => Some(
+                std::env::var(key)
+                    .map_err(|_| Error::Provider(format!("{key} is not set — put it in .env")))?,
+            ),
+            None => None,
         };
-        let api_key = std::env::var(env_key)
-            .map_err(|_| Error::Provider(format!("{env_key} is not set — put it in .env")))?;
         let max_retries = std::env::var("ORVENA_MAX_RETRIES")
             .ok()
             .and_then(|s| s.trim().parse::<u32>().ok())
@@ -62,7 +82,7 @@ impl OpenAiCompat {
             client: reqwest::Client::new(),
             api_key,
             model: sel.model.clone(),
-            base_url: sel.base_url.clone().unwrap_or_else(|| default_base.to_string()),
+            base_url,
             id,
             max_retries,
             min_interval,
@@ -123,14 +143,12 @@ impl Provider for OpenAiCompat {
 
             // Transport errors (connection reset/timeout under load) are transient;
             // retry them with backoff rather than failing the run outright.
-            let resp = match self
-                .client
-                .post(format!("{}/chat/completions", self.base_url))
-                .bearer_auth(&self.api_key)
-                .json(&body)
-                .send()
-                .await
-            {
+            let mut req =
+                self.client.post(format!("{}/chat/completions", self.base_url)).json(&body);
+            if let Some(key) = &self.api_key {
+                req = req.bearer_auth(key);
+            }
+            let resp = match req.send().await {
                 Ok(resp) => resp,
                 Err(_) if attempt < self.max_retries => {
                     attempt += 1;
@@ -227,5 +245,31 @@ mod tests {
     fn no_hint_returns_none() {
         assert_eq!(retry_delay_from_body("plain 500 error, no hint"), None);
         assert_eq!(retry_delay_from_body("{\"error\":{\"code\":500}}"), None);
+    }
+
+    #[test]
+    fn openai_compat_requires_explicit_base_url() {
+        let sel = ProviderSelection {
+            kind: "openai_compat".into(),
+            model: "whatever".into(),
+            base_url: None,
+            api_key_env: None,
+        };
+        let Err(err) = OpenAiCompat::from_env(&sel) else {
+            panic!("expected an error when base_url is missing for openai_compat");
+        };
+        assert!(err.to_string().contains("base_url"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn openai_compat_with_no_api_key_env_is_unauthenticated() {
+        let sel = ProviderSelection {
+            kind: "openai_compat".into(),
+            model: "whatever".into(),
+            base_url: Some("http://localhost:1234/v1".into()),
+            api_key_env: None,
+        };
+        let provider = OpenAiCompat::from_env(&sel).expect("no key required when unset");
+        assert!(provider.api_key.is_none());
     }
 }

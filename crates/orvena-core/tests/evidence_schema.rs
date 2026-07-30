@@ -29,6 +29,7 @@ fn config(gates: Gates, tier: Tier) -> Config {
                 kind: "offline".into(),
                 model: "stub".into(),
                 base_url: None,
+                api_key_env: None,
             },
             tier,
             default_role: "developer".into(),
@@ -98,7 +99,12 @@ async fn offline_run(
     tag: &str,
 ) -> std::path::PathBuf {
     let root = temp_dir(tag);
-    let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let sel = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let cfg = config(gates, tier);
     let provider = orvena_core::build_chat_provider(&sel).unwrap();
     let agent = Agent::with_provider(cfg, &root, provider);

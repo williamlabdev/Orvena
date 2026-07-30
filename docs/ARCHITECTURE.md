@@ -165,7 +165,13 @@ mechanism (`light` = advisory, `engineering` = hard-enforced).
 | `skills/` | reviewed skill procedures (`SKILL.md` each) |
 
 Provider keys come from `.env` ([`.env.example`](../.env.example)); no
-provider is ever silently defaulted (`provider/mod.rs`).
+provider is ever silently defaulted (`provider/mod.rs`). The generic
+`openai_compat` kind targets any OpenAI-compatible endpoint — self-hosted OSS
+inference servers (vLLM, llama.cpp server, LM Studio, TGI, SGLang) or hosted
+open-weight aggregators (Groq, Together, Fireworks) — via two explicit
+`provider` fields: `base_url` (required — no default endpoint to fall back
+to) and `api_key_env` (names the env var holding the key; omitted means the
+endpoint is unauthenticated, no `Authorization` header sent).
 
 ---
 
@@ -199,11 +205,13 @@ plan and rulings (D1–D6):
 
 ## 6. Known limitations (honest, as self-reported in-repo)
 
-- **Provider coverage** — only Ollama (`qwen3:14b`) and Gemini (via the
-  OpenAI-compat base-URL override) are parity-checked; **Anthropic, OpenAI
-  (native endpoint), and OpenRouter have never been run** — implemented and
-  expected to work, but unexercised ([provider-parity.md](provider-parity.md),
-  [README](../README.md)).
+- **Provider coverage** — only Ollama (`qwen3:14b`), Gemini (via the
+  OpenAI-compat base-URL override), and the generic `openai_compat` kind
+  (checked against Ollama's own OpenAI-compat endpoint) are parity-checked;
+  **Anthropic, OpenAI (native endpoint), OpenRouter, and `openai_compat`
+  against an actual self-hosted OSS server (vLLM/llama.cpp/LM Studio) have
+  never been run** — implemented and expected to work, but unexercised
+  ([provider-parity.md](provider-parity.md), [README](../README.md)).
 - **Hosted differential leg pending** — the published governance differential
   is one local 14B model on one machine, 8 hand-authored tasks, 3 runs per
   cell; hosted-model legs are pending (no key was available)

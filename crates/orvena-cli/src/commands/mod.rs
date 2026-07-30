@@ -7,6 +7,7 @@ pub mod run;
 pub mod status;
 
 use anyhow::{bail, Result};
+use orvena_core::config::agent::ProviderSelection;
 use orvena_core::provider::registry::{self, Readiness};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -57,8 +58,9 @@ pub fn is_initialized(dir: &Path) -> bool {
 /// network-free check (a missing key, or an unknown kind) — reused from the
 /// registry so `run`, `bench`, and `doctor` never drift. Shared by `run` and
 /// `bench`.
-pub fn preflight_provider(kind: &str) -> Result<()> {
-    match registry::readiness(kind) {
+pub fn preflight_provider(sel: &ProviderSelection) -> Result<()> {
+    let kind = &sel.kind;
+    match registry::readiness(sel) {
         Readiness::Ready => Ok(()),
         Readiness::MissingKey(key) => bail!(
             "provider '{kind}' is not ready — {key} is not set.\n  \
@@ -66,7 +68,8 @@ pub fn preflight_provider(kind: &str) -> Result<()> {
              • see the loop run right now with no key: `orvena run --provider offline \"<task>\"`"
         ),
         Readiness::Unknown => bail!(
-            "provider '{kind}' is unknown — choose anthropic | openai | openrouter | ollama | offline\n  \
+            "provider '{kind}' is unknown — choose anthropic | openai | openrouter | ollama | \
+             openai_compat | offline\n  \
              (edit .orvena/orvena.yaml, or pass `--provider <kind>`)."
         ),
     }

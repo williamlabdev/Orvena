@@ -32,12 +32,19 @@ pub struct AgentConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderSelection {
-    /// `anthropic` | `openai` | `openrouter` | `ollama` | `offline`.
+    /// `anthropic` | `openai` | `openrouter` | `ollama` | `openai_compat` | `offline`.
     pub kind: String,
     pub model: String,
-    /// Optional endpoint override (required-ish for `ollama`, defaulted there).
+    /// Optional endpoint override (required-ish for `ollama`, defaulted there;
+    /// required with no default for `openai_compat`).
     #[serde(default)]
     pub base_url: Option<String>,
+    /// Env var to read the API key from, overriding the kind's default (if
+    /// any). Unset for `openai_compat` means the endpoint is unauthenticated —
+    /// no `Authorization` header is sent, matching most self-hosted OSS
+    /// inference servers (vLLM, llama.cpp server, LM Studio).
+    #[serde(default)]
+    pub api_key_env: Option<String>,
 }
 
 /// Discipline scales with risk (Tiered Governance). v0.1 minimal set.

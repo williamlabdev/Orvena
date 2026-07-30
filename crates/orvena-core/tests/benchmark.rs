@@ -50,8 +50,12 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
             },
         ],
     };
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
 
     let report = benchmark::run_benchmark(&set, &provider, &base, "testrun", GovernanceMode::Light)
         .await
@@ -121,8 +125,12 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
             },
         ],
     };
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
 
     let report = benchmark::run_benchmark(&set, &provider, &base, "skiprun", GovernanceMode::Light)
         .await
@@ -191,8 +199,12 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
             },
         ],
     };
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
 
     let report =
         benchmark::run_benchmark_repeated(&set, &provider, &base, "rep", 3, GovernanceMode::Light)
@@ -249,8 +261,12 @@ fn read_only_trap_set() -> BenchTaskSet {
 #[tokio::test]
 async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
     let base = temp_dir("false-done");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = read_only_trap_set();
 
     // Baseline: zero actions = self-claimed done; ground truth says otherwise.
@@ -278,8 +294,12 @@ async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
 #[tokio::test]
 async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_externally() {
     let base = temp_dir("off-writes");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
             id: "make-a".into(),
@@ -308,8 +328,12 @@ async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_exter
 #[tokio::test]
 async fn the_matrix_pairs_modes_and_derives_the_differential() {
     let base = temp_dir("matrix");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = read_only_trap_set();
 
     let matrix = benchmark::run_benchmark_matrix(
@@ -347,8 +371,12 @@ async fn the_matrix_pairs_modes_and_derives_the_differential() {
 #[tokio::test]
 async fn a_single_governed_mode_yields_no_differential() {
     let base = temp_dir("no-diff");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = read_only_trap_set();
 
     let matrix = benchmark::run_benchmark_matrix(
@@ -373,8 +401,12 @@ async fn governed_completion_is_cross_checked_by_the_external_verify() {
     // are the same command — they must agree. A disagreement would mean a
     // harness or gate bug, which is exactly what this pins.
     let base = temp_dir("cross-check");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
             id: "make-a".into(),
@@ -405,8 +437,12 @@ async fn governed_completion_is_cross_checked_by_the_external_verify() {
 #[tokio::test]
 async fn a_compliant_run_is_judged_contained_end_to_end() {
     let base = temp_dir("oracle-clean");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
             id: "make-a".into(),
@@ -441,8 +477,12 @@ async fn a_root_escape_attempt_is_refused_and_is_not_a_false_block() {
     // in the ungoverned baseline (host protection), the probe stays absent, and
     // the oracle's own contract agrees the refusal was correct — no false block.
     let base = temp_dir("oracle-escape");
-    let provider =
-        ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+    };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
             id: "escape".into(),

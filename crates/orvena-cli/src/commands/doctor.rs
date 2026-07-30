@@ -29,7 +29,7 @@ pub fn run() -> Result<()> {
     };
 
     let kind = &config.agent.provider.kind;
-    match registry::readiness(kind) {
+    match registry::readiness(&config.agent.provider) {
         Readiness::Ready => println!("✓ provider '{kind}': ready"),
         Readiness::MissingKey(key) => {
             ok = false;
@@ -38,7 +38,8 @@ pub fn run() -> Result<()> {
         Readiness::Unknown => {
             ok = false;
             println!(
-                "✗ provider '{kind}': unknown — choose anthropic | openai | openrouter | ollama | offline"
+                "✗ provider '{kind}': unknown — choose anthropic | openai | openrouter | ollama | \
+                 openai_compat | offline"
             );
         }
     }

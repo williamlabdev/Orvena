@@ -27,6 +27,7 @@ fn dev_config() -> Config {
                 kind: "offline".into(),
                 model: "stub".into(),
                 base_url: None,
+                api_key_env: None,
             },
             tier: Tier::Engineering,
             default_role: "developer".into(),
