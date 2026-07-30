@@ -67,6 +67,12 @@ pub fn preflight_provider(sel: &ProviderSelection) -> Result<()> {
              • add it to .env (see .env.example), then `orvena doctor` to verify; or\n  \
              • see the loop run right now with no key: `orvena run --provider offline \"<task>\"`"
         ),
+        Readiness::MissingBaseUrl => bail!(
+            "provider '{kind}' is not ready — base_url is not set.\n  \
+             • this kind has no default endpoint: add `base_url:` under `provider:` in \
+             .orvena/orvena.yaml\n  \
+             • e.g. a local server: base_url: http://localhost:8000/v1"
+        ),
         Readiness::Unknown => bail!(
             "provider '{kind}' is unknown — choose anthropic | openai | openrouter | ollama | \
              openai_compat | offline\n  \

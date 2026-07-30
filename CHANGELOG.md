@@ -6,7 +6,41 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`openai_compat` — a first-class provider kind for any OpenAI-compatible
+  endpoint.** Self-hosted open-source inference servers (vLLM, llama.cpp
+  server, LM Studio, TGI, SGLang) and hosted open-weight aggregators (Groq,
+  Together, Fireworks) all speak the wire format `OpenAiCompat` already
+  implemented, but the factory only accepted `openai`/`openrouter`, so reaching
+  one meant pretending to be a vendor you were not and putting your key in an
+  unrelated variable. The new kind names the thing honestly and adds the one
+  capability that genuinely did not exist: `api_key_env` points at whatever
+  variable holds your key, and **omitting it sends no `Authorization` header at
+  all**, so a keyless local server works — previously the builder hard-required
+  an env var and refused to start without one. `base_url` is required with no
+  default, because there is no sane endpoint to guess (`orvena init` prompts for
+  it). Verified end-to-end against Ollama's own OpenAI-compatible endpoint:
+  real token usage, gate passed, evidence bundle round-tripped.
+
 ### Fixed
+
+- **`orvena doctor` no longer reports "All checks passed" on configs that
+  cannot run.** Readiness had drifted from the builders it was supposed to
+  front, in three ways, all reachable from a hand-edited `orvena.yaml`:
+  `api_key_env` steered the check for *every* kind while only the
+  OpenAI-compatible builders actually read it — so `kind: anthropic` with a
+  custom key variable passed preflight and then died on
+  `ANTHROPIC_API_KEY is not set`; the same field made the keyless `offline`
+  stub *unreachable* when left over in a config, and the resulting error
+  advised `--provider offline`, the very thing it was blocking; and the one
+  mandatory new field, `openai_compat`'s `base_url`, was not checked at all.
+  Readiness now consults a single `key_var` helper gated on whether the kind's
+  builder honors `api_key_env`, and rejects a missing required `base_url` with
+  a `MissingBaseUrl` state that `doctor` and preflight both report. The
+  OpenAI-compatible builder also lists its kinds explicitly instead of falling
+  through a catch-all arm that would have silently handed a future kind
+  OpenAI's endpoint and key — and mislabeled it `openai` in the evidence.
 
 - **A one-line action block no longer manufactures a scope violation** — the
   action protocol expects `<<<RUN check` … `>>>` on separate lines, and models

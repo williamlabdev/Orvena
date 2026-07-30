@@ -35,6 +35,13 @@ pub fn run() -> Result<()> {
             ok = false;
             println!("✗ provider '{kind}': {key} not set — add it to .env");
         }
+        Readiness::MissingBaseUrl => {
+            ok = false;
+            println!(
+                "✗ provider '{kind}': base_url is not set — add it under `provider:` in \
+                 .orvena/orvena.yaml (this kind has no default endpoint)"
+            );
+        }
         Readiness::Unknown => {
             ok = false;
             println!(

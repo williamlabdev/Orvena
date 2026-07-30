@@ -39,10 +39,19 @@ pub struct ProviderSelection {
     /// required with no default for `openai_compat`).
     #[serde(default)]
     pub base_url: Option<String>,
-    /// Env var to read the API key from, overriding the kind's default (if
-    /// any). Unset for `openai_compat` means the endpoint is unauthenticated —
-    /// no `Authorization` header is sent, matching most self-hosted OSS
-    /// inference servers (vLLM, llama.cpp server, LM Studio).
+    /// Env var to read the API key from, overriding the kind's default.
+    ///
+    /// Honored by the OpenAI-compatible kinds only (`openai`, `openrouter`,
+    /// `openai_compat`) — those are the ones whose builder reads it. Setting it
+    /// on `anthropic`, `ollama`, or `offline` has no effect: their builders
+    /// hardcode their own key var or need none, so readiness deliberately
+    /// ignores it there rather than reporting a state the build won't honor.
+    ///
+    /// Unset on `openai_compat` means the endpoint is treated as
+    /// **unauthenticated** — no `Authorization` header is sent at all, matching
+    /// self-hosted OSS servers (vLLM, llama.cpp server, LM Studio). Note this
+    /// is "no auth", not "auth optional": a *misspelled* key here (`api_key_evn`)
+    /// is silently ignored by serde and downgrades the request to no-auth.
     #[serde(default)]
     pub api_key_env: Option<String>,
 }

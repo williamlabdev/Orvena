@@ -45,13 +45,23 @@ pub struct OpenAiCompat {
 
 impl OpenAiCompat {
     pub fn from_env(sel: &ProviderSelection) -> Result<Self> {
+        // Every kind routed here by `build_chat_provider` is listed explicitly: a
+        // catch-all arm would silently hand a future kind OpenAI's endpoint and
+        // key var — and report `id` as "openai" in the evidence — which is
+        // exactly the silent default this crate refuses to have.
         let (default_env_key, default_base, id): (Option<&str>, Option<&str>, &'static str) =
             match sel.kind.as_str() {
+                "openai" => (Some("OPENAI_API_KEY"), Some("https://api.openai.com/v1"), "openai"),
                 "openrouter" => {
                     (Some("OPENROUTER_API_KEY"), Some("https://openrouter.ai/api/v1"), "openrouter")
                 }
                 "openai_compat" => (None, None, "openai_compat"),
-                _ => (Some("OPENAI_API_KEY"), Some("https://api.openai.com/v1"), "openai"),
+                other => {
+                    return Err(Error::Provider(format!(
+                        "'{other}' was routed to the OpenAI-compatible builder but has no \
+                         endpoint/key mapping — add an arm in openai_compat::from_env."
+                    )))
+                }
             };
         let base_url =
             sel.base_url.clone().or_else(|| default_base.map(str::to_string)).ok_or_else(|| {

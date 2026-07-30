@@ -1,7 +1,8 @@
 # Provider parity — the Anthropic + Ollama consistency check
 
-**Status:** harness in place · Ollama + Gemini + openai_compat demonstrated · **Anthropic never run**
-**Updated:** 2026-07-31 (openai_compat leg added)
+**Status:** harness in place · two distinct backends demonstrated (Ollama, Gemini) ·
+`openai_compat` code path demonstrated on Ollama · **Anthropic never run**
+**Updated:** 2026-07-31 (openai_compat leg added; not counted as a third backend)
 
 MVP exit (see [MVP-SCOPE.md](../MVP-SCOPE.md) §1) requires Orvena to run on **at
 least Anthropic + Ollama** with **consistent behavior**. This document defines
@@ -44,13 +45,14 @@ ANTHROPIC_API_KEY=sk-... \
   ORVENA_PARITY_PROVIDER=anthropic ORVENA_PARITY_MODEL=claude-opus-4-8 \
   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 
-# Gemini (hosted) via its OpenAI-compatible endpoint — no Orvena code change:
-# reuse the `openai` provider and override the base URL. NOTE: the `openai`
-# provider reads OPENAI_API_KEY, so put your *Gemini* key there.
-OPENAI_API_KEY=<your-gemini-key> \
-  ORVENA_PARITY_PROVIDER=openai \
+# Gemini (hosted) via its OpenAI-compatible endpoint — the `openai_compat` kind
+# with the key in a var you name, so a Gemini key no longer has to masquerade
+# as OPENAI_API_KEY.
+GEMINI_API_KEY=<your-gemini-key> \
+  ORVENA_PARITY_PROVIDER=openai_compat \
   ORVENA_PARITY_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai \
   ORVENA_PARITY_MODEL=gemini-2.5-flash \
+  ORVENA_PARITY_API_KEY_ENV=GEMINI_API_KEY \
   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 
 # openai_compat (generic OpenAI-compatible endpoint) — checked here against
@@ -82,9 +84,11 @@ whatever Gemini model your key serves. To route through OpenRouter instead, use
 Env vars: `ORVENA_PARITY_PROVIDER` (required — the provider kind),
 `ORVENA_PARITY_MODEL` (required — a model that provider serves),
 `ORVENA_PARITY_BASE_URL` (optional — endpoint override, e.g. a non-default
-Ollama host, or required for `openai_compat`), `ORVENA_PARITY_API_KEY_ENV`
-(optional — `openai_compat` only, names the env var holding the key; omit for
-a no-auth endpoint). With no `ORVENA_PARITY_PROVIDER` set the test skips
+Ollama host; **required** for `openai_compat`, which has no default endpoint),
+`ORVENA_PARITY_API_KEY_ENV` (optional — names the env var holding the key;
+honored by the OpenAI-compatible kinds `openai` / `openrouter` /
+`openai_compat`, and on `openai_compat` omitting it means no `Authorization`
+header is sent at all). With no `ORVENA_PARITY_PROVIDER` set the test skips
 cleanly, so `cargo test -- --ignored` never fails just because parity env is
 absent.
 
@@ -94,18 +98,22 @@ absent.
 | :-------- | :----- | :------- |
 | **Ollama** (local model) | ✅ demonstrated · re-verified 2026-07-30 | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported (`steps=1`, 373 tok), evidence bundle round-trips |
 | **openai_compat** (generic, checked via Ollama's OpenAI-compat endpoint) | ✅ demonstrated 2026-07-31 | `qwen3:14b` via `http://localhost:11434/v1`, no `api_key_env` set (unauthenticated), passes the same contract (`steps=1`, 403 tok, gate `hello-exists` passes) |
-| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated · re-verified 2026-07-30 | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (`steps=1`, 281 tok; Gemini key in `OPENAI_API_KEY`) |
+| **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated · re-verified 2026-07-30 | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (`steps=1`, 281 tok). Run on the pre-`openai_compat` route — kind `openai` with the Gemini key in `OPENAI_API_KEY`. The recipe above now uses `openai_compat` + `api_key_env`; that cleaner path has **not** been re-run, so this row records what was actually executed |
 | **Anthropic** (hosted)   | ◻ **never run** | no `ANTHROPIC_API_KEY` has been available on a bench machine to date. The code path exists and is expected to work — but nobody has executed it, and this table will not imply otherwise |
 | **OpenAI** (hosted, native endpoint) | ◻ never run | exercised only via the base-URL override above (Gemini), never against OpenAI's own endpoint |
 | **OpenRouter** (hosted) | ◻ never run | — |
 | **openai_compat against a real self-hosted OSS server** (vLLM, llama.cpp server, LM Studio, ...) | ◻ never run | only checked so far against Ollama's own OpenAI-compat endpoint (a real server, but not a genuinely different backend from the `ollama` leg above) |
 
 **Cross-provider consistency is demonstrated:** the harness passes the same
-behavioral contract on three *real* providers — two local (Ollama native and
-`openai_compat` via Ollama) and one hosted (Gemini) — which satisfies the
-MVP-exit consistency check (Gemini stands in for Anthropic). The Ollama and
-Gemini legs were re-verified 2026-07-30 (see their table rows); the
-`openai_compat` leg was added and run 2026-07-31.
+behavioral contract on **two genuinely distinct backends** — one local (Ollama)
+and one hosted (Gemini) — which satisfies the MVP-exit consistency check
+(Gemini stands in for Anthropic). Both were re-verified 2026-07-30.
+
+The `openai_compat` leg (2026-07-31) is deliberately **not** counted as a third
+provider: it drove the same Ollama daemon serving the same `qwen3:14b`, just
+over a second code path. It demonstrates that the generic kind works
+end-to-end; it does not widen backend coverage. Counting it would inflate the
+number this page exists to keep honest.
 
 **On Anthropic specifically.** MVP-SCOPE §1 names Anthropic by name, and the
 README used to call it the recommended first run — while it had never actually
