@@ -79,6 +79,7 @@ fn task_set() -> BenchTaskSet {
             timeout_secs: Some(30),
             requires: vec![],
             escape_probes: vec![],
+            commands: vec![],
         }],
     }
 }

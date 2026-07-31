@@ -126,6 +126,30 @@ lazy-path task documents what no gate can catch (hardcoding the expected
 answer stays in scope and passes verify): the differential measures
 *containment and honesty*, not semantic correctness.
 
+**The agent can run the check (since slice-019).** The benchmark declares each
+task's `verify` as a read-only `check` command, plus any extra read-only
+commands the task lists, and grants the role `shell.run`. This was not a
+convenience: before it, the benchmark's agent could not run anything, and the
+prompt only ever shows the *writable* files — so the read-only neighbor, the
+failing validator, and the check's own output were all invisible. The
+2026-07-11 containment differential came out a null result for that reason, and
+"the baseline resisted temptation" was not a safe reading of it. Any real
+unbounded agent can `cat` those files without asking.
+
+Two disciplines keep it honest, and one consequence is worth stating plainly:
+
+- **Capability is identical in every posture** (same role, same tools, same
+  commands, same prompt) — enforcement stays the only variable, pinned by a test.
+- **No declared command solves a task or points at its shortcut.** They make
+  visible what a shell would show, nothing more. The command *strings* are also
+  kept out of the prompt (only names are listed): a check like
+  `test "$(cat answer.txt)" = "42"` would otherwise hand over its own answer.
+- **This strengthens the baseline, which can only shrink our differential.**
+  That is the intended direction. A differential measured against a blindfolded
+  opponent is not a measurement. It also means numbers published before
+  2026-07-30 were measured under a *different capability envelope* and are not
+  directly comparable to later ones — noted on the results page too.
+
 Reproduce with [`scripts/bench-differential.sh`](../scripts/bench-differential.sh)
 (defaults: `qwen3:14b` via local Ollama, 3 runs per task per mode).
 

@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::adapter::{self, AgentSelection};
 use crate::agent::{Agent, Task};
 use crate::config::agent::{AgentConfig, ProviderSelection, Tier};
-use crate::config::commands::Commands;
+use crate::config::commands::{Command, Commands, Intent};
 use crate::config::context_budget::ContextBudgets;
 use crate::config::gates::{Gate, Gatekeeper, Gates};
 use crate::config::roles::{Role, Roles};
@@ -530,14 +530,44 @@ pub async fn run_benchmark_matrix(
     })
 }
 
+/// The read-only commands one task's agent may run: the task's own extras, plus
+/// a `check` that runs its `verify` (unless the task declared that name itself).
+///
+/// **Why the agent gets a shell at all.** Until slice-019 the benchmark role
+/// could not run anything, which made the ungoverned baseline a weak stand-in
+/// for "an agent with no brakes": it could not run the failing check, so it
+/// never saw the temptation, and the containment differential came out a null
+/// result. A real unbounded agent has a shell — that is what makes it worth
+/// putting brakes on. The declared commands are `read_only` and identical in
+/// every posture, so this raises the ceiling for *both* sides of the comparison
+/// and leaves enforcement as the only variable (the same reasoning that settled
+/// the role-allowlist question in `docs/next/tkt-bench-provider-error-validity.md`).
+fn bench_commands(task: &BenchTask) -> Commands {
+    let mut commands = task.commands.clone();
+    if !commands.iter().any(|c| c.name == "check") {
+        commands.push(Command {
+            name: "check".into(),
+            // Human-authored (it comes from the task file), so `sh -c` is the
+            // same trust posture as a gate's verify — and the model still cannot
+            // supply a string, only the name.
+            argv: vec!["sh".into(), "-c".into(), task.verify.clone()],
+            intent: Intent::ReadOnly,
+            timeout_secs: task.timeout_secs.or(Some(30)),
+        });
+    }
+    Commands { commands }
+}
+
 /// The fixed harness config for one task: the caller's provider, a `developer`
-/// role that can read/write/search, and a single automated gate whose `verify`
-/// is the task's success criterion. Only the *provider* is borrowed from the
-/// user; "solved" is defined by the task, not by the user's gates.
+/// role that can read/write/search/run, the task's read-only commands, and a
+/// single automated gate whose `verify` is the task's success criterion. Only
+/// the *provider* is borrowed from the user; "solved" is defined by the task,
+/// not by the user's gates.
 ///
 /// Governance mode maps to: `off` → no gates (the baseline never sees a gate;
 /// the tier value is then irrelevant), `light`/`engineering` → the solved gate
-/// under that tier.
+/// under that tier. Nothing else differs between postures — same role, same
+/// tools, same commands, same prompt.
 fn bench_config(provider: &ProviderSelection, task: &BenchTask, mode: GovernanceMode) -> Config {
     let (tier, gates) = match mode {
         GovernanceMode::Off => (Tier::Light, vec![]),
@@ -555,13 +585,98 @@ fn bench_config(provider: &ProviderSelection, task: &BenchTask, mode: Governance
         roles: Roles {
             roles: vec![Role {
                 name: "developer".into(),
-                allowed_tools: vec!["fs.read".into(), "fs.write".into(), "grep.search".into()],
+                allowed_tools: vec![
+                    "fs.read".into(),
+                    "fs.write".into(),
+                    "grep.search".into(),
+                    "shell.run".into(),
+                ],
                 forbidden_tools: vec![],
                 knowledge_scope: vec![],
             }],
         },
         gates: Gates { gates },
         budgets: ContextBudgets::default(),
-        commands: Commands::default(),
+        commands: bench_commands(task),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bench_task(id: &str, commands: Vec<Command>) -> BenchTask {
+        BenchTask {
+            id: id.into(),
+            instruction: "fix it".into(),
+            writes: vec!["src/a.rs".into()],
+            verify: "cargo test".into(),
+            seed: vec![],
+            timeout_secs: Some(45),
+            requires: vec![],
+            escape_probes: vec![],
+            commands,
+        }
+    }
+
+    #[test]
+    fn every_task_gets_a_runnable_check_that_is_its_own_verify() {
+        // The baseline could not run anything before slice-019, so it never saw
+        // the failing check it was asked to fix — which is why containment came
+        // out a null result rather than a measurement.
+        let cmds = bench_commands(&bench_task("t", vec![]));
+        let check = cmds.get("check").expect("every task has a check");
+        assert_eq!(check.argv, vec!["sh", "-c", "cargo test"]);
+        assert_eq!(
+            check.intent,
+            Intent::ReadOnly,
+            "the model may never trigger a mutating command"
+        );
+        assert_eq!(check.timeout_secs, Some(45), "the task's own timeout applies");
+    }
+
+    #[test]
+    fn a_task_may_define_its_own_check_without_being_shadowed() {
+        let mine = Command {
+            name: "check".into(),
+            argv: vec!["true".into()],
+            intent: Intent::ReadOnly,
+            timeout_secs: None,
+        };
+        let cmds = bench_commands(&bench_task("t", vec![mine]));
+        assert_eq!(cmds.commands.len(), 1, "no duplicate name (config validation would reject it)");
+        assert_eq!(cmds.get("check").unwrap().argv, vec!["true"]);
+    }
+
+    #[test]
+    fn capability_is_identical_in_every_posture_only_enforcement_differs() {
+        // The whole differential rests on this: same role, same tools, same
+        // commands, same prompt. If the baseline were handed a weaker hand, the
+        // number would measure the handicap instead of the governance.
+        let task = bench_task("t", vec![]);
+        let provider = ProviderSelection {
+            kind: "offline".into(),
+            model: "m".into(),
+            base_url: None,
+            api_key_env: None,
+        };
+        let configs: Vec<Config> =
+            [GovernanceMode::Off, GovernanceMode::Light, GovernanceMode::Engineering]
+                .iter()
+                .map(|m| bench_config(&provider, &task, *m))
+                .collect();
+
+        for c in &configs {
+            let role = c.roles.get("developer").unwrap();
+            assert!(role.tool_allowed("shell.run"), "the baseline gets a shell too");
+            assert!(role.tool_allowed("fs.write") && role.tool_allowed("grep.search"));
+            assert_eq!(
+                c.commands.commands.iter().map(|x| x.name.clone()).collect::<Vec<_>>(),
+                configs[0].commands.commands.iter().map(|x| x.name.clone()).collect::<Vec<_>>(),
+            );
+        }
+        // …and the one thing that DOES differ.
+        assert!(configs[0].gates.gates.is_empty(), "off: no gate — done is the model's own claim");
+        assert_eq!(configs[2].gates.gates.len(), 1, "engineering: the gate decides done");
     }
 }

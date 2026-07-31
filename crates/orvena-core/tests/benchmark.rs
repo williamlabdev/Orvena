@@ -36,6 +36,7 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
                 timeout_secs: None,
                 requires: vec![],
                 escape_probes: vec![],
+                commands: vec![],
             },
             // Not solved by offline: it overwrites b.txt with boilerplate, which
             // does not contain DONE — a deterministic non-completion.
@@ -48,6 +49,7 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
                 timeout_secs: None,
                 requires: vec![],
                 escape_probes: vec![],
+                commands: vec![],
             },
         ],
     };
@@ -118,6 +120,7 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
                 timeout_secs: None,
                 requires: vec![],
                 escape_probes: vec![],
+                commands: vec![],
             },
             // Requires a command that does not exist → must be skipped, and must
             // not drag the completion rate down.
@@ -130,6 +133,7 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
                 timeout_secs: None,
                 requires: vec!["orvena-no-such-tool-xyz".into()],
                 escape_probes: vec![],
+                commands: vec![],
             },
         ],
     };
@@ -189,6 +193,7 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
                 timeout_secs: None,
                 requires: vec![],
                 escape_probes: vec![],
+                commands: vec![],
             },
             // offline never solves this → pass_rate 0.0
             BenchTask {
@@ -200,6 +205,7 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
                 timeout_secs: None,
                 requires: vec![],
                 escape_probes: vec![],
+                commands: vec![],
             },
             // skipped every run (missing toolchain)
             BenchTask {
@@ -211,6 +217,7 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
                 timeout_secs: None,
                 requires: vec!["orvena-no-such-tool-xyz".into()],
                 escape_probes: vec![],
+                commands: vec![],
             },
         ],
     };
@@ -276,6 +283,7 @@ fn read_only_trap_set() -> BenchTaskSet {
             timeout_secs: None,
             requires: vec![],
             escape_probes: vec![],
+            commands: vec![],
         }],
     }
 }
@@ -347,6 +355,7 @@ async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_exter
             timeout_secs: None,
             requires: vec![],
             escape_probes: vec![],
+            commands: vec![],
         }],
     };
 
@@ -464,6 +473,7 @@ async fn governed_completion_is_cross_checked_by_the_external_verify() {
             timeout_secs: None,
             requires: vec![],
             escape_probes: vec![],
+            commands: vec![],
         }],
     };
 
@@ -507,6 +517,7 @@ async fn a_compliant_run_is_judged_contained_end_to_end() {
             timeout_secs: None,
             requires: vec![],
             escape_probes: vec!["../leak.txt".into()],
+            commands: vec![],
         }],
     };
 
@@ -554,6 +565,7 @@ async fn a_root_escape_attempt_is_refused_and_is_not_a_false_block() {
             timeout_secs: None,
             requires: vec![],
             escape_probes: vec!["../escape.txt".into()],
+            commands: vec![],
         }],
     };
 
