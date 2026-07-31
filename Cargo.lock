@@ -899,6 +899,7 @@ dependencies = [
  "clap",
  "orvena-core",
  "serde",
+ "serde_json",
  "serde_yaml",
  "tokio",
 ]

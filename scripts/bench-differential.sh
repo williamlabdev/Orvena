@@ -14,6 +14,14 @@
 #     BASE_URL   endpoint override; required for openai_compat
 #     API_KEY_ENV  env var holding the key (openai/openrouter/openai_compat).
 #                  Omit on openai_compat for a keyless local server.
+#     AGENT      native | aider                             (default native)
+#
+#   AGENT=aider measures a third-party CLI agent inside Orvena's envelope
+#   (ADR-004): same tasks, same model, `off` = the agent unwrapped, `engineering`
+#   = the agent spawned inside the OS sandbox with writable narrowed to the
+#   task's declared paths. Needs `aider` on PATH. Note that only the filesystem
+#   is contained — the wrapped agent must reach its own model provider — and that
+#   its token counts are self-reported, not observed.
 #
 #   Local (default) — needs a local Ollama serving MODEL:
 #     scripts/bench-differential.sh 3 qwen3:14b
@@ -47,12 +55,18 @@ MODEL="${2:-qwen3:14b}"
 PROVIDER="${PROVIDER:-ollama}"
 BASE_URL="${BASE_URL:-}"
 API_KEY_ENV="${API_KEY_ENV:-}"
+AGENT="${AGENT:-native}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TASKS="$REPO/benchmarks/temptation.yaml"
 DATE="$(date +%F)"
 SAFE_MODEL="$(printf '%s' "$MODEL" | tr '/:' '--')"
-OUT="$REPO/docs/benchmark-results/${DATE}-${SAFE_MODEL}-differential.json"
+# The agent is part of the number's identity, so it is part of the filename.
+if [ "$AGENT" = "native" ]; then
+  OUT="$REPO/docs/benchmark-results/${DATE}-${SAFE_MODEL}-differential.json"
+else
+  OUT="$REPO/docs/benchmark-results/${DATE}-${SAFE_MODEL}-${AGENT}-differential.json"
+fi
 
 echo "== building orvena (release) =="
 ( cd "$REPO" && cargo build --release --quiet )
@@ -87,15 +101,19 @@ fi
 
 echo
 echo "== sanity: offline dry-run (fast, deterministic, no model) =="
-"$BIN" bench --provider offline --tasks "$TASKS" --governance off,engineering
+if [ "$AGENT" = "native" ]; then
+  "$BIN" bench --provider offline --tasks "$TASKS" --governance off,engineering
+else
+  echo "   (skipped: the offline stub is a native-loop fixture; an external agent brings its own model client)"
+fi
 
 echo
-echo "== differential: ${PROVIDER} / ${MODEL} × ${REPEAT} runs × (off, engineering) =="
+echo "== differential: ${AGENT} agent / ${PROVIDER} / ${MODEL} × ${REPEAT} runs × (off, engineering) =="
 if [ -n "${ORVENA_MIN_REQUEST_INTERVAL_MS:-}" ]; then
   echo "   (pacing: ${ORVENA_MIN_REQUEST_INTERVAL_MS}ms minimum between requests)"
 fi
 echo "   (this calls the model many times; expect an hour-plus for a 14B model)"
-"$BIN" bench --tasks "$TASKS" --governance off,engineering --repeat "$REPEAT" --out "$OUT"
+"$BIN" bench --tasks "$TASKS" --agent "$AGENT" --governance off,engineering --repeat "$REPEAT" --out "$OUT"
 
 echo
 echo "Differential report written to:"

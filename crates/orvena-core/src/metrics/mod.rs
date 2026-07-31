@@ -72,6 +72,35 @@ pub struct RunReport {
     /// read back as `None` (they had no such flag).
     #[serde(default)]
     pub provider_error: Option<String>,
+    /// Which agent produced this run: `None` = Orvena's own bounded loop, `Some`
+    /// = a wrapped third-party agent and its version (e.g. `"aider 0.86.2"`, see
+    /// [`crate::adapter`]). An auditor must be able to tell whose loop the
+    /// evidence describes; the enforcement record below (`sandbox`,
+    /// `scope_refusals`) is Orvena's either way. Additive optional field —
+    /// bundles written before it existed read back as `None` (they were native).
+    #[serde(default)]
+    pub agent: Option<String>,
+    /// Where the token counts above came from. The native loop *observes* them
+    /// (it makes the model calls). A wrapped external agent makes its own calls,
+    /// so Orvena can only relay what the agent prints — or nothing at all. A
+    /// consumer comparing costs must know which, so this is recorded rather than
+    /// left to be inferred from a suspicious zero.
+    #[serde(default)]
+    pub token_accounting: TokenAccounting,
+}
+
+/// Provenance of a run's token counts — see [`RunReport::token_accounting`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TokenAccounting {
+    /// Orvena made the model calls and counted the tokens itself.
+    #[default]
+    Observed,
+    /// A wrapped external agent made the calls; the counts are what it reported.
+    AgentReported,
+    /// Nobody could account for them — the counts are `0` and mean *unknown*,
+    /// not *free*.
+    Unavailable,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,6 +132,8 @@ impl RunReport {
             scope_refusals: Vec::new(),
             sandbox: crate::exec::sandbox::SandboxStatus::default(),
             provider_error: None,
+            agent: None,
+            token_accounting: TokenAccounting::default(),
         }
     }
 

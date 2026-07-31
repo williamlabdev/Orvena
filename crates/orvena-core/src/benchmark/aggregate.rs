@@ -6,6 +6,7 @@
 //! without running a benchmark.
 
 use super::report::{BenchReport, Differential, RepeatedReport, TaskResult};
+use crate::metrics::TokenAccounting;
 
 /// Share of a posture's task-runs that may die on provider failures before its
 /// numbers stop meaning anything. Some loss is tolerable — a single flaky
@@ -34,6 +35,7 @@ pub(super) fn aggregate(
     endpoint: Option<String>,
     run_id: String,
     governance: String,
+    agent: String,
     results: Vec<TaskResult>,
 ) -> BenchReport {
     let task_count = results.len() as u32;
@@ -71,6 +73,7 @@ pub(super) fn aggregate(
         endpoint,
         run_id,
         governance,
+        agent,
         task_count,
         passed,
         skipped,
@@ -150,10 +153,24 @@ pub(super) fn derive_differential(
             baseline_verified_rate: b.verified_rate,
             governed_verified_rate: g.verified_rate,
             overhead_steps_ratio: ratio(g.mean_steps, b.mean_steps),
-            overhead_tokens_ratio: ratio(g.mean_total_tokens, b.mean_total_tokens),
+            overhead_tokens_ratio: (b.token_accounting != TokenAccounting::Unavailable
+                && g.token_accounting != TokenAccounting::Unavailable)
+                .then(|| ratio(g.mean_total_tokens, b.mean_total_tokens)),
+            token_accounting: weakest_accounting(b.token_accounting, g.token_accounting),
         }),
         None,
     )
+}
+
+/// Combine two token provenances into the weaker of the two
+/// (`unavailable` < `agent_reported` < `observed`).
+pub(super) fn weakest_accounting(a: TokenAccounting, b: TokenAccounting) -> TokenAccounting {
+    use TokenAccounting::*;
+    match (a, b) {
+        (Unavailable, _) | (_, Unavailable) => Unavailable,
+        (AgentReported, _) | (_, AgentReported) => AgentReported,
+        _ => Observed,
+    }
 }
 
 /// Task-runs in a repeated report that actually reached the model.
@@ -198,6 +215,7 @@ mod tests {
             oracle_error: None,
             evidence_valid: true,
             provider_error: None,
+            token_accounting: TokenAccounting::Observed,
         }
     }
 
@@ -226,7 +244,15 @@ mod tests {
     }
 
     fn report(results: Vec<TaskResult>) -> BenchReport {
-        aggregate("offline".into(), "m".into(), None, "r".into(), "off".into(), results)
+        aggregate(
+            "offline".into(),
+            "m".into(),
+            None,
+            "r".into(),
+            "off".into(),
+            "native".into(),
+            results,
+        )
     }
 
     #[test]
@@ -275,6 +301,7 @@ mod tests {
             endpoint: None,
             run_id: "r".into(),
             governance: governance.into(),
+            agent: "native".into(),
             repeat: 1,
             task_count: bench.task_count,
             ran: bench.task_count - bench.skipped,
@@ -290,6 +317,7 @@ mod tests {
             evidence_valid_rate: bench.evidence_valid_rate,
             mean_steps: 2.0,
             mean_total_tokens: 150.0,
+            token_accounting: TokenAccounting::Observed,
             tasks: Vec::new(),
             runs: vec![bench],
         }
@@ -339,6 +367,56 @@ mod tests {
         let (diff, why) = derive_differential(&[posture("off", 0), posture("engineering", 0)]);
         assert!(why.is_none());
         assert!(diff.is_some());
+    }
+
+    #[test]
+    fn an_unaccounted_token_cost_yields_no_ratio_rather_than_a_flattering_zero() {
+        // A wrapped external agent makes its own model calls: the token means are
+        // 0 because nobody counted. Dividing them would print "×0.00 tokens" —
+        // governance for free, which is the single most flattering number this
+        // project could accidentally publish.
+        let mut b = posture("off", 0);
+        let mut g = posture("engineering", 0);
+        for r in [&mut b, &mut g] {
+            r.token_accounting = TokenAccounting::Unavailable;
+            r.mean_total_tokens = 0.0;
+        }
+        let (diff, why) = derive_differential(&[b, g]);
+        assert!(why.is_none(), "unknown cost is not a reason to suppress the whole differential");
+        let d = diff.expect("containment and false-done are still comparable");
+        assert_eq!(d.overhead_tokens_ratio, None, "no ratio, rather than a fabricated one");
+        assert!(d.overhead_steps_ratio > 0.0, "steps stay observable — Orvena spawns them");
+        assert_eq!(d.token_accounting, TokenAccounting::Unavailable);
+    }
+
+    #[test]
+    fn a_relayed_token_count_is_labelled_as_relayed() {
+        let mut b = posture("off", 0);
+        b.token_accounting = TokenAccounting::AgentReported;
+        let (diff, _) = derive_differential(&[b, posture("engineering", 0)]);
+        let d = diff.unwrap();
+        assert!(d.overhead_tokens_ratio.is_some(), "a relayed count still divides");
+        assert_eq!(
+            d.token_accounting,
+            TokenAccounting::AgentReported,
+            "the weaker provenance travels with the ratio"
+        );
+    }
+
+    #[test]
+    fn one_unaccounted_run_weakens_the_whole_posture() {
+        assert_eq!(
+            weakest_accounting(TokenAccounting::Observed, TokenAccounting::Unavailable),
+            TokenAccounting::Unavailable
+        );
+        assert_eq!(
+            weakest_accounting(TokenAccounting::Observed, TokenAccounting::AgentReported),
+            TokenAccounting::AgentReported
+        );
+        assert_eq!(
+            weakest_accounting(TokenAccounting::Observed, TokenAccounting::Observed),
+            TokenAccounting::Observed
+        );
     }
 
     #[test]

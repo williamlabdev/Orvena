@@ -7,10 +7,13 @@ use std::path::PathBuf;
 
 use super::{config_dir, is_initialized, load_dotenv, preflight_provider, run_timestamp};
 use anyhow::{bail, Context, Result};
+use orvena_core::adapter::{self, AgentSelection};
 use orvena_core::benchmark::{
     self, BenchReport, BenchTaskSet, GovernanceMode, MatrixReport, RepeatedReport,
 };
+use orvena_core::config::agent::ProviderSelection;
 use orvena_core::config::Config;
+use orvena_core::metrics::TokenAccounting;
 
 /// The built-in task set, embedded so `orvena bench` works without a fixtures
 /// directory on disk (same pattern as the init scaffold).
@@ -22,6 +25,7 @@ pub async fn run(
     out: Option<PathBuf>,
     repeat: u32,
     governance: Option<String>,
+    agent: String,
 ) -> Result<()> {
     load_dotenv();
 
@@ -71,6 +75,8 @@ pub async fn run(
         }
     };
 
+    let agent_selection = resolve_agent(&agent, &config.agent.provider)?;
+
     let run_id = run_timestamp();
     let base = dir.join("bench");
     let kind = config.agent.provider.kind.clone();
@@ -89,6 +95,7 @@ pub async fn run(
             &run_id,
             &modes,
             repeat,
+            &agent_selection,
         )
         .await?;
         print_matrix(&report);
@@ -100,8 +107,15 @@ pub async fn run(
     } else if repeat <= 1 {
         let mode = modes[0];
         println!("running {} task(s) against provider '{kind}' [{mode}]…\n", set.tasks.len());
-        let report =
-            benchmark::run_benchmark(&set, &config.agent.provider, &base, &run_id, mode).await?;
+        let report = benchmark::run_benchmark(
+            &set,
+            &config.agent.provider,
+            &base,
+            &run_id,
+            mode,
+            &agent_selection,
+        )
+        .await?;
         print_report(&report);
         benchmark::write_report(&report, &report_path)?;
         announce_report(&report_path, out.as_deref())?;
@@ -121,6 +135,7 @@ pub async fn run(
             &run_id,
             repeat,
             mode,
+            &agent_selection,
         )
         .await?;
         print_repeated(&report);
@@ -131,6 +146,40 @@ pub async fn run(
         }
     }
     Ok(())
+}
+
+/// Resolve `--agent` into a selection, failing fast (before any task runs) when
+/// a wrapped agent is asked for but not installed or not mappable onto the
+/// configured provider. The same posture as `preflight_provider`: a missing
+/// prerequisite is a loud error up front, never a benchmark full of failures.
+fn resolve_agent(agent: &str, provider: &ProviderSelection) -> Result<AgentSelection> {
+    match agent.trim().to_ascii_lowercase().as_str() {
+        "" | "native" | "orvena" => Ok(AgentSelection::Native),
+        adapter::aider::NAME => {
+            let spec = adapter::aider::spec(provider)?;
+            if !adapter::available(&spec) {
+                bail!(
+                    "--agent aider: `{}` is not on PATH. Install it (e.g. `pipx install aider-chat` \
+                     or `python -m pip install aider-chat`) and re-run; Orvena wraps the agent, it \
+                     does not bundle one",
+                    spec.program
+                );
+            }
+            println!("agent: {} (wrapped by Orvena)", adapter::identity(&spec));
+            Ok(AgentSelection::External(Box::new(spec)))
+        }
+        other => bail!("unknown --agent '{other}' (known: native, aider)"),
+    }
+}
+
+/// One line describing where a token figure came from, or nothing when Orvena
+/// counted it itself (the unremarkable case).
+fn token_note(accounting: TokenAccounting) -> &'static str {
+    match accounting {
+        TokenAccounting::Observed => "",
+        TokenAccounting::AgentReported => "  (tokens: self-reported by the agent)",
+        TokenAccounting::Unavailable => "  (tokens: NOT COUNTED — 0 means unknown, not free)",
+    }
 }
 
 /// Print where the report(s) landed. Writing the `--out` copy is left to the
@@ -149,6 +198,7 @@ fn print_report(r: &BenchReport) {
     if let Some(endpoint) = &r.endpoint {
         println!("endpoint:  {endpoint}");
     }
+    println!("agent:     {}", r.agent);
     for res in &r.results {
         if res.skipped {
             let why = res.skip_reason.as_deref().unwrap_or("skipped");
@@ -234,6 +284,7 @@ fn print_repeated(r: &RepeatedReport) {
     if let Some(endpoint) = &r.endpoint {
         println!("endpoint:  {endpoint}");
     }
+    println!("agent:     {}", r.agent);
     for t in &r.tasks {
         if t.skipped {
             println!("  {:<18} SKIP", t.id);
@@ -275,11 +326,12 @@ fn print_repeated(r: &RepeatedReport) {
     }
     println!();
     println!(
-        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  mean {:.1} steps, {:.0} tok",
+        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  mean {:.1} steps, {:.0} tok{}",
         r.verified_rate * 100.0,
         r.false_done_rate * 100.0,
         r.mean_steps,
-        r.mean_total_tokens
+        r.mean_total_tokens,
+        token_note(r.token_accounting)
     );
     print!("containment (oracle): {:.0}%", r.containment_rate * 100.0);
     if r.false_blocks > 0 {
@@ -330,10 +382,20 @@ fn print_matrix(m: &MatrixReport) {
             d.governed,
             d.governed_verified_rate * 100.0
         );
-        println!(
-            "overhead:    ×{:.2} steps, ×{:.2} tokens (governed / baseline)",
-            d.overhead_steps_ratio, d.overhead_tokens_ratio
-        );
+        match d.overhead_tokens_ratio {
+            Some(tokens) => println!(
+                "overhead:    ×{:.2} steps, ×{:.2} tokens (governed / baseline){}",
+                d.overhead_steps_ratio,
+                tokens,
+                token_note(d.token_accounting)
+            ),
+            // Never "×0.00 tokens": an unmeasured cost is not a free one.
+            None => println!(
+                "overhead:    ×{:.2} steps (governed / baseline)  |  tokens: not counted — the \
+                 wrapped agent makes its own model calls",
+                d.overhead_steps_ratio
+            ),
+        }
     } else if let Some(reason) = &m.differential_suppressed {
         println!("── governance differential ──");
         println!("{reason}");

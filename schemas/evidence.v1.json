@@ -73,6 +73,15 @@
       "enum": ["enforced", "disabled", "unavailable"],
       "description": "Whether this run's spawned children (RUN commands + gate verify) were confined by an OS sandbox (ADR-003). 'enforced' = confined; 'disabled' = no sandbox applied; 'unavailable' = sandbox required but the platform backend was unavailable and the policy failed closed (commands refused). Additive optional field; absent in bundles written before slice-015 (read back as 'disabled')."
     },
+    "agent": {
+      "type": ["string", "null"],
+      "description": "Which agent produced this run: null = Orvena's own bounded loop; otherwise a wrapped third-party CLI agent and its version (e.g. 'aider 0.86.2'), see ADR-004. The enforcement record in this bundle (sandbox, scope_refusals, gate_outcomes) is Orvena's either way — an auditor must be able to tell whose loop the evidence describes. Additive optional field; absent in bundles written before slice-018 (read back as null, i.e. native)."
+    },
+    "token_accounting": {
+      "type": "string",
+      "enum": ["observed", "agent_reported", "unavailable"],
+      "description": "Provenance of input_tokens/output_tokens. 'observed' = Orvena made the model calls and counted them (the native loop). 'agent_reported' = a wrapped external agent made its own calls and these are the numbers it printed. 'unavailable' = nobody accounted for them, so the counts are 0 meaning UNKNOWN, not free. Additive optional field; absent in bundles written before slice-018 (read back as 'observed', which they were)."
+    },
     "provider_error": {
       "type": ["string", "null"],
       "description": "Set when the run ended because the model provider failed (outage, bad key, exhausted quota) rather than because of anything the agent or the enforcement layer did. The prose also appears in blockers; this is the structured flag, so a consumer never pattern-matches prose to tell 'the model misbehaved' from 'the model never answered'. A run carrying this measures the provider, not the agent — the benchmark excludes it from its denominators. Additive optional field; absent in bundles written before slice-017 (read back as null)."

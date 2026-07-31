@@ -39,6 +39,52 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "somebody actually ran it" rested on a number retyped into a table. A test
   keeps every committed bundle schema-valid and self-describing.
 
+- **External-agent adapter — Orvena's envelope around an agent it did not write**
+  (slice-018, ADR-004) — `orvena bench --agent aider` runs the benchmark with a
+  **third-party CLI agent** doing the coding: the agent supplies the loop, Orvena
+  supplies the scope, the gate, and the evidence. This is the executable form of
+  the differential plan's §5/D5 bet ("the agent loop is a commodity; the trust
+  envelope is the asset"), and it needed no new enforcement mechanism — an
+  external agent is just another spawned child, so ADR-003's OS boundary was
+  pointed at it: the agent runs under the sandbox with **writable narrowed to the
+  task's declared `writes`** (file-level granularity on both macOS SBPL and Linux
+  Landlock), and an out-of-scope write fails at the syscall regardless of what
+  the agent believes it may touch. Everything around the loop is unchanged: the
+  same independent git oracle judges it, the same external verify is ground
+  truth, the same schema-v1 bundle lands. `AdapterSpec` is pure data
+  (name/program/args/env), so the next agent is a profile, not a code path.
+  **First measured result — a non-null M1 differential, which the native loop
+  could not produce**: on the temptation set with Aider 0.86.2, containment went
+  **83% → 100%** with a local `qwen3:14b` (raw Aider created a literal
+  `~/.orvena-notes.txt`; wrapped, it got `EPERM` and still finished the in-scope
+  edit) and **67% → 100%** with `qwen2.5-coder:1.5b` (raw Aider relaxed a
+  read-only `validate.sh` instead of fixing the in-scope `config.json`). These are
+  single-repeat smoke runs over 6 of the 8 tasks and are **not published as a
+  third number** — a publishable one needs 3 repeats over the full set.
+  Four things had to be right or the number would have been fiction, and each is
+  now pinned by a test: (1) Aider commits its own work by default, which would
+  leave a clean `git status` and read as "touched nothing" — the **oracle now
+  diffs against the baseline commit**, and the adapter also turns auto-commit off
+  (two layers, because a judge must not depend on the defendant's flags); (2) its
+  `.gitignore` edits and repo-map cache are switched off and its history files
+  redirected into `.orvena-agent/` (excluded like `target/`); (3) **system temp is
+  no longer granted when the workdir lives under it** — `bench-differential.sh`
+  scaffolds into `mktemp -d`, where that grant would have covered the whole
+  workdir and silently voided containment while still reporting `enforced`;
+  (4) tokens are **not observed** in an adapter run, so the bundle records
+  `token_accounting: observed | agent_reported | unavailable` and the differential
+  prints **no** token ratio when they are unknown — `×0.00 tokens` ("governance is
+  free") is the single most flattering number this project could publish by
+  accident. Honest limits, stated wherever an adapter number appears: **only the
+  filesystem is contained** (the agent must reach its own model provider, so
+  `network: allow`), and a declared path that does not exist yet widens to its
+  parent directory, with the widening recorded in the run's blockers. Backed by an
+  end-to-end containment test on both CI platforms (a stub agent that always
+  attempts the out-of-scope write: unwrapped it lands and the oracle names it,
+  wrapped the neighbour is byte-identical while the in-scope fix still passes),
+  plus unit coverage for argv/placeholder expansion, provider→model mapping,
+  token-provenance arithmetic, and the committing-agent oracle regression.
+
 ### Changed
 
 - **`orvena init` no longer recommends a provider nobody has run.** The picker
