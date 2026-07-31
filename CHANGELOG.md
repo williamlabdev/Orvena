@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Wire-level proof of `openai_compat`'s authentication contract.** The
+  existing tests asserted `api_key.is_none()` on the built struct — a claim
+  about memory, standing in for a claim about the socket. Two integration
+  tests now capture the actual HTTP request against a loopback listener (no
+  mock-HTTP dependency) and pin both directions: a keyless config sends **no
+  `Authorization` header at all** (an empty or garbage bearer breaks servers
+  that validate whatever is presented), and a keyed config sends exactly the
+  `Bearer` value its `api_key_env` variable holds.
+
 - **`openai_compat` — a first-class provider kind for any OpenAI-compatible
   endpoint.** Self-hosted open-source inference servers (vLLM, llama.cpp
   server, LM Studio, TGI, SGLang) and hosted open-weight aggregators (Groq,
