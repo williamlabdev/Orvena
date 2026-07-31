@@ -30,7 +30,13 @@ pub struct AgentConfig {
     pub sandbox: SandboxConfig,
 }
 
+/// `deny_unknown_fields`: a typo here is a security posture change, not a
+/// cosmetic one — `api_key_evn` under `openai_compat` used to be silently
+/// ignored by serde, downgrading the request to **no auth** while `doctor`
+/// reported ready. An unknown key in the `provider:` block is now a hard parse
+/// error naming the field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProviderSelection {
     /// `anthropic` | `openai` | `openrouter` | `ollama` | `openai_compat` | `offline`.
     pub kind: String,
@@ -50,8 +56,9 @@ pub struct ProviderSelection {
     /// Unset on `openai_compat` means the endpoint is treated as
     /// **unauthenticated** — no `Authorization` header is sent at all, matching
     /// self-hosted OSS servers (vLLM, llama.cpp server, LM Studio). Note this
-    /// is "no auth", not "auth optional": a *misspelled* key here (`api_key_evn`)
-    /// is silently ignored by serde and downgrades the request to no-auth.
+    /// is "no auth", not "auth optional": a *misspelled* key (`api_key_evn`)
+    /// would silently downgrade the request to no-auth, which is why the struct
+    /// rejects unknown fields at parse time.
     #[serde(default)]
     pub api_key_env: Option<String>,
 }
@@ -168,5 +175,28 @@ mod tests {
         );
         assert_eq!(sel(Some("localhost:11434")).endpoint_origin(), None);
         assert_eq!(sel(Some("   ")).endpoint_origin(), None);
+    }
+
+    // The typo that motivated deny_unknown_fields: `api_key_evn` under
+    // `openai_compat` used to be silently ignored, downgrading the request to
+    // no-auth while `doctor` reported ready. A typo in a security-relevant
+    // field must be a parse error, not a posture change.
+    #[test]
+    fn a_misspelled_provider_field_is_a_parse_error_not_a_silent_downgrade() {
+        let err = serde_yaml::from_str::<ProviderSelection>(
+            "kind: openai_compat\nmodel: m\nbase_url: http://localhost:8000/v1\napi_key_evn: MY_KEY\n",
+        )
+        .expect_err("an unknown field must not parse");
+        let msg = err.to_string();
+        assert!(msg.contains("api_key_evn"), "the error names the offending field: {msg}");
+    }
+
+    #[test]
+    fn every_declared_provider_field_still_parses() {
+        let s = serde_yaml::from_str::<ProviderSelection>(
+            "kind: openai_compat\nmodel: m\nbase_url: http://localhost:8000/v1\napi_key_env: MY_KEY\n",
+        )
+        .expect("the full legitimate surface parses");
+        assert_eq!(s.api_key_env.as_deref(), Some("MY_KEY"));
     }
 }

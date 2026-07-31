@@ -41,6 +41,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **BREAKING: an unknown field in the `provider:` block is now a parse error.**
+  A misspelled `api_key_evn` under `openai_compat` used to be silently ignored
+  by serde, which downgraded the request to **no auth** while `orvena doctor`
+  reported ready — a typo acting as a security posture change. `ProviderSelection`
+  now rejects unknown fields at parse time with an error naming the field.
+  Configs that carried stray keys in `provider:` will stop loading until the
+  stray is removed; that is the point.
+
 - **`orvena init` no longer recommends a provider nobody has run.** The picker
   called Anthropic "Recommended first run" while `docs/provider-parity.md`
   claimed that recommendation had been removed — it had been, from the README

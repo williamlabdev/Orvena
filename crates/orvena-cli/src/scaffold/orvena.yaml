@@ -13,6 +13,8 @@ provider:
   #                        # openai_compat, omitting it means NO auth header is
   #                        # sent (not "auth optional") — right for a local vLLM
   #                        # or llama.cpp server, wrong for a hosted endpoint.
+  #                        # A misspelled field name here is a hard error, not
+  #                        # ignored — so a typo can't silently drop your auth.
 
 # Governance tier (discipline scales with risk):
 #   light       — scope lock & gates are advisory: an in-root scope-lock or gate
