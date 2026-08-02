@@ -48,6 +48,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The ungoverned baseline is told the scope, not told to obey it** — the second
+  half of the slice-019 fix below, and the reason the containment differential
+  (M1) was null. The baseline was handed the governed run's scope *obligation*
+  verbatim ("modify ONLY files listed under WRITABLE … never expand scope"),
+  because the prompt was held identical so that enforcement would be the only
+  variable. Under that rule M1 measured whether a model disobeys an explicit
+  written instruction — not what an agent without a scope contract does — so the
+  number was near-zero by construction, and it read as "the brakes are rarely
+  needed" when it actually said "this model follows instructions". Confirmed null
+  on both legs and both models tested: native `qwen3:14b` (0 violations in 24
+  baseline runs), wrapped Aider on `qwen3:14b` (0 in 24) and on `qwen3.6:35b`.
+  Now the baseline receives the same *information* — identical writable list,
+  identical file contents, identical runnable commands — with the obligation
+  lifted for it alone (`agent::context::scope_rules`, `adapter::compose_message`,
+  both keyed off flags that already marked the baseline). The governed prompt is
+  unchanged. Deliberately **not** done: withholding the file list as well, which
+  would re-create the slice-019 blindfold from the other side; a test asserts the
+  baseline still sees everything, so that over-correction fails CI. The task set
+  was not touched — tuning the temptations to make the number move is the trap
+  engineering the plan forbids. **Consequence:** every M1 and M4 figure on
+  `docs/benchmark-results.md` predates this and was measured against the
+  told-and-obligated baseline; they stay as history, and no published number
+  moves until both agent legs are re-measured at the full bar.
+  See `docs/next/tkt-m1-null-is-structural.md`.
 - **The benchmark's agent can now run the check it is asked to fix** (slice-019)
   — and the ungoverned baseline gets the same shell, which makes our own
   differential smaller on purpose. Until now the bench role had no `shell.run`

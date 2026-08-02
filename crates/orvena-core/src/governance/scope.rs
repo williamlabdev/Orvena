@@ -13,7 +13,9 @@ pub struct Scope {
     pub tier: Tier,
     /// Benchmark-only ungoverned baseline (D2): every in-root path is writable,
     /// regardless of the lists above. `allowed_modifications` is still carried
-    /// so the prompt is identical to a governed run — only enforcement differs.
+    /// because the baseline sees the same files and the same contents as a
+    /// governed run — it is simply not told to stay inside them (the prompt's
+    /// obligation is dropped, the information is not: `context::scope_rules`).
     /// Root escape (`..`, symlinks) is host protection, not governance, and is
     /// NOT lifted. Unreachable from the CLI/config surface.
     pub(crate) unrestricted: bool,

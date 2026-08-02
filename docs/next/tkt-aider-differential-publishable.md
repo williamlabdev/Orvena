@@ -1,7 +1,51 @@
 # Ticket: a publishable Aider differential (the third number)
 
-> Status: OPEN · opened 2026-07-30 · follow-up to slice-018 · **two attempts
-> 2026-08-02, neither publishable, see below**
+> Status: **CLOSED (won't fix as scoped)** · 2026-08-02 · opened 2026-07-30 ·
+> follow-up to slice-018 · two attempts, neither publishable · superseded by
+> [`tkt-m1-null-is-structural.md`](tkt-m1-null-is-structural.md)
+
+## Why this is closed (2026-08-02, after attempt 2)
+
+This ticket existed for one reason: the wrapped leg was the **only** source of a
+non-null M1, so it was the only leg that could carry the "what the brakes buy"
+headline. Both halves of that premise are gone.
+
+1. **The non-null M1 did not reproduce, on either model.** 0 violations in 48
+   full-bar runs on `qwen3:14b` (attempt 1), and still null on the 8 `off` runs
+   of `qwen3.6:35b` (attempt 2) — which was the "at least one capable model"
+   requirement this ticket set for itself. The 83% rested on one event.
+2. **The null is structural, and it is not about Aider.** The baseline is handed
+   the scope in its prompt, as a prohibition, in every posture — for the wrapped
+   agent too (`adapter/mod.rs:441`: "the scope contract is stated in the
+   prompt"), on the same host-protection floor (`baseline_sandbox_policy`,
+   `adapter/mod.rs:260`, confines to the workdir, so a root escape is unreachable
+   in `off` here as well). Both legs measure the same thing: whether the model
+   defies a written instruction. Evidence chain in
+   [`tkt-m1-null-is-structural.md`](tkt-m1-null-is-structural.md).
+
+So re-running this leg at any bar, on any model, cannot produce the number the
+ticket was opened for until the baseline question is ruled on. Attempt 3 would
+burn another full matrix to re-measure a constant.
+
+**What survives:** the architecture claim, which was always the other half of
+D5 — `orvena bench --agent aider` wraps a third-party CLI agent end to end under
+OS-boundary enforcement, with evidence bundles, pinned to Aider 0.86.2
+(slice-018, ADR-004). That is validated and needs no differential to be true. It
+is a fact about the envelope, not a number for the results page.
+
+**What is deliberately not claimed:** any cost ratio for the wrapped leg. The
+`engineering` half was invalidated twice by harness bugs (PR #27, PR #28) and has
+never been re-run clean. There is no publishable Aider number of any kind.
+
+**To reopen:** only after `tkt-m1-null-is-structural.md` is ruled on, and only if
+the ruling makes a non-null M1 reachable. At that point the right move is
+probably to re-measure **both** legs together under the new baseline rather than
+to resurrect this ticket alone — the page needs them side by side to separate
+"what the brakes buy" from "which loop is better".
+
+---
+
+## History (kept as measured)
 
 ## Attempt 2 (2026-08-02, smoke only) — a second harness bug, same category
 
