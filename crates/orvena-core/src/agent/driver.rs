@@ -60,7 +60,9 @@ pub(crate) struct LoopOptions {
     /// Ungoverned baseline: scope lists are not enforced (root escape still is),
     /// gates are never consulted, and the run ends when the model emits zero
     /// actions — its own, unverified claim of "done" — or at `max_steps`. The
-    /// prompt is identical to a governed run; only enforcement differs.
+    /// prompt carries the same information as a governed run (same writable
+    /// list, same file contents) minus the obligation to respect it — see
+    /// `context::scope_rules` and `tkt-m1-null-is-structural`.
     pub ungoverned: bool,
 }
 

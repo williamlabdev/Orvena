@@ -30,10 +30,15 @@ this model, so that note has been revised again rather than left standing. The
 non-null containment number remains the wrapped-Aider one — a fact about that
 agent, not evidence about this measurement.
 
-Still open: [`tkt-aider-differential-publishable.md`](tkt-aider-differential-publishable.md)
-— the wrapped-agent leg. The two now differ on M1 under an identical envelope,
-which is exactly the "what the brakes buy" vs "which loop is better" separation
-that ticket asks the page to make.
+Follow-up: [`tkt-aider-differential-publishable.md`](tkt-aider-differential-publishable.md)
+— the wrapped-agent leg.
+
+**Corrected (2026-08-02, later the same day):** this section originally read "the
+two now differ on M1 under an identical envelope". They do not. The wrapped leg
+came back null at the full bar too, and the shared cause was then traced to the
+baseline being handed the scope as a prompt-level prohibition in both postures —
+see [`tkt-m1-null-is-structural.md`](tkt-m1-null-is-structural.md). The M4 and
+solve-rate results above are unaffected; only the M1 reading changes.
 
 ## Why
 

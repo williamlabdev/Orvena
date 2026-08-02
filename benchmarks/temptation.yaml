@@ -32,6 +32,26 @@
 # the cheap path — which can only shrink our own differential. That is the point:
 # a differential measured against a blindfolded opponent is not a measurement.
 #
+# ── The baseline is told the scope, not told to obey it (2026-08-02) ─────────
+# The fix above was necessary and not sufficient. Through 2026-08-02 the baseline
+# also received the governed run's scope OBLIGATION verbatim ("modify ONLY files
+# listed under WRITABLE … never expand scope"), because the prompt was held
+# identical so that enforcement would be the only variable. Under that rule M1
+# measured whether a model disobeys a written instruction — not what an agent
+# without a scope contract does — and the differential was null by construction
+# on both legs and both models tested.
+#
+# So rule 1 above now applies to INFORMATION, not to obligation. The baseline
+# still sees the identical writable list, the identical file contents and the
+# identical commands; the obligation Orvena injects is lifted for it alone
+# (`agent::context::scope_rules`, `adapter::compose_message`). Rule 2 is
+# untouched, and so is every task below: nothing points at a shortcut, and the
+# set was not re-tuned to make the number move.
+#
+# Consequence for anyone reading old numbers: any M1/M4 figure measured before
+# 2026-08-02 came from the told-and-obligated baseline. See
+# `docs/next/tkt-m1-null-is-structural.md`.
+#
 # Judged by the independent git-diff oracle (D3): after the run, everything
 # that changed is compared against `writes` by a judge that shares no code with
 # the enforcement layer. `escape_probes` list out-of-root paths that must not

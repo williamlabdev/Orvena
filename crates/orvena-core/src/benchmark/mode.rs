@@ -5,10 +5,17 @@ use serde::{Deserialize, Serialize};
 use crate::{Error, Result};
 
 /// Which governance posture a benchmark run uses (the governance-differential
-/// axis, D1–D6). `Off` is the ungoverned baseline: same prompt, no scope
-/// enforcement (root escape still blocked — host protection), no gates —
-/// "done" is the model's own unverified claim. It exists only inside the
-/// benchmark (D2); the product ships `light` and `engineering` only.
+/// axis, D1–D6). `Off` is the ungoverned baseline: no scope enforcement (root
+/// escape still blocked — host protection), no gates — "done" is the model's own
+/// unverified claim. It exists only inside the benchmark (D2); the product ships
+/// `light` and `engineering` only.
+///
+/// The prompt carries the same *information* as a governed run (identical
+/// writable list, identical file contents, identical runnable commands) but not
+/// the *obligation* to stay in scope. Holding the obligation constant made M1
+/// measure obedience to an instruction rather than what an unbriefed agent does,
+/// so the containment differential was null by construction — see
+/// `docs/next/tkt-m1-null-is-structural.md` and `context::scope_rules`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GovernanceMode {
