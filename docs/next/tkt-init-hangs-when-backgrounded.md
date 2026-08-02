@@ -1,7 +1,31 @@
 # Ticket: `orvena init` hangs silently when it is not in the foreground
 
-> Status: OPEN · opened 2026-08-02 · found while running the 2026-08-02
-> differential
+> Status: DONE · 2026-08-02 · found while running the 2026-08-02 differential
+
+## Outcome (2026-08-02)
+
+Both proposed changes landed.
+
+`init` gained `--provider` / `--model` / `--base-url` / `--api-key-env` (and a
+plain `--non-interactive`). An explicit `--provider` is treated as an
+instruction: it applies whether or not there is a terminal and never prompts on
+top of itself, so a script never depends on interactivity detection. An unknown
+kind, or `openai_compat` without `--base-url`, is an error rather than a silent
+fall back to the scaffold default.
+
+`can_prompt()` replaced the bare `is_terminal()`: stdin must be a terminal
+**and** this process must be its foreground process group
+(`tcgetpgrp(0) == getpgrp()`). Otherwise `init` prints next steps — which now
+also name the `--provider` form, so the fallback teaches the fix.
+
+`scripts/bench-differential.sh` passes the flags instead of scaffolding and
+`sed`-ing the YAML afterwards; the `base_url` / `api_key_env` greps that guarded
+those substitutions are gone with them.
+
+Pinned by `crates/orvena-cli/tests/init_non_interactive.rs`, including a
+regression test that hands `init` a real pty on stdin with the child in its own
+process group and fails if the process does not exit. It was confirmed to bite:
+against the old `is_terminal()` check it hangs until the 10s deadline.
 
 ## Problem
 

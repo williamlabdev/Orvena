@@ -17,6 +17,9 @@ clap.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
+# Only for asking whether we are the terminal's foreground process group before
+# prompting — see `init::can_prompt`.
+libc = "0.2"
 
 [dev-dependencies]
 # Evidence bundles are read back as raw JSON in tests — deliberately not through

@@ -77,24 +77,18 @@ trap 'rm -rf "$WORK"' EXIT
 cd "$WORK"
 
 echo "== scaffolding a throwaway project in $WORK =="
-"$BIN" init >/dev/null
-sed -i.bak "s/kind: anthropic/kind: ${PROVIDER}/; s#model: claude-opus-4-8#model: ${MODEL}#" \
-  .orvena/orvena.yaml && rm -f .orvena/orvena.yaml.bak
+# `init` writes the provider block itself, so the config is never pattern-matched
+# into shape. It also refuses an unknown kind or a missing base_url up front,
+# which is a better failure than a scratch project that quietly runs the wrong
+# provider. `--provider` never prompts, so this is safe when backgrounded.
+INIT_ARGS=(init --provider "$PROVIDER" --model "$MODEL")
 if [ -n "$BASE_URL" ]; then
-  # The scaffold ships `base_url` commented out; replace that line so the
-  # override lands inside the provider block rather than appended at the end.
-  sed -i.bak "s|^  # base_url:.*|  base_url: ${BASE_URL}|" .orvena/orvena.yaml
-  rm -f .orvena/orvena.yaml.bak
-  grep -q "^  base_url: " .orvena/orvena.yaml \
-    || { echo "error: failed to set base_url in the scratch config" >&2; exit 1; }
+  INIT_ARGS+=(--base-url "$BASE_URL")
 fi
 if [ -n "$API_KEY_ENV" ]; then
-  # Same trick for the commented-out api_key_env line.
-  sed -i.bak "s|^  # api_key_env:.*|  api_key_env: ${API_KEY_ENV}|" .orvena/orvena.yaml
-  rm -f .orvena/orvena.yaml.bak
-  grep -q "^  api_key_env: " .orvena/orvena.yaml \
-    || { echo "error: failed to set api_key_env in the scratch config" >&2; exit 1; }
+  INIT_ARGS+=(--api-key-env "$API_KEY_ENV")
 fi
+"$BIN" "${INIT_ARGS[@]}" >/dev/null
 
 # The key lives in the repo's .env (git-ignored); the scratch project has none.
 [ -f "$REPO/.env" ] && cp "$REPO/.env" .env
