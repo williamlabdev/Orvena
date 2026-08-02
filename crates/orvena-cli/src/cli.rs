@@ -16,7 +16,30 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Scaffold config into ./.orvena and choose a model provider.
-    Init,
+    ///
+    /// With no flags on an interactive terminal this prompts. Passing
+    /// `--provider` sets the provider outright and never prompts, which is what
+    /// scripts and provisioning jobs should use.
+    Init {
+        /// Set the provider without prompting:
+        /// anthropic|openai|openrouter|ollama|openai_compat|offline.
+        #[arg(long = "provider")]
+        provider: Option<String>,
+        /// Model id to write into the config (used with `--provider`).
+        #[arg(long = "model")]
+        model: Option<String>,
+        /// Endpoint override — required for `openai_compat`.
+        #[arg(long = "base-url")]
+        base_url: Option<String>,
+        /// Name of the environment variable holding the API key. Omit for a
+        /// provider that needs no key.
+        #[arg(long = "api-key-env")]
+        api_key_env: Option<String>,
+        /// Scaffold and print the next steps without prompting, even on a
+        /// terminal. Implied whenever we cannot safely read stdin.
+        #[arg(long = "non-interactive")]
+        non_interactive: bool,
+    },
     /// Run a coding task through one bounded loop.
     Run {
         /// The task instruction.
@@ -69,7 +92,12 @@ enum Command {
 pub async fn run() -> i32 {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Init => commands::init::run(),
+        Command::Init { provider, model, base_url, api_key_env, non_interactive } => {
+            commands::init::run(
+                commands::init::ProviderArgs { kind: provider, model, base_url, api_key_env },
+                non_interactive,
+            )
+        }
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
         Command::Bench { provider, tasks, out, repeat, governance, agent } => {
             commands::bench::run(provider, tasks, out, repeat, governance, agent).await

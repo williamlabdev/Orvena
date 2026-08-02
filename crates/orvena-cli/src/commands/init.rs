@@ -1,14 +1,28 @@
 //! `orvena init` — deploy the scaffold and walk the user through choosing a
-//! provider. No provider is assumed silently; in a non-interactive shell we
-//! deploy the scaffold and print the next steps instead of prompting.
+//! provider. No provider is assumed silently; when we cannot prompt we deploy
+//! the scaffold and print the next steps instead.
+//!
+//! "Cannot prompt" is deliberately stricter than "stdin is not a terminal" —
+//! see [`can_prompt`]. Scripts should not depend on that detection at all:
+//! `--provider` (with `--model` / `--base-url` / `--api-key-env`) sets the
+//! provider outright and never prompts.
 
 use super::{config_dir, is_initialized, ENV_EXAMPLE, SCAFFOLD};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use orvena_core::provider::registry;
 use std::io::{IsTerminal, Write};
 use std::path::Path;
 
-pub fn run() -> Result<()> {
+/// Provider settings supplied on the command line, for scripted setup.
+#[derive(Default)]
+pub struct ProviderArgs {
+    pub kind: Option<String>,
+    pub model: Option<String>,
+    pub base_url: Option<String>,
+    pub api_key_env: Option<String>,
+}
+
+pub fn run(args: ProviderArgs, non_interactive: bool) -> Result<()> {
     let dir = config_dir();
     if is_initialized(&dir) {
         println!("Already initialized at {}/ — leaving it untouched.", dir.display());
@@ -18,10 +32,75 @@ pub fn run() -> Result<()> {
         println!("Scaffolded config into {}/", dir.display());
     }
 
-    if std::io::stdin().is_terminal() {
+    // An explicit provider is an instruction, not a preference: honor it whether
+    // or not there is a terminal, and never prompt on top of it.
+    if args.kind.is_some() {
+        return apply_provider_args(&dir, &args);
+    }
+    if !non_interactive && can_prompt() {
         choose_provider(&dir)?;
     } else {
         print_manual_next_steps();
+    }
+    Ok(())
+}
+
+/// Whether this process may actually prompt on stdin.
+///
+/// `stdin().is_terminal()` answers whether stdin *is* a terminal — not whether
+/// we are allowed to read it. A backgrounded process (`&`, `nohup`, a launchd
+/// job that inherited a tty) keeps stdin attached to the terminal, so the naive
+/// check says "interactive" and the first read earns **SIGTTIN**, which stops
+/// the process with no error, no exit, and no output. `orvena init` is the
+/// first command anyone runs and is exactly the kind of thing scripts run
+/// unattended, so it must fall back to printing next steps instead of hanging.
+///
+/// The question that actually matters is whether we are the terminal's
+/// foreground process group.
+fn can_prompt() -> bool {
+    if !std::io::stdin().is_terminal() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: both are argument-free getters with no side effects;
+        // `tcgetpgrp` only reads terminal state for the given fd.
+        let (foreground, ours) = unsafe { (libc::tcgetpgrp(libc::STDIN_FILENO), libc::getpgrp()) };
+        // A -1 means stdin is not our controlling terminal; treat that as
+        // "cannot prompt" rather than guessing.
+        foreground != -1 && foreground == ours
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// Apply a provider chosen on the command line. Unknown kinds and a missing
+/// `base_url` are errors here rather than silent downgrades — the same standard
+/// the config parser holds.
+fn apply_provider_args(dir: &Path, args: &ProviderArgs) -> Result<()> {
+    let kind = args.kind.as_deref().expect("caller checked");
+    let Some(p) = registry::info(kind) else {
+        let known: Vec<&str> = registry::known().iter().map(|p| p.kind).collect();
+        bail!("unknown provider '{kind}' — known kinds: {}", known.join(", "));
+    };
+    let base_url = args.base_url.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    if p.requires_base_url && base_url.is_none() {
+        bail!(
+            "provider '{kind}' needs --base-url (e.g. --base-url http://localhost:8000/v1); \
+             there is no default to fall back to"
+        );
+    }
+    let model = args.model.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let key_env = args.api_key_env.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    write_provider(dir, p.kind, model, base_url, key_env)?;
+    println!("Set provider to '{}'.", p.kind);
+    match key_env.or(p.env_key) {
+        Some(key) => {
+            println!("Next: put your key in .env as  {key}=<your-key>  (never commit .env).")
+        }
+        None => println!("This provider needs no API key."),
     }
     Ok(())
 }
@@ -142,8 +221,11 @@ fn write_provider(
 
 fn print_manual_next_steps() {
     println!(
-        "\nNon-interactive shell — next steps:\n  \
-         1. Edit {}/orvena.yaml and set provider.kind + provider.model.\n  \
+        "\nNot prompting (no terminal to read, or this process is not in its \
+         foreground) — next steps:\n  \
+         1. Set the provider without prompting, e.g.\n     \
+              orvena init --provider ollama --model qwen3:14b\n     \
+            (or edit {}/orvena.yaml and set provider.kind + provider.model).\n  \
          2. Put the matching key in .env (see .env.example).\n  \
          3. Run `orvena doctor` to verify, then `orvena run \"<task>\"`.",
         CONFIG_DIR

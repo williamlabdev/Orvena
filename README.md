@@ -50,6 +50,18 @@ orvena status                                 # provider / roles / gates / budge
 `orvena init` walks you through picking a provider and points you to where the API key
 goes — nothing is assumed silently. `orvena doctor` preflights your setup.
 
+For scripts and provisioning jobs, set the provider outright instead of relying on the
+prompt — this never asks a question, so it is safe to run unattended:
+
+```bash
+orvena init --provider ollama --model qwen3:14b
+orvena init --provider openai_compat --model <id> \
+  --base-url http://localhost:8000/v1 --api-key-env MY_KEY   # key var optional
+```
+
+An unknown `--provider`, or `openai_compat` without `--base-url`, is an error rather
+than a silent fall back to the scaffold default.
+
 ## Model providers
 
 Pick one at `orvena init` — **no default is forced**:

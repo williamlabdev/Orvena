@@ -57,7 +57,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dated section, keeps the 2026-07-11 one unedited as history behind a
   kept-as-history banner, and the README headline moves to the new number.
 
+### Fixed
+
+- **`orvena init` no longer hangs, silently and forever, when it is not in the
+  foreground.** It decided whether to prompt with `stdin().is_terminal()`, which
+  answers whether stdin *is* a terminal — not whether this process may read it.
+  A backgrounded process (`&`, `nohup`, a launchd job that inherited a tty)
+  keeps stdin on the terminal, so the check said "interactive", the picker ran,
+  and the first read earned **SIGTTIN**: state `T`, no error, no exit, no
+  output. The 2026-08-02 differential run sat that way for ten minutes looking
+  like a slow model. `init` is the first command anyone runs and the one most
+  likely to be run unattended, so the failure mode mattered more than the
+  frequency. Now the question asked is the right one — stdin is a terminal
+  **and** we are its foreground process group — and the fallback prints next
+  steps instead of blocking.
+
 ### Added
+
+- **A non-interactive interface for `orvena init`**, so scripts never depend on
+  interactivity detection in the first place: `--provider` (with `--model`,
+  `--base-url`, `--api-key-env`, plus a plain `--non-interactive`). An explicit
+  `--provider` is an instruction rather than a preference — it applies with or
+  without a terminal and never prompts on top of itself. An unknown kind, or
+  `openai_compat` with no `--base-url`, is a **parse-time error, not a silent
+  downgrade** to the scaffold default, matching the standard the provider config
+  already holds. `scripts/bench-differential.sh` now passes these flags instead
+  of scaffolding and then `sed`-ing the YAML into shape.
 
 - **Wire-level proof of `openai_compat`'s authentication contract.** The
   existing tests asserted `api_key.is_none()` on the built struct — a claim
