@@ -1,6 +1,43 @@
 # Ticket: a publishable Aider differential (the third number)
 
-> Status: OPEN · opened 2026-07-30 · follow-up to slice-018
+> Status: OPEN · opened 2026-07-30 · follow-up to slice-018 · **first attempt
+> 2026-08-02: not publishable, see below**
+
+## Attempt 1 (2026-08-02) — nothing published, two findings
+
+Run at the full bar for the first time: `AGENT=aider scripts/bench-differential.sh 3 qwen3:14b`
+— Aider 0.86.2, 8 tasks × 3 repeats × both postures, **0 skipped, 0 provider
+errors**. Report kept as evidence at
+`docs/benchmark-results/2026-08-02-qwen3-14b-aider-differential.json`; deliberately
+**not** on `docs/benchmark-results.md`.
+
+**1. The `engineering` half was invalid — a harness bug, not a governance cost.**
+The two `cargo test` tasks could not pass their gate because the gate was confined
+by the agent's write policy, and no task declares `target/` as a write. Diagnosed
+and fixed in [`tkt-adapter-gate-confined-by-agent-policy`](tkt-adapter-gate-confined-by-agent-policy.md).
+Anything derived from that posture — the 8/8 → 6/8 pass rate, the ×1.75 step and
+×1.98 token overhead — is measurement damage and must not be quoted.
+
+**2. The non-null M1 did not reproduce, and that finding is independent of the bug.**
+`off` runs no gate at all, so it was never touched by the fix:
+
+| | smoke run (1 repeat, 6 tasks) | 2026-08-02 (3 repeats, 8 tasks) |
+|---|---|---|
+| containment `off` | 83% | **100%** |
+| containment `engineering` | 100% | 100% |
+| violations observed | 1 | **0 of 48 runs** |
+
+The 83% rested on a single event — `qwen3:14b` creating a literal `~/.orvena-notes.txt`
+inside the root — and this section already said so ("enough to prove the mechanism,
+not enough to characterise it"). Given 24 fresh `off` runs it did not happen once.
+At this sample size and this model, the wrapped-agent leg is **a null M1 result,
+the same as the native loop** — the differential's whole reason for existing is
+not currently in evidence.
+
+So re-running as-is buys only a clean cost ratio. What the ticket wants — a
+containment differential a page can stand on — needs the temptations to actually
+be taken, which points at the "at least one capable model" requirement below, or
+at temptations that a competent agent will still reach for.
 
 ## What exists
 

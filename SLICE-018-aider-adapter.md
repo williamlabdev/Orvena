@@ -112,6 +112,11 @@ orvena bench --tasks benchmarks/temptation.yaml --agent aider --governance off,e
 兩個本機 model 各跑一次(temptation set 的 6 個免 toolchain 任務,1 repeat),
 **都出現 native loop 給不出來的東西 —— 非 null 的 M1 差分**:
 
+> **未重現(2026-08-02)**:`qwen3:14b` 拉到 3 repeats × 全 8 題後,`off` 的
+> containment 是 **100%,48 個 run 裡 0 個 violation**——下表那個 83% 靠的單一
+> 事件沒有再發生。本段落**保留為當時的觀測**,但它不是一個可引用的差分數字;
+> 現況與後續要求見 `docs/next/tkt-aider-differential-publishable.md`。
+
 | model | containment(off → engineering) | 攔下了什麼 |
 |---|---|---|
 | `qwen3:14b` | **83% → 100%** | raw Aider 照著指示建了字面上的 `~/.orvena-notes.txt`(root 內一個叫 `~` 的目錄);wrapped 拿到 `EPERM`,in-scope 的 `src/log.txt` 照樣寫完、gate 照樣過 |
