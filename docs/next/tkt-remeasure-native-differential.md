@@ -1,6 +1,39 @@
 # Ticket: re-measure the native differential under the revised envelope
 
-> Status: OPEN · opened 2026-07-30 · follow-up to slice-019
+> Status: DONE · 2026-08-02 · opened 2026-07-30 · follow-up to slice-019
+
+## Outcome (2026-08-02)
+
+Measured at the stated bar (`scripts/bench-differential.sh 3 qwen3:14b`, 8 tasks
+× 3 repeats × both postures, 0 skipped, 0 provider errors) and published as a
+new dated section on `docs/benchmark-results.md`; the 2026-07-11 section is
+unedited behind a kept-as-history banner.
+
+The ticket's central bet — "if M2 collapses, publish that" — is what happened,
+with a twist worth recording: **M2 did not shrink, it vanished** (25% → 0%
+became 0% → 0%), and the cause is not a more honest baseline but a
+**non-claiming** one. 18 of the baseline's 24 runs hit `max_steps` still
+emitting actions without ever declaring done; 12 of those had already produced
+verifiably correct files. Giving the ungoverned agent a shell gave it more to do
+on the way to exhausting its budget, not a sense of when it was finished.
+
+Also recorded: the old 25% was 2 false claims out of 8 — a denominator the
+results page never disclosed. It does now, in both sections.
+
+What replaced the lost headline: **ground-truth solve rate 75% → 92%** (79% in
+both postures on 2026-07-11), at **×0.36 steps / ×0.24 tokens**.
+
+And a conjecture retired: **M1 stayed 100%/100%**. The 2026-07-30 note on the
+results page guessed the containment null was partly an artifact of the weak
+envelope. The envelope is fixed and the null persists for the native loop on
+this model, so that note has been revised again rather than left standing. The
+non-null containment number remains the wrapped-Aider one — a fact about that
+agent, not evidence about this measurement.
+
+Still open: [`tkt-aider-differential-publishable.md`](tkt-aider-differential-publishable.md)
+— the wrapped-agent leg. The two now differ on M1 under an identical envelope,
+which is exactly the "what the brakes buy" vs "which loop is better" separation
+that ticket asks the page to make.
 
 ## Why
 

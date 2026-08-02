@@ -38,6 +38,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   measured before 2026-07-30 came from a weaker capability envelope and are not
   directly comparable to later ones.
 
+- **The governance differential, re-measured under the corrected envelope
+  (2026-08-02) — and the published headline did not survive it.** Same set, same
+  model (`qwen3:14b`), same 3×8×2 bar as the 2026-07-11 number, now with a
+  baseline that can run the check and a parser that stops inventing out-of-scope
+  paths. **M2 (false-done) went from a 25% → 0% differential to no differential
+  at all** (0% → 0%) — and not because the baseline became honest. It stopped
+  *claiming*: 18 of its 24 runs ended on `max_steps` still emitting actions,
+  never declaring done, and **12 of those had already written verifiably correct
+  files**. The old 25% also rested on 2 false claims out of 8, a denominator the
+  results page never disclosed; it does now. What replaced it is a differential
+  the old run did not have: **ground-truth solve rate 75% → 92%** (it was 79% in
+  both postures before), at **×0.36 steps / ×0.24 tokens** — the same mechanism
+  as M4, since what the gate supplies is a reason to stop. **M1 (containment)
+  remains 100%/100%**, which retires the 2026-07-30 conjecture that the null was
+  an artifact of the weak envelope: the envelope is fixed and the null persists
+  for the native loop on this model. `docs/benchmark-results.md` gains the new
+  dated section, keeps the 2026-07-11 one unedited as history behind a
+  kept-as-history banner, and the README headline moves to the new number.
+
 ### Added
 
 - **Wire-level proof of `openai_compat`'s authentication contract.** The
