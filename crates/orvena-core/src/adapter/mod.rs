@@ -118,6 +118,22 @@ pub struct AdapterRun<'a> {
     /// Gates that define "done". Empty = the ungoverned baseline: one invocation,
     /// and the agent's own exit status is its unverified claim.
     pub gates: &'a [Gate],
+    /// Confinement for the **gates**, which is deliberately *not* the agent's.
+    ///
+    /// A gate is harness-run measurement, not an agent action: the command comes
+    /// from the task/config, and running it is how "done" is decided. It still
+    /// answers to the host boundary (the sandbox root), but it must not inherit
+    /// the agent's per-task write narrowing — a build-based verify writes build
+    /// artifacts (`cargo test` creates `target/` and `Cargo.lock`) that no task
+    /// would ever declare as a write. Confine the gate with the agent's policy
+    /// and such a verify can *never* pass, which does not read as a broken
+    /// measurement: it reads as governance costing you the task.
+    ///
+    /// The independent oracle already draws the same line from the other side —
+    /// it excludes exactly those build artifacts as harness side effects
+    /// (`benchmark::oracle`), so this is the enforcement half of a distinction
+    /// the judge was always making.
+    pub gate_sandbox: &'a Sandbox,
     /// Maximum agent invocations (each failed gate buys one more).
     pub max_steps: u32,
     /// Wall-clock ceiling per invocation.
@@ -371,7 +387,7 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         let mut needs_human = false;
         let mut evidence = String::new();
         for gate in cfg.gates {
-            let outcome = GateRunner::run(gate, cfg.workdir, sandbox);
+            let outcome = GateRunner::run(gate, cfg.workdir, cfg.gate_sandbox);
             report.gate_outcomes.push(GateRecord {
                 step: step_no,
                 gate: outcome.gate.clone(),

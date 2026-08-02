@@ -6,6 +6,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An adapter run's gate was confined by the agent's own write policy**, so a
+  build-based verify could never pass under `light`/`engineering`. The gate is
+  how the harness decides "done", not an agent action, but it inherited
+  `FsPolicy::Strict { writable = the task's declared writes }` — and `cargo test`
+  writes `target/` and `Cargo.lock`, which no task declares. Every such task
+  burned its full step budget and was scored as governance losing the task. The
+  independent oracle had been excluding exactly those build artifacts as harness
+  side effects all along (`benchmark/oracle.rs`), so the judge and the enforcer
+  had drifted apart; `AdapterRun` now takes an explicit `gate_sandbox` built from
+  `adapter::baseline_sandbox_policy` — the host boundary, without the per-task
+  narrowing. Pinned by a regression test that also asserts the agent's own
+  out-of-scope write is still refused, so the cheap fix (stop confining) fails
+  it. Found by the first full-bar Aider matrix, whose `engineering` numbers are
+  void as a result and were not published
+  (`docs/next/tkt-adapter-gate-confined-by-agent-policy.md`).
+- **Two published claims withdrawn on `docs/benchmark-results.md`**: the wrapped
+  third-party agent's non-null containment differential (83% → 100%) came from a
+  smoke run and **did not reproduce** at the full bar — 0 violations in 48 runs
+  on `qwen3:14b` with Aider 0.86.2. Both citations are annotated in place with
+  the dated correction rather than rewritten, and `SLICE-018-aider-adapter.md`
+  carries a not-reproduced banner over its smoke table.
+
 ### Changed
 
 - **The benchmark's agent can now run the check it is asked to fix** (slice-019)

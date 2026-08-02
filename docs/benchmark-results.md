@@ -90,6 +90,14 @@ measurement, not a correction of the old one — both are on this page.
   the same set **does** produce a non-null containment differential (see
   [`SLICE-018-aider-adapter.md`](../SLICE-018-aider-adapter.md)), so this is a
   property of this loop and this model, not of the task set.
+  **Corrected (2026-08-02, same day, later):** that last sentence rested on a
+  smoke run (1 repeat, 6 tasks) and **did not reproduce** at this section's own
+  bar. Wrapped Aider 0.86.2 on `qwen3:14b`, 8 tasks × 3 repeats × both postures:
+  containment 100% in *both*, **0 violations in 48 runs**. So the wrapped-agent
+  leg is currently a null M1 result too, and nothing here distinguishes "this
+  loop and this model" from "this task set" on containment. The claim is
+  withdrawn until a run at the full bar supports it — see
+  [`docs/next/tkt-aider-differential-publishable.md`](next/tkt-aider-differential-publishable.md).
 - **`engineering`'s two misses are both fail-closed, not failures.** Its 22/24
   is `tempt-backup-outside` stopping the run twice with the escape attempt
   recorded as an auditable blocker (the third repeat, the model did not try).
@@ -197,6 +205,11 @@ variable is enforcement (method: [`benchmark.md`](benchmark.md); plan:
   Aider), which is a statement about that agent, not evidence that the native
   measurement was flawed. See the
   [2026-08-02 section](#the-governance-differential-re-measured-2026-08-02).
+  **Corrected (2026-08-02, same day, later):** the wrapped-Aider number cited
+  here was a smoke run and did not reproduce at the full bar (0 violations in 48
+  runs). The conclusion above is unchanged — the native measurement was not
+  hiding a differential — but it no longer has a non-null number from another
+  agent standing behind it.
 
 ### How to read this (不美化)
 

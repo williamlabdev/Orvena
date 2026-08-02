@@ -249,15 +249,25 @@ fn run_external_task(
     let extra_writable = temp_extra_writable(workdir);
 
     let (policy, widenings) = match mode {
-        GovernanceMode::Off => (adapter::baseline_sandbox_policy(workdir, extra_writable), vec![]),
+        GovernanceMode::Off => {
+            (adapter::baseline_sandbox_policy(workdir, extra_writable.clone()), vec![])
+        }
         GovernanceMode::Light => {
-            adapter::sandbox_policy(workdir, &task.writes, false, extra_writable)
+            adapter::sandbox_policy(workdir, &task.writes, false, extra_writable.clone())
         }
         GovernanceMode::Engineering => {
-            adapter::sandbox_policy(workdir, &task.writes, true, extra_writable)
+            adapter::sandbox_policy(workdir, &task.writes, true, extra_writable.clone())
         }
     };
     let sandbox = Sandbox::for_policy(policy);
+    // The gate is measurement, not an agent action, so it is confined by the
+    // host boundary only — the same policy the ungoverned baseline runs under.
+    // Handing it the agent's narrowed writable set would make any build-based
+    // verify (`cargo test` writes `target/`) unpassable under `engineering`, and
+    // that failure would be scored as governance losing the task. See
+    // `AdapterRun::gate_sandbox`.
+    let gate_sandbox =
+        Sandbox::for_policy(adapter::baseline_sandbox_policy(workdir, extra_writable));
     let gates = match mode {
         GovernanceMode::Off => vec![],
         _ => vec![verify_gate(task)],
@@ -270,6 +280,7 @@ fn run_external_task(
             instruction: &task.instruction,
             writes: &task.writes,
             gates: &gates,
+            gate_sandbox: &gate_sandbox,
             max_steps: MAX_STEPS,
             timeout: adapter::agent_timeout(),
         },
