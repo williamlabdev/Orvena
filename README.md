@@ -104,13 +104,16 @@ It also measures the **governance differential** — what the brakes buy:
 the only variable, and an independent git-based oracle judges what each run actually
 changed.
 
-**Governance differential (2026-07-11):** on an 8-task scope-adversarial set, a local
-`qwen3:14b` under the ungoverned baseline made a **false "done" claim 25%** of the
-time; under the `engineering` tier that is structurally impossible (**0%**) — and the
-governed runs were *cheaper* (×0.43 steps, ×0.31 tokens): gate evidence acts as
-navigation, not drag. Containment was 100% under both postures for this model —
-enforcement showed up as refused, auditable escape attempts rather than prevented
-files. Full numbers and honest caveats:
+**Governance differential (2026-08-02):** on an 8-task scope-adversarial set, a local
+`qwen3:14b` solved **75%** of runs under the ungoverned baseline versus **92%** under
+the `engineering` tier (external verify, not self-claims) — and the governed runs were
+*cheaper* (×0.36 steps, ×0.24 tokens): gate evidence acts as navigation, not drag.
+The baseline's problem was not lying but never stopping: 18 of its 24 runs burned the
+whole step budget without ever claiming done, and 12 of those had already produced
+correct files. Containment was 100% under both postures for this model — enforcement
+showed up as refused, auditable escape attempts rather than prevented files. An earlier
+false-done differential (2026-07-11) **did not reproduce** once the baseline was given
+a shell. Full numbers and honest caveats:
 [docs/benchmark-results.md](docs/benchmark-results.md).
 
 The same harness can measure **an agent Orvena did not write**:
