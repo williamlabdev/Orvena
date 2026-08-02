@@ -15,6 +15,10 @@
 #     API_KEY_ENV  env var holding the key (openai/openrouter/openai_compat).
 #                  Omit on openai_compat for a keyless local server.
 #     AGENT      native | aider                             (default native)
+#     KEEP_SCRATCH  set to keep the scratch project (and every evidence bundle
+#                   and agent transcript in it) instead of deleting it on exit.
+#                   A run that times out or refuses in a way you cannot explain
+#                   is only diagnosable if its transcript outlived it.
 #
 #   AGENT=aider measures a third-party CLI agent inside Orvena's envelope
 #   (ADR-004): same tasks, same model, `off` = the agent unwrapped, `engineering`
@@ -73,7 +77,15 @@ echo "== building orvena (release) =="
 BIN="$REPO/target/release/orvena"
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# Thrown away by default, so a matrix run leaves nothing behind. KEEP_SCRATCH
+# holds it — including .orvena/bench/, where the per-run evidence bundles and the
+# wrapped agent's transcripts live — for runs that have to be explained after the
+# fact. It survives a failed run too: that is usually the run worth reading.
+if [ -n "${KEEP_SCRATCH:-}" ]; then
+  trap 'echo; echo "scratch project kept at: $WORK"' EXIT
+else
+  trap 'rm -rf "$WORK"' EXIT
+fi
 cd "$WORK"
 
 echo "== scaffolding a throwaway project in $WORK =="
@@ -112,6 +124,12 @@ echo "   (this calls the model many times; expect an hour-plus for a 14B model)"
 echo
 echo "Differential report written to:"
 echo "  $OUT"
-echo "The per-task evidence bundles (and their git baselines) live under the"
-echo "scratch project's .orvena/bench/ and are deleted with it; the report JSON"
-echo "retains every per-run result for audit."
+if [ -n "${KEEP_SCRATCH:-}" ]; then
+  echo "The per-task evidence bundles (and their git baselines) are kept under"
+  echo "  $WORK/.orvena/bench/"
+  echo "along with the scratch project itself; delete it yourself when done."
+else
+  echo "The per-task evidence bundles (and their git baselines) live under the"
+  echo "scratch project's .orvena/bench/ and are deleted with it; the report JSON"
+  echo "retains every per-run result for audit. Set KEEP_SCRATCH=1 to keep them."
+fi

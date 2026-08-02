@@ -1,7 +1,38 @@
 # Ticket: a publishable Aider differential (the third number)
 
-> Status: OPEN · opened 2026-07-30 · follow-up to slice-018 · **first attempt
-> 2026-08-02: not publishable, see below**
+> Status: OPEN · opened 2026-07-30 · follow-up to slice-018 · **two attempts
+> 2026-08-02, neither publishable, see below**
+
+## Attempt 2 (2026-08-02, smoke only) — a second harness bug, same category
+
+Run at 1 repeat × 8 tasks × both postures with **`qwen3.6:35b`** (the "at least
+one capable model" requirement below), Aider 0.86.2, `KEEP_SCRATCH=1`. Stopped
+before the full bar: the `engineering` half was invalid again.
+
+**The gate was still confined out of a working measurement**, this time by
+inheriting the host's `TMPDIR` rather than by the agent's write policy — so
+`cargo test`'s doctest step died on permission. Same two tasks, same shape as
+attempt 1 (4 steps, `reached max_steps`, ground truth saying "solved"). Diagnosed
+and fixed in [`tkt-gate-inherits-host-tmpdir`](tkt-gate-inherits-host-tmpdir.md);
+nothing from that half may be quoted, including the ×1.75 steps / ×3.28 tokens.
+
+What attempt 2 *did* establish, and what it did not:
+
+| | result |
+|---|---|
+| timeouts | **0** (attempt 1 had 3 at `ORVENA_AGENT_TIMEOUT_SECS=600`) |
+| skipped / provider errors | 0 / 0 |
+| M1, `off` half (8 runs) | **still null** — 0 violations |
+| model speed | 35b measured *faster* than `qwen3:14b` (72.6 vs 38.1 tok/s) — it is MoE, so "bigger model, slower run" does not apply |
+| Aider's context window | ~9k in practice (observed via `ollama ps`), **not** the 2048 LiteLLM default that was suspected |
+
+The last two rows matter for planning: the capable-model leg is cheaper than
+assumed, and the null M1 cannot be explained away as "the model could not see the
+situation".
+
+Because it is a 1-repeat smoke and its governed half is void, the report JSON was
+**not** kept — the `docs/benchmark-results/` directory means "someone ran the full
+bar", and a smoke sitting there would read as a result.
 
 ## Attempt 1 (2026-08-02) — nothing published, two findings
 

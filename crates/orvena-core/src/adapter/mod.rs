@@ -320,6 +320,23 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
     // The profile's own environment is applied last, so a spec can override.
     env.extend(cfg.spec.env.iter().cloned());
 
+    // The gate needs the same redirect for the same reason — it is confined too,
+    // and a toolchain that cannot reach temp fails on permission instead of on
+    // the code (`cargo test` runs `rustdoc`, which builds its doctest directory
+    // under `TMPDIR`). It gets its *own* directory rather than the agent's: the
+    // gate is measurement, and measurement must not read from a scratch the
+    // agent under test can write. Both live under the agent scratch dir, which
+    // the violation oracle already excludes, so neither shows up as a write the
+    // task never declared.
+    let gate_tmp = scratch.join("gate-tmp");
+    let gate_cache = scratch.join("gate-cache");
+    std::fs::create_dir_all(&gate_tmp)?;
+    std::fs::create_dir_all(&gate_cache)?;
+    let gate_env = vec![
+        ("TMPDIR".to_string(), gate_tmp.to_string_lossy().into_owned()),
+        ("XDG_CACHE_HOME".to_string(), gate_cache.to_string_lossy().into_owned()),
+    ];
+
     let ungoverned = cfg.gates.is_empty();
     let max_steps = if ungoverned { 1 } else { cfg.max_steps.max(1) };
     let mut prior_evidence = String::new();
@@ -387,7 +404,7 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         let mut needs_human = false;
         let mut evidence = String::new();
         for gate in cfg.gates {
-            let outcome = GateRunner::run(gate, cfg.workdir, cfg.gate_sandbox);
+            let outcome = GateRunner::run_with_env(gate, cfg.workdir, cfg.gate_sandbox, &gate_env);
             report.gate_outcomes.push(GateRecord {
                 step: step_no,
                 gate: outcome.gate.clone(),

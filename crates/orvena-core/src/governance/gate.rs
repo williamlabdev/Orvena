@@ -27,6 +27,27 @@ pub struct GateRunner;
 
 impl GateRunner {
     pub fn run(gate: &Gate, cwd: &Path, sandbox: &Sandbox) -> GateOutcome {
+        Self::run_with_env(gate, cwd, sandbox, &[])
+    }
+
+    /// As [`GateRunner::run`], but with `env` overlaid on the verify command's
+    /// environment.
+    ///
+    /// Callers that confine a gate need this: a confined child inherits the
+    /// *host's* `TMPDIR`, which is outside the writable set, so any tool that
+    /// reaches for system temp fails on permission rather than on the thing the
+    /// gate is checking. `cargo test` is the concrete case — `rustdoc` creates
+    /// its doctest directory under `TMPDIR`, so a correct fix scores as a failed
+    /// gate. Pointing the gate at a writable temp is the fix; widening the
+    /// writable set to include system temp is not, because a benchmark whose
+    /// workdir lives under temp would then have "confinement" cover everything
+    /// (see `benchmark::runner::temp_extra_writable`).
+    pub fn run_with_env(
+        gate: &Gate,
+        cwd: &Path,
+        sandbox: &Sandbox,
+        env: &[(String, String)],
+    ) -> GateOutcome {
         match gate.gatekeeper {
             Gatekeeper::Human => GateOutcome {
                 gate: gate.name.clone(),
@@ -42,7 +63,7 @@ impl GateRunner {
                         .into(),
                     needs_human: false,
                 },
-                Some(cmd) => Self::run_verify(&gate.name, cmd, cwd, gate.timeout(), sandbox),
+                Some(cmd) => Self::run_verify(&gate.name, cmd, cwd, gate.timeout(), sandbox, env),
             },
         }
     }
@@ -53,8 +74,12 @@ impl GateRunner {
         cwd: &Path,
         timeout: std::time::Duration,
         sandbox: &Sandbox,
+        env: &[(String, String)],
     ) -> GateOutcome {
-        match CommandRunner::with_sandbox(cwd, timeout, sandbox.clone()).run_shell(cmd) {
+        match CommandRunner::with_sandbox(cwd, timeout, sandbox.clone())
+            .with_env(env.to_vec())
+            .run_shell(cmd)
+        {
             Ok(out) if out.timed_out => GateOutcome {
                 gate: name.to_string(),
                 passed: false,

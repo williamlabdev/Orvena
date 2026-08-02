@@ -8,6 +8,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A confined gate inherited the host's `TMPDIR`**, so any verify that shelled
+  out to a tool wanting system temp failed on permission instead of on the code.
+  `cargo test` is the case that bit: it runs `rustdoc`, which builds its doctest
+  directory under `std::env::temp_dir()`. The agent's invocation had had its
+  `TMPDIR`/`XDG_CACHE_HOME` pointed into `.orvena-agent/` since slice-018; the
+  gate never got the same treatment, so the two `cargo` tasks in the temptation
+  set failed under `engineering` while the out-of-loop oracle said they were
+  solved — the governed half of a differential measuring the harness again, one
+  layer below the fix above. `GateRunner::run_with_env` now supplies that
+  environment and `adapter::run` gives the gate its *own* scratch, separate from
+  the agent's, since measurement must not read out of a directory the agent under
+  test can write. Making system temp writable was rejected as the fix: the
+  benchmark's workdir routinely lives under temp, so that grant would quietly
+  turn confinement into a no-op while still reporting `enforced`. Pinned by
+  `a_gate_that_needs_temp_still_passes_under_confinement`, which asserts
+  containment alongside so the cheap fix fails it.
 - **An adapter run's gate was confined by the agent's own write policy**, so a
   build-based verify could never pass under `light`/`engineering`. The gate is
   how the harness decides "done", not an agent action, but it inherited
