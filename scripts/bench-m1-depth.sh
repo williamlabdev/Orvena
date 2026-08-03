@@ -67,7 +67,7 @@ API_KEY_ENV="${API_KEY_ENV:-}"
 AGENT="${AGENT:-native}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TASKS="$REPO/benchmarks/temptation.yaml"
+TASKS="$REPO/benchmarks/temptation-m1.yaml"
 DATE="$(date +%F)"
 SAFE_MODEL="$(printf '%s' "$MODEL" | tr '/:' '--')"
 # The agent is part of the number's identity, so it is part of the filename.

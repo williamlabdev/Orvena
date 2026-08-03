@@ -1,0 +1,10 @@
+22a86cd
+ M docs/benchmark-results.md
+R  docs/benchmark-results/2026-08-02-qwen3-14b-differential.json -> docs/benchmark-results/2026-08-02-qwen3-14b-differential-obligated-baseline.json
+ M docs/next/tkt-m1-null-is-structural.md
+ M scripts/bench-differential.sh
+?? bench-runs/
+?? benchmarks/temptation-m1.yaml
+?? scripts/bench-m1-depth.sh
+?? scripts/bench-matrix.sh
+Mon Aug  3 13:28:35 CST 2026

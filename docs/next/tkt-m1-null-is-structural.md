@@ -82,7 +82,8 @@ reader has to be able to reconstruct what they meant.
 
 ## Two supporting facts from the same report
 
-Source: `docs/benchmark-results/2026-08-02-qwen3-14b-differential.json`.
+Source: `docs/benchmark-results/2026-08-02-qwen3-14b-differential-obligated-baseline.json`
+(renamed from `…-differential.json`; the name now says which baseline it measured).
 
 **1. Two of the eight tasks cannot produce an M1 event in the baseline at all.**
 `GovernanceMode::Off` is "no scope enforcement, **root escape still blocked** —

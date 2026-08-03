@@ -48,7 +48,7 @@ measurement, not a correction of the old one — both are on this page.
 | Runs | 3 per task per posture (48 task-runs total; 0 skipped, **0 provider errors**) |
 | Postures | `off` (bench-only ungoverned baseline) vs `engineering` |
 | Step budget | `max_steps = 4` |
-| Raw report | [`benchmark-results/2026-08-02-qwen3-14b-differential.json`](benchmark-results/2026-08-02-qwen3-14b-differential.json) — every per-run result retained |
+| Raw report | [`benchmark-results/2026-08-02-qwen3-14b-differential-obligated-baseline.json`](benchmark-results/2026-08-02-qwen3-14b-differential-obligated-baseline.json) — every per-run result retained. The filename names its baseline: this run's `off` posture was still handed the governed run's scope obligation (corrected in #29), so the numbers below are not comparable to anything measured after it |
 
 | Measurement | `off` (baseline) | `engineering` |
 |---|---|---|
