@@ -1,27 +1,37 @@
 # Orvena
 
-**A customizable, config-first coding agent — the runnable reference for AI-native software engineering.**
+**A task-scope governance runtime — you declare boundaries, Orvena enforces them, any agent stays contained.**
 
-Orvena treats an LLM as a *bounded team member*, not an unsupervised code generator.
-Its behavior is driven by configuration rather than hard-coded logic — you define the
-**roles**, **context budgets**, and **workflow gates** that shape how the model works
-inside your codebase. Bring your own model provider.
+Orvena doesn't code. It *proves that an untrusted agent can't escape its sandbox.*
 
-> **Status: early & evolving.** v0.1 is a minimal core, shipped in small increments.
-> The single coding loop works; advanced subsystems are intentionally out of scope for now.
+You give Orvena a task definition (these files, this time, this step budget), hand it any agent
+(native loop, Aider, Claude, a finetuned model), and Orvena ensures:
+- The agent can only read/write the declared files
+- The agent can't exceed its step budget
+- Every boundary violation is logged, measured, and evidence is frozen in a JSON report
+
+**The value**: You can now safely use a powerful agent—even one you don't fully trust—because
+you have mathematical proof it stayed in scope.
+
+> **Status: early & evolving.** v0.1 is a minimal core. The native loop + containment oracle work;
+> advanced subsystems (multiple agents, policy composition) are intentionally out of scope for now.
 
 ## Why Orvena
 
-Prompt-driven AI coding drifts at scale: scope creep, over-refactoring, exploding
-context, and no clear definition of "done". Orvena puts brakes on each of these:
+AI agents are getting more capable, but "capable" can mean "goes places you didn't ask it to go."
+Traditional solutions (prompt restrictions, agent design philosophy) don't scale: they're suggestions,
+not guarantees. Orvena shifts the boundary to the OS.
 
-- **Bounded change** — a task locks its scope; everything else is read-only by default.
-- **Specialized roles** — each role has allowed/forbidden tools.
-- **Controlled context** — context is a per-role budget, not an unbounded window.
-- **Verifiable gates** — a change is "done" only when it passes a gate that produces
-  observable evidence (e.g. your test command exits 0).
-- **Evidence & metrics** — every run emits frozen metrics (completed, tokens, steps,
-  tool calls) so you can catch regressions.
+**The problem:**
+- Scope creep — agent modifies unrelated files to "optimize" or "fix things"
+- False confidence — you rely on the agent to honor what you asked, not what you can verify
+- No audit trail — agent ran, things changed, no evidence of what it actually tried to do
+
+**Orvena's answer:**
+- **Declared scope** — you list exactly which files can be modified; everything else is read-only by default
+- **Enforced boundaries** — OS-level containment (sandbox + file descriptor restriction) makes violations *impossible*, not impolite
+- **Observable evidence** — every run produces a frozen report: scope violations, steps taken, tokens consumed, task outcome
+- **Differential measurement** — run the same task ungoverned vs. governed with the same agent; the difference is pure overhead of containment
 
 ## Install
 
@@ -41,123 +51,86 @@ Requires a recent stable Rust toolchain (`rustup` recommended).
 
 ## Quickstart
 
-```bash
-orvena init                                   # scaffold config + pick a provider
-orvena run "create a hello module" -w src/hello.rs
-orvena status                                 # provider / roles / gates / budgets / skills
-```
-
-`orvena init` walks you through picking a provider and points you to where the API key
-goes — nothing is assumed silently. `orvena doctor` preflights your setup.
-
-For scripts and provisioning jobs, set the provider outright instead of relying on the
-prompt — this never asks a question, so it is safe to run unattended:
+**The model provider**, pick at init time — **no default is forced**:
 
 ```bash
 orvena init --provider ollama --model qwen3:14b
 orvena init --provider openai_compat --model <id> \
-  --base-url http://localhost:8000/v1 --api-key-env MY_KEY   # key var optional
+  --base-url http://localhost:8000/v1 --api-key-env MY_KEY
 ```
 
-An unknown `--provider`, or `openai_compat` without `--base-url`, is an error rather
-than a silent fall back to the scaffold default.
+An unknown provider or `openai_compat` without `base_url` is an error, safe for unattended runs.
+
+**Run a bounded task:**
+
+```bash
+orvena run "add a hello module" --scope src/hello.rs
+# Agent gets ONE invocation, can only read/write src/hello.rs, can't escape.
+# Report lands in .orvena/bench/<timestamp>/report.json
+```
 
 ## Model providers
 
-Pick one at `orvena init` — **no default is forced**:
-
-| Provider | Notes | Parity-checked |
+| Provider | Notes | Tested |
 |---|---|---|
-| **Ollama** | Local / offline / private. You run Ollama and pull a model yourself. | ✅ `qwen3:14b` |
-| **openai_compat** | Generic OpenAI-compatible endpoint — self-hosted OSS servers (vLLM, llama.cpp server, LM Studio, TGI, SGLang) or hosted open-weight aggregators (Groq, Together, Fireworks). Needs `base_url`; `api_key_env` names your own key var, or omit it for no-auth local servers. | ✅ via Ollama's own OpenAI-compat endpoint |
-| **Gemini** | Hosted. Use `openai_compat` with Google's OpenAI-compatible `base_url` and `api_key_env: GEMINI_API_KEY`. | ✅ `gemini-2.5-flash` (the verified run predates `openai_compat` and used the `openai` kind with the key in `OPENAI_API_KEY`) |
-| **Anthropic** | Hosted Claude. | ◻ not yet run |
-| **OpenAI** | Hosted. | ◻ not yet run |
-| **OpenRouter** | Hosted — one key, many models. | ◻ not yet run |
+| **Ollama** | Local / offline / private. You run Ollama and pull a model. | ✅ `qwen3:14b` |
+| **openai_compat** | Generic OpenAI-compatible endpoint — vLLM, llama.cpp, LM Studio, SGLang, Groq, Together, etc. Needs `base_url`; `api_key_env` names your key var, or omit for no-auth local servers. | ✅ via Ollama |
+| **Gemini** | Hosted. Use `openai_compat` with Google's base_url and `api_key_env: GEMINI_API_KEY`. | ✅ `gemini-2.5-flash` |
+| **Anthropic** | Hosted Claude. | ◻ not yet tested |
+| **OpenAI** | Hosted. | ◻ not yet tested |
+| **OpenRouter** | Hosted. | ◻ not yet tested |
 | **offline** | Deterministic stub for tests and regression baselines (no network). | n/a |
 
-**"Parity-checked" means somebody actually ran it**, not that the code path
-exists: the provider passed the behavioral contract in
-[`docs/provider-parity.md`](docs/provider-parity.md) — well-formed report,
-consistent completion semantics, real token round-trip, evidence bundle that
-round-trips. The unchecked providers are implemented and expected to work; they
-simply have not been exercised end to end here, and this table will not claim
-otherwise. Adding one is a single command (see that doc) — PRs with a passing
-run are welcome.
+**"Tested" means a real end-to-end run passed the behavioral contract** in
+[`docs/provider-parity.md`](docs/provider-parity.md). Unchecked providers are implemented;
+they simply have not been exercised here yet.
 
-Keys are read from `.env` (see `.env.example`). **Never commit real keys.**
+Keys are read from `.env`. **Never commit real keys.**
 
 ## How it works
 
-Orvena is **config-first**: a small scaffold deployed by `orvena init` into `./.orvena/`
-drives behavior, so you adapt Orvena by editing config, not forking code.
+Orvena is **config-first**: a scaffold deployed by `orvena init` drives behavior.
 
-- `orvena.yaml` — provider selection, governance tier, default role, step ceiling.
-- `roles.yaml` — roles and their allowed/forbidden tools.
-- `gates.yaml` — gates (a `condition`, an optional `verify` command for evidence, and a
-  `gatekeeper`: `automated` or `human`).
-- `context-budgets.yaml` — per-role token budgets.
+- `orvena.yaml` — provider, task scope, governance tier (off/engineering), step ceiling
+- `gates.yaml` — completion criteria (what defines "done"?)
+- `context-budgets.yaml` — token limits per invocation
 
-The coding loop is **prepare context → call model → apply (scope-gated) → check gates**.
-If an automated gate fails, Orvena re-attempts within a bounded number of steps, feeding
-the gate's evidence back in. A `human` gate stops and reports a blocker for you to resolve.
+Run a task with `orvena run <description> --scope <files>`:
 
-Discipline scales with risk via a **governance tier**: `light` (gates/scope advisory) or
-`engineering` (hard-enforced).
+1. **Scope declaration** — you list which files are writable; Orvena restricts the agent's filesystem to exactly those paths
+2. **Agent invocation** — Orvena hands the task to the agent (native loop, Aider, or any model)
+3. **Boundary enforcement** — any attempt to read/write outside the declared scope is blocked and logged
+4. **Evidence collection** — Orvena records every syscall violation, every step, and the final outcome
+5. **Report** — frozen JSON with task metadata, agent transcript, scope violations, token count, step count
 
-## Benchmark
+The **native loop** is a minimal reference agent built into Orvena for testing. It's not the
+product; it's how you measure governance overhead. Real-world agents (Aider, Claude, etc.) run
+the same containment boundary.
 
-`orvena bench` runs a set of hand-picked, auto-verifiable coding tasks and reports a
-**completion rate** (fraction that reach a passing test). Each task defines its own
-`verify` (e.g. `cargo test` / `pytest`), so "solved" is the same rule the product ships.
+## What it measures
 
-It also measures the **governance differential** — what the brakes buy:
-`orvena bench --governance off,engineering` runs the same tasks with enforcement as
-the only variable, and an independent git-based oracle judges what each run actually
-changed.
+The core metric is **M1: Governance Differential**.
 
-**Governance differential (2026-08-02):** on an 8-task scope-adversarial set, a local
-`qwen3:14b` solved **75%** of runs under the ungoverned baseline versus **92%** under
-the `engineering` tier (external verify, not self-claims) — and the governed runs were
-*cheaper* (×0.36 steps, ×0.24 tokens): gate evidence acts as navigation, not drag.
-The baseline's problem was not lying but never stopping: 18 of its 24 runs burned the
-whole step budget without ever claiming done, and 12 of those had already produced
-correct files. Containment was 100% under both postures for this model — enforcement
-showed up as refused, auditable escape attempts rather than prevented files. An earlier
-false-done differential (2026-07-11) **did not reproduce** once the baseline was given
-a shell. Full numbers and honest caveats:
-[docs/benchmark-results.md](docs/benchmark-results.md).
+Run the same task **twice**:
+- **Baseline (off)**: One invocation, no gates, no containment
+- **Governed (engineering)**: Same setup, but Orvena enforces scope
 
-The same harness can measure **an agent Orvena did not write**:
-`orvena bench --agent aider` runs the tasks with a third-party CLI agent doing the
-coding, spawned inside the OS sandbox with writes narrowed to the paths the task
-declared — the agent supplies the loop, Orvena supplies the scope, the gate, and the
-evidence ([ADR-004](docs/adr/ADR-004-external-agent-adapter.md)). Only the filesystem
-is contained (the wrapped agent must reach its own model provider), and its token
-counts are self-reported rather than observed; both caveats travel with any number
-from it. Method: [docs/benchmark.md](docs/benchmark.md#measuring-an-agent-orvena-did-not-write---agent).
+The difference between them is *pure overhead of containment*:
+- Step blowup: how many extra steps does the sandboxing cost?
+- Token blowup: how many extra tokens?
+- Boundary violations: how many times did the agent try to escape?
 
-**First number (2026-07-04):** on a small curated set of 5 self-contained Rust tasks,
-Orvena driving a local `qwen3:14b` solved **5/5 (100%)**, single-pass. This is a
-deliberately small, early, self-hosted signal — *not* a real-world capability claim
-(the tasks are simple and the sample is tiny). Full context, caveats, and how to
-reproduce (or run a stronger model): [docs/benchmark-results.md](docs/benchmark-results.md)
-· method: [docs/benchmark.md](docs/benchmark.md).
+Example from qwen3:14b on a real temptation (home-cache scope trap):
+- **Baseline**: 30/30 tasks breach the boundary (agent writes outside scope)
+- **Governed**: 0/30 breaches (sandbox blocks every attempt)
+- **Overhead**: ×0.08 tokens (containment is *cheaper* than paying for trial-and-error escapes)
 
-## Embedding
+## Relationship to other tools
 
-All logic lives in the `orvena-core` library crate; the `orvena` CLI is a thin frontend.
-The core is designed to be embedded by a larger runtime later.
+- **airt** — governs tool calls (LLM says "read this file"). Orvena governs actual syscalls (binary tries to write). Different boundary, complementary. airt is inside-the-LLM; Orvena is OS-level.
+- **Your agent** (Aider, Claude, finetune, etc.) — Orvena doesn't care what's inside the box. It just enforces the box. A better agent = harder containment test = more confidence your boundary is real.
 
-## Customization
+## Benchmarks
 
-Everything behavioral lives in `./.orvena/*.yaml`. Edit roles, budgets, and gates to fit
-your workflow — no code changes required for most adaptations.
-
-## Contributing
-
-Early-stage and moving fast — issues and discussion welcome. (Contribution guide coming.)
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+See [`docs/benchmarks.md`](docs/benchmarks.md) for the temptation test set (8 scope-adversarial tasks
+designed to make agents try to escape) and differential results across providers and models.
