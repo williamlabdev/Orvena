@@ -1,5 +1,21 @@
 # Benchmark results
 
+> **Third number (the capability ruler, first ladder) — 2026-08-04/05:** on
+> the 8-task **capability set** (the smartness ruler, slice-022) driving
+> `qwen3:14b`, three agent envelopes measured back to back:
+> **native 0.1.0: 75%** (the baseline — perfectly bimodal, both failing
+> tasks *guessed* values instead of reading them) → **native 0.2.0
+> (grounded loop, slice-023): 88%**, cheaper (3.8 → 3.0 steps) → native
+> 0.3.0 (a search-to-locate prompt rule): **83%, rejected and reverted** —
+> its target task did not move and an unrelated task regressed. The shipped
+> agent is 0.2.0. One ruler, one variable per rung, and the ruler killed a
+> bad investment before it was committed — which is what it is for.
+> **Cross-model check (2026-08-05):** `qwen3.6:35b` × native 0.2.0 solves the
+> set **24/24 (100%)** at 2.3 steps — including the task `qwen3:14b` failed
+> 0/9 across three envelopes. That failure was a model boundary, not a loop
+> defect, and the ruler is saturated for the 35b class: measuring further
+> loop investments there needs a harder set version.
+>
 > **Second number (the governance differential), re-measured — 2026-08-02:**
 > on the 8-task **temptation set**, same model (`qwen3:14b`), same prompts, 3
 > runs per task per posture — ungoverned baseline vs the `engineering` tier:
@@ -30,6 +46,133 @@ this".
 > [2026-08-02 section](#the-governance-differential-re-measured-2026-08-02)
 > immediately below, and it moved the numbers enough that the old headline no
 > longer holds.
+
+## The capability first run (2026-08-04)
+
+The first measurement on the **capability set** — the ruler that tracks
+*competence* (can the loop do the work), deliberately disjoint from the
+temptation set, which tracks *compliance*. No escape probes, no differential
+matrix: governance is not the variable here, the native loop's version is.
+This run establishes the post-slice-021 baseline that future loop investments
+are compared against.
+
+| | |
+|---|---|
+| Date | 2026-08-04 |
+| Provider / model | `ollama` / `qwen3:14b` (local) |
+| Task set | [`benchmarks/capability.yaml`](../benchmarks/capability.yaml) — 8 tasks: preservation, anchored edit, convergence, localization |
+| Runs | 3 per task (24 task-runs; 0 skipped, 0 provider errors) |
+| Posture | `engineering` only (per the ruler protocol) |
+| Comparability key | set `benchmarks/capability.yaml` @ `1d30697` · `max_steps = 8` · `qwen3:14b` · `native 0.1.0` — all four recorded in the bundles; numbers are quotable only against an identical key |
+| Raw report | `bench-runs/20260804-capability-qwen3-14b.json` — every per-run result retained |
+
+| Measurement | Value |
+|---|---|
+| **Ground-truth solve rate** (verify-gate as oracle, all 24 runs) | **75%** (18/24); solved ≥once: 6/8 tasks |
+| **M4 — cost** (mean per task-run) | 3.8 steps / 5,761 tok (solved runs alone: 2.3 steps) |
+| **Budget exhaustion** (`exit = budget_exhausted`) | 25% (6/24) |
+| **M2 — false-done** (of claims) | 0% (structurally near-0 under `engineering`; reported, not claimed) |
+| M1 — containment / M3 — evidence validity | 100% / 100% (reported for completeness — this set contains no temptations, so M1 carries no information here) |
+
+### What the runs actually show
+
+- **The outcome is perfectly bimodal.** Every solved task was solved 3/3, and
+  the solved runs were fast (2.3 steps mean — under a third of the budget).
+  Both unsolved tasks ended `budget_exhausted` at 8 steps in all three runs.
+  There were no lucky solves and no near-misses: the six exhausted runs *are*
+  the six failures.
+- **What failed is informative.** `cap-locate-broken-ref` (the symptom names
+  no file; the loop must find which writable doc holds a reference to a
+  renamed file) and `cap-audit-services` (reconcile `services.list` against a
+  registry when the check reveals one defect per run) went 0/3. The solved set
+  includes the easier localization task (`cap-locate-retries`, three candidate
+  files) and both convergence tasks. On this model, 8 steps comfortably covers
+  preservation, anchored edits, and short convergence; exhaustion concentrates
+  where search and multi-round feedback must chain.
+- **The ruler has headroom in both directions.** 75% is neither floor nor
+  ceiling: improvements to the loop have room to show up, and none of the
+  tasks needs re-tuning. Whether the two failures are a budget problem or a
+  productivity problem (steps spent without narrowing) is readable from the
+  kept evidence bundles — that analysis is future work, not this page's claim.
+
+### The ladder: two investments measured, one shipped (2026-08-04/05)
+
+The first run's autopsy (final-file diffs from the kept evidence bundles)
+showed both 0/3 tasks dying the same death: the loop **guesses values instead
+of reading them**. It located the broken reference correctly but pointed it at
+a guessed target; it converged on the registry audit but invented ports (8201,
+8080) for a service whose real port sat in `tests/registry.txt` — a file the
+check's own feedback said to see. Two prompt investments followed, one rung
+per variable, same comparability key except the agent version:
+
+| Measurement | native 0.1.0 | native 0.2.0 (slice-023) | native 0.3.0 (rejected) |
+|---|---|---|---|
+| **Ground-truth solve rate** | 75% (18/24) | **88%** (21/24) | 83% (20/24) |
+| **M4 — cost** (mean/task-run) | 3.8 steps / 5,761 tok | **3.0 / 5,728** | 3.4 / 7,079 |
+| **Budget exhaustion** | 25% | **12.5%** | 16.7% |
+| `cap-audit-services` | 0/3 | **3/3** | 3/3 |
+| `cap-locate-broken-ref` | 0/3 | 0/3 | 0/3 |
+| `cap-converge-deploy` | 3/3 | 3/3 | **2/3 (regression)** |
+| Raw report | `…-capability-qwen3-14b.json` | `…-native020.json` | `…-native030.json` |
+
+- **0.2.0 — grounded loop (slice-023, shipped).** Two rules joined the system
+  prompt (identically in both postures, parity-pinned): never invent a value
+  your change depends on — READ/SEARCH it first; and when evidence names an
+  unread file, read it before the next attempt. The registry audit flipped
+  0/3 → 3/3, and the whole set got *cheaper* — the extra READ pays for the
+  guessing rounds it replaces.
+- **0.3.0 — search-to-locate (rejected, reverted).** A third rule told the
+  loop to SEARCH for content whose location is unknown. The target task
+  (`cap-locate-broken-ref`) did not move — all three runs still guessed, one
+  fabricated an "Installation steps" section inside the writable file to
+  satisfy the check — and `cap-converge-deploy` regressed with degenerate
+  edits (+24% tokens). n=3 leaves noise room on the aggregate, but a target
+  at 0/3 with zero SEARCH calls is a clean null: the rule bought nothing and
+  charged for it. Reverted before commit; the shipped agent is 0.2.0. Lesson
+  recorded in `SLICE-024-search-to-locate.md`: on this model, prompt rules
+  can discipline the use of tools the evidence points at, but do not induce
+  a tool the model never reaches for — that lever is either driver feedback
+  or a stronger model, and deciding which is the next measurement.
+
+### Cross-model check: the 14B wall is the model's, not the loop's (2026-08-05)
+
+The rejected slice-024 left a fork: `cap-locate-broken-ref`'s persistent 0/3
+is either a loop defect (fixable by driver feedback) or a model boundary
+(fixable by a stronger model). One run decides it — same set, same
+`max_steps = 8`, same `native 0.2.0`, only the model axis moves:
+
+| Measurement | `qwen3:14b` × 0.2.0 | `qwen3.6:35b` × 0.2.0 |
+|---|---|---|
+| **Ground-truth solve rate** | 88% (21/24) | **100%** (24/24) |
+| **M4 — cost** (mean/task-run) | 3.0 steps / 5,728 tok | **2.3 / 4,595** |
+| **Budget exhaustion** | 12.5% | **0%** |
+| `cap-locate-broken-ref` | 0/3 | **3/3** (exact minimal edit → `docs/install.md`, exits `gates_passed` at 5/2/7 steps) |
+| Raw report | `…-capability-qwen3-14b-native020.json` | [`20260805-capability-qwen3.6-35b.json`](../bench-runs/20260805-capability-qwen3.6-35b.json) |
+
+- **Verdict on the fork: model boundary.** The task `qwen3:14b` failed 0/9
+  across three prompt envelopes, `qwen3.6:35b` solves 3/3 with the exact
+  one-line fix, first try, under the identical loop. A driver-side
+  search-nudge (the slice-024 postmortem's other candidate) would be
+  compensating for a model that cannot act on the strategy — deferred, per
+  the decision rule set before this run.
+- **The ruler is saturated for the 35b class.** 100% at 2.3 steps means this
+  set can no longer measure loop investments on 35b-class models; per the
+  ruler protocol that calls for a harder set *version* (the set itself is
+  never re-tuned), which is a scoping decision, not a measurement.
+- **Cross-model numbers are never pooled.** The 88% and the 100% share every
+  comparability-key element except the model; they sit side by side as two
+  facts about two envelopes, not an average.
+
+### Reproduce
+
+```sh
+# needs a local Ollama serving qwen3:14b. Run from a scratch project
+# (`orvena init --provider ollama --model qwen3:14b`) so the repo's own
+# .orvena config — a different provider/model/max_steps — is not inherited:
+orvena bench --tasks benchmarks/capability.yaml --governance engineering --repeat 3 \
+  --out bench-runs/$(date +%Y%m%d)-capability-qwen3-14b.json
+# the cross-model leg swaps the init: --model qwen3.6:35b
+```
 
 ## The governance differential, re-measured (2026-08-02)
 

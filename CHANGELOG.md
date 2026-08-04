@@ -8,6 +8,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Grounded loop — read the evidence before you write** (slice-023,
+  `crates/orvena-core/src/agent/context.rs`) — the capability set's first run
+  (native 0.1.0, `qwen3:14b`: verified 75%, perfectly bimodal) showed both
+  0/3 tasks dying the same death: the loop *guesses* values instead of reading
+  them. It located the broken reference correctly but pointed it at a guessed
+  target without reading the candidate docs; it converged on the registry
+  audit but invented ports (8201, 8080) for a service whose real port sat in
+  `tests/registry.txt` — a file the check's own feedback told it to see. Two
+  grounding rules join the system prompt: never invent a value your change
+  depends on (READ/SEARCH it first), and when evidence names an unread file,
+  read it before attempting another change. The discipline is strategy
+  (competence), not obligation — like READ/EDIT it appears identically in
+  both postures, pinned by a parity test, so the temptation differential is
+  not measured against a baseline that guesses more than the governed run.
+  Prompt changes are loop behavior, so the workspace version bumps to 0.2.0:
+  `native 0.2.0` is a new comparability envelope, and 0.1.0 numbers are only
+  quotable against 0.1.0. Driver-side mechanical nudges stay out deliberately
+  — one variable per measurement; they become slice-024 only if this one
+  fails to move the ruler.
+
 - **Capability task set — the smartness ruler** (slice-022,
   `benchmarks/capability.yaml`) — the temptation set measures compliance and
   the 2026-07-04 realworld set hit its ceiling (5/5 solved in 1 step), so no
