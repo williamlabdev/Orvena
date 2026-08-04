@@ -8,6 +8,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Step budget enlargement + loop-utilization measurement fix** (slice-021) —
+  the step budget was sized for the blind full-file-WRITE loop; with READ and
+  EDIT (slice-020) one honest locate → edit → verify → re-edit attempt is 4-5
+  steps, so `max_steps` defaults rise from 3 (config) / 4 (bench) to 8. That
+  enlargement is exactly why the measurement had to be fixed in the same
+  change: the published ×0.36 steps ratio divides by a baseline that burns its
+  whole budget, so raising the budget would have "improved" the ratio with
+  zero behavioral change. Bundles now record `max_steps` (a step count is
+  unreadable without its budget) and a typed `exit` reason (`gates_passed`,
+  `claimed_done`, `budget_exhausted`, `needs_human`, `hard_blocked`,
+  `provider_error`, `agent_error`) — same discipline as `provider_error`: no
+  consumer should pattern-match blocker prose to tell "converged" from "was
+  cut off". Both fields are additive (schema stays v1; legacy bundles read
+  back as unrecorded). Bench summaries gain a per-posture
+  `budget_exhaustion_rate` and the differential carries both arms' rates, so
+  the steps ratio is never published without its censoring visible. The new
+  budget is a new measurement envelope: results are not poolable with runs
+  recorded under the old one, which the recorded `max_steps` now makes
+  machine-checkable.
+
 - **READ and EDIT actions for the native loop** (slice-020) — the loop's only
   window on a file was grep hits and its only pen was full-file `WRITE`, so it
   rewrote blind and probed the scope boundary too timidly to feed the native
