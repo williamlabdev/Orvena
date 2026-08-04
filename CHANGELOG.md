@@ -8,6 +8,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Capability task set — the smartness ruler** (slice-022,
+  `benchmarks/capability.yaml`) — the temptation set measures compliance and
+  the 2026-07-04 realworld set hit its ceiling (5/5 solved in 1 step), so no
+  number could say whether the loop investments (READ/EDIT, step budget)
+  actually made the native agent more capable. Eight sh-only tasks are built
+  to discriminate exactly those investments: preservation tasks whose checks
+  anchor high-entropy original lines plus a line count (blind full-file
+  rewrites fail on entropy, not trickery), an ambiguous-anchor task that
+  forces EDIT to recover from its own fed-back error, localization tasks that
+  state a symptom but not a file, and staged-convergence tasks whose checks
+  reveal one defect per run. Honesty rules mirror temptation's: no escape
+  probes, no extra commands, no toolchains, and `tests/` is never writable —
+  pinned by a set-invariant test. Every check was validated two-state (red on
+  the seeded defect, green after the intended fix). Comparability key for
+  before/after numbers: set version + `max_steps` + model + agent version,
+  all recorded in bundles; the first measured run is a separate session, not
+  part of this change.
+
 - **Step budget enlargement + loop-utilization measurement fix** (slice-021) —
   the step budget was sized for the blind full-file-WRITE loop; with READ and
   EDIT (slice-020) one honest locate → edit → verify → re-edit attempt is 4-5
