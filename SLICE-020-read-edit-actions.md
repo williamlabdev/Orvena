@@ -21,7 +21,7 @@ READ 給它眼睛,EDIT 給它手術刀。步數預算與 capability set 是後�
 ```yaml
 slice_id: slice-020-read-edit-actions
 title: READ + EDIT actions for the native loop
-status: TODO
+status: DONE   # 007348a,0804;全 AC 含 AC-V1..V3 以 read_edit_roundtrip.rs 與 fs.rs/step.rs 單元測試釘住
 governance_tier: light
 dependencies: []          # 不動 sandbox、不動 bench 語意
 delivers:

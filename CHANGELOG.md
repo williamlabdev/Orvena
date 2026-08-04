@@ -6,6 +6,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **READ and EDIT actions for the native loop** (slice-020) — the loop's only
+  window on a file was grep hits and its only pen was full-file `WRITE`, so it
+  rewrote blind and probed the scope boundary too timidly to feed the native
+  leg's `false_blocks` measurement. `<<<READ path>>>` feeds file content back
+  as (visibly capped) evidence; `<<<EDIT path>>>` is an anchored replace whose
+  old/new halves split on a `===` line and whose anchor must match exactly
+  once — failures are fed back like an invalid regex so the model can
+  re-anchor within the bounded loop. EDIT shares `WRITE`'s full authorization
+  path (role gate, scope decision, `scope_refusals`), and its errors never
+  echo file content, so a role with `fs.write` but not `fs.read` cannot use
+  failed edits as a read side-channel. Exposing READ also closed a hole:
+  `FsTool::read` was a bare `root.join`, so a `../` or through-symlink path
+  read outside the root — reads now pass the same `resolve_in_root` as
+  writes. Both benchmark postures get both capabilities; the obligation line
+  is untouched. Reports now record `native <version>` instead of a bare
+  `native`, because this is the first behavioral change to the native agent
+  since numbers were published.
+
 ### Fixed
 
 - **A confined gate inherited the host's `TMPDIR`**, so any verify that shelled
