@@ -31,7 +31,7 @@ const RUN_EVIDENCE_MAX_BYTES: usize = 8 * 1024;
 
 /// Trim `raw` to the RUN evidence caps. Returns the (possibly truncated) body and
 /// a note describing the cap when one was hit (empty otherwise).
-fn cap_run_output(raw: &str) -> (String, String) {
+fn cap_run_output(raw: &str, hint: &str) -> (String, String) {
     let mut body = String::new();
     let mut truncated = false;
     for (idx, line) in raw.trim_end().lines().enumerate() {
@@ -43,10 +43,7 @@ fn cap_run_output(raw: &str) -> (String, String) {
         body.push('\n');
     }
     let note = if truncated {
-        format!(
-            "(capped at {RUN_EVIDENCE_MAX_LINES} lines / {RUN_EVIDENCE_MAX_BYTES} bytes — \
-             narrow the command for the rest)\n"
-        )
+        format!("(capped at {RUN_EVIDENCE_MAX_LINES} lines / {RUN_EVIDENCE_MAX_BYTES} bytes — {hint})\n")
     } else {
         String::new()
     };
@@ -170,6 +167,55 @@ pub(crate) async fn run_loop_with(
                         }
                     }
                 }
+                step::Action::Edit { path, old, new } => {
+                    match fs.edit(&path, &old, &new) {
+                        Ok(()) => {}
+                        // An edit is a write: identical refusal handling, and the
+                        // same scope_refusals record — it is the false_blocks
+                        // denominator on the native leg.
+                        Err(e @ Error::Scope(_)) => {
+                            report.scope_refusals.push(path.clone());
+                            report.blockers.push(e.to_string());
+                            if cfg.agent.tier.enforces() {
+                                return Ok(report.finished(false));
+                            }
+                        }
+                        // Anchor failures (not found / ambiguous / empty) are
+                        // recorded and fed back so the model can re-anchor on the
+                        // next bounded attempt — like an invalid regex.
+                        Err(e) => {
+                            report.blockers.push(e.to_string());
+                            tool_evidence.push_str(&format!("{e}\n"));
+                        }
+                    }
+                }
+                step::Action::Read { path } => {
+                    match fs.read(&path) {
+                        Ok(content) => {
+                            let (body, capped) = cap_run_output(
+                                &content,
+                                "READ shows the head; SEARCH for the rest",
+                            );
+                            tool_evidence.push_str(&format!("READ '{path}':\n{body}\n"));
+                            if !capped.is_empty() {
+                                tool_evidence.push_str(&capped);
+                            }
+                        }
+                        // Role boundary or a path escaping the root: same
+                        // handling as a forbidden search.
+                        Err(e @ Error::Scope(_)) => {
+                            report.blockers.push(e.to_string());
+                            if cfg.agent.tier.enforces() {
+                                return Ok(report.finished(false));
+                            }
+                        }
+                        // e.g. the file does not exist — recorded and fed back.
+                        Err(e) => {
+                            report.blockers.push(e.to_string());
+                            tool_evidence.push_str(&format!("READ '{path}' failed: {e}\n"));
+                        }
+                    }
+                }
                 step::Action::Search { pattern, path } => {
                     match grep.search(&pattern, path.as_deref()) {
                         Ok(hits) => {
@@ -215,7 +261,8 @@ pub(crate) async fn run_loop_with(
                                 None => "killed".to_string(),
                             };
                             let raw = format!("{}{}", out.stdout, out.stderr);
-                            let (body, capped) = cap_run_output(&raw);
+                            let (body, capped) =
+                                cap_run_output(&raw, "narrow the command for the rest");
                             tool_evidence
                                 .push_str(&format!("RUN '{name}' → exit {exit}:\n{body}\n"));
                             if !capped.is_empty() {

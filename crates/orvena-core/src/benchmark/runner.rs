@@ -54,7 +54,12 @@ pub async fn run_benchmark(
     // Probed once per report rather than per task: it spawns a process, and the
     // answer cannot change mid-run.
     let agent_label = match agent_selection.spec() {
-        None => "native".to_string(),
+        // Versioned for the same reason the adapter path probes `aider --version`:
+        // the agent is part of the number's identity. The native loop's behavior
+        // changes with this crate (slice-020 is the first such change since
+        // numbers were published), so a report that says bare "native" cannot
+        // say *which* native it measured.
+        None => format!("native {}", env!("CARGO_PKG_VERSION")),
         Some(spec) => {
             // A missing agent is systemic, exactly like a missing provider key:
             // every task would fail the same way. Surface it once, up front,

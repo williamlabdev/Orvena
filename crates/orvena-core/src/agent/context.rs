@@ -143,6 +143,19 @@ fn system_prompt(role: &Role, ungoverned: bool) -> String {
          \x20 <<<WRITE relative/path\n\
          \x20 <full new file content>\n\
          \x20 >>>\n\
+         - To change PART of a file, prefer an edit block over rewriting it: the\n\
+         \x20 text before the === line must appear EXACTLY ONCE in the file and is\n\
+         \x20 replaced by the text after it. READ the file first and anchor on its\n\
+         \x20 exact current content:\n\
+         \x20 <<<EDIT relative/path\n\
+         \x20 <text to replace (must match exactly once)>\n\
+         \x20 ===\n\
+         \x20 <replacement text>\n\
+         \x20 >>>\n\
+         - To read a file in full (read-only), emit a read block; the content is\n\
+         \x20 returned as evidence on your next step:\n\
+         \x20 <<<READ relative/path\n\
+         \x20 >>>\n\
          - To search file contents (read-only), emit a search block; the hits are\n\
          \x20 returned as evidence on your next step:\n\
          \x20 <<<SEARCH <regex pattern>\n\
@@ -281,5 +294,9 @@ mod tests {
         assert!(b.contains("RUNNABLE"), "same observation commands in both postures");
         assert!(b.contains("- check"));
         assert!(b.contains("<<<WRITE"), "the action protocol is unchanged");
+        // slice-020: capability is part of the measurement platform, obligation
+        // is the governed variable — READ/EDIT must appear in both postures.
+        assert!(b.contains("<<<READ"), "READ is a capability, present in both postures");
+        assert!(b.contains("<<<EDIT"), "EDIT is a capability, present in both postures");
     }
 }

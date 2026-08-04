@@ -1,11 +1,21 @@
 //! Per-step parsing: the model speaks a tiny action protocol so the loop can
-//! apply changes deterministically. v0.1 supports three actions — writing a file
-//! in full, a read-only content search, and running a pre-declared command by
-//! name (never a free-form command string — see ADR-001):
+//! apply changes deterministically. Five actions — writing a file in full, an
+//! anchored partial edit, reading a file, a read-only content search, and
+//! running a pre-declared command by name (never a free-form command string —
+//! see ADR-001):
 //!
 //! ```text
 //! <<<WRITE relative/path
 //! <full new file content>
+//! >>>
+//!
+//! <<<EDIT relative/path
+//! <text that must appear exactly once in the file>
+//! ===
+//! <replacement text>
+//! >>>
+//!
+//! <<<READ relative/path
 //! >>>
 //!
 //! <<<SEARCH <regex pattern>
@@ -15,10 +25,19 @@
 //! <<<RUN <command name>
 //! >>>
 //! ```
+//!
+//! EDIT's old/new are split on the first body line that is exactly `===`
+//! (slice-020). Known v1 limit: an old/new that itself contains such a line
+//! cannot be expressed — full-file WRITE remains the escape hatch. A block with
+//! no separator yields no action at all: guessing at a partial edit risks a
+//! wrong write, which is worse than a no-op step (the gate feedback drives the
+//! retry).
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
     Write { path: String, content: String },
+    Edit { path: String, old: String, new: String },
+    Read { path: String },
     Search { pattern: String, path: Option<String> },
     Run { name: String },
 }
@@ -46,6 +65,53 @@ pub fn parse_actions(text: &str) -> Vec<Action> {
                 content.push('\n');
             }
             actions.push(Action::Write { path, content });
+        } else if let Some(raw) = trimmed.strip_prefix("<<<EDIT ") {
+            let (path, self_closed) = split_header(raw);
+            // Body split on the first `===` line. Neither side gets a trailing
+            // newline appended (unlike WRITE): the anchor must match the file
+            // byte-for-byte, and an implicit newline would make an anchor at
+            // end-of-file unmatchable.
+            let mut old_lines: Vec<&str> = Vec::new();
+            let mut new_lines: Vec<&str> = Vec::new();
+            let mut past_separator = false;
+            if !self_closed {
+                for body in lines.by_ref() {
+                    if body.trim() == ">>>" {
+                        break;
+                    }
+                    if !past_separator && body.trim() == "===" {
+                        past_separator = true;
+                        continue;
+                    }
+                    if past_separator {
+                        new_lines.push(body);
+                    } else {
+                        old_lines.push(body);
+                    }
+                }
+            }
+            // No separator → no action (see module docs): a guessed partial
+            // edit is worse than a no-op step.
+            if !path.is_empty() && past_separator {
+                actions.push(Action::Edit {
+                    path,
+                    old: old_lines.join("\n"),
+                    new: new_lines.join("\n"),
+                });
+            }
+        } else if let Some(raw) = trimmed.strip_prefix("<<<READ ") {
+            let (path, self_closed) = split_header(raw);
+            // Like RUN: the header carries everything; body lines are ignored.
+            if !self_closed {
+                for body in lines.by_ref() {
+                    if body.trim() == ">>>" {
+                        break;
+                    }
+                }
+            }
+            if !path.is_empty() {
+                actions.push(Action::Read { path });
+            }
         } else if let Some(raw) = trimmed.strip_prefix("<<<SEARCH ") {
             let (pattern, self_closed) = split_header(raw);
             // The first non-empty body line (if any) narrows the search path.
@@ -242,6 +308,104 @@ mod tests {
         assert_eq!(
             parse_actions("<<<SEARCH fn f() ->\n>>>"),
             vec![Action::Search { pattern: "fn f() ->".into(), path: None }]
+        );
+    }
+
+    #[test]
+    fn parses_an_edit_with_old_and_new() {
+        let text = "<<<EDIT src/a.rs\nlet x = 1;\n===\nlet x = 2;\n>>>";
+        assert_eq!(
+            parse_actions(text),
+            vec![Action::Edit {
+                path: "src/a.rs".into(),
+                old: "let x = 1;".into(),
+                new: "let x = 2;".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn edit_sides_are_multi_line_without_trailing_newlines() {
+        // No implicit trailing newline on either side: an anchor at end-of-file
+        // must be expressible.
+        let text = "<<<EDIT a.txt\nline1\nline2\n===\nonly\n>>>";
+        assert_eq!(
+            parse_actions(text),
+            vec![Action::Edit {
+                path: "a.txt".into(),
+                old: "line1\nline2".into(),
+                new: "only".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn edit_replacement_may_be_empty_meaning_deletion() {
+        let text = "<<<EDIT a.txt\ndrop me\n===\n>>>";
+        assert_eq!(
+            parse_actions(text),
+            vec![Action::Edit { path: "a.txt".into(), old: "drop me".into(), new: "".into() }]
+        );
+    }
+
+    #[test]
+    fn an_edit_without_a_separator_yields_no_action() {
+        // Pinning the documented choice: a malformed edit produces nothing —
+        // guessing at a partial edit risks a wrong write, which is worse than a
+        // no-op step. The actions around it must survive.
+        let text = "<<<EDIT a.txt\nno separator here\n>>>\n<<<RUN check\n>>>";
+        assert_eq!(parse_actions(text), vec![Action::Run { name: "check".into() }]);
+    }
+
+    #[test]
+    fn edit_splits_on_the_first_separator_only() {
+        // A second `===` line belongs to the replacement text.
+        let text = "<<<EDIT a.txt\nold\n===\nnew\n===\nmore\n>>>";
+        assert_eq!(
+            parse_actions(text),
+            vec![Action::Edit {
+                path: "a.txt".into(),
+                old: "old".into(),
+                new: "new\n===\nmore".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn parses_a_read() {
+        assert_eq!(
+            parse_actions("<<<READ src/lib.rs\n>>>"),
+            vec![Action::Read { path: "src/lib.rs".into() }]
+        );
+    }
+
+    #[test]
+    fn a_self_closed_read_keeps_its_path_clean() {
+        // Same hazard as the self-closed WRITE: `src/lib.rs>>>` is a path no
+        // task declares.
+        assert_eq!(
+            parse_actions("<<<READ src/lib.rs>>>"),
+            vec![Action::Read { path: "src/lib.rs".into() }]
+        );
+    }
+
+    #[test]
+    fn read_ignores_body_lines_and_takes_only_the_path() {
+        assert_eq!(
+            parse_actions("<<<READ a.txt\nthis body is ignored\n>>>"),
+            vec![Action::Read { path: "a.txt".into() }]
+        );
+    }
+
+    #[test]
+    fn parses_read_then_edit_in_order() {
+        let text = "<<<READ a.txt\n>>>\n<<<EDIT a.txt\nx\n===\ny\n>>>";
+        assert_eq!(
+            parse_actions(text),
+            vec![
+                Action::Read { path: "a.txt".into() },
+                Action::Edit { path: "a.txt".into(), old: "x".into(), new: "y".into() },
+            ]
         );
     }
 
