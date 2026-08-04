@@ -5,8 +5,9 @@
 
 ## 1. 現況一句話
 
-main 全推、CI 全綠、slice-020 落地;native 深度腿重跑**正在背景進行**
-(PID 19486,16:59 起跑,估一小時+),跑完才能寫 pooled 數字上結果頁。
+main 全推、CI 全綠、slice-020 落地;native 深度腿重跑 16:59 起跑後
+**18:25 被 SIGTERM 殺掉(session 收尾時背景任務被停),沒有產出**——需要重跑,
+之後才能寫 pooled 數字上結果頁。
 
 ## 2. 已完成(全部已 push,CI 逐一驗綠)
 
@@ -25,11 +26,14 @@ main 全推、CI 全綠、slice-020 落地;native 深度腿重跑**正在背景�
 
 ## 3. 未完成與地雷
 
-- **深度跑進行中**:`OUT=bench-runs/m1-depth-20260804/native-qwen3-14b-m1x30.json`,
-  log 在同目錄 `native.log`,`KEEP_SCRATCH=1`(scratch 路徑見 log 開頭)。
-  binary build 自 `97742a2`(**pre-slice-020,故意的**——被替換的 0803 競寫樣本
-  也是舊 native,保可比性)。**別再開第二條**;死掉的話 0-byte 佔位會被 trap 清掉,
-  直接重跑同指令即可。
+- **深度跑被殺,無產出**:16:59 起跑、18:25 SIGTERM(session 收尾停背景任務時陪葬,
+  86 分鐘作廢)。0-byte 佔位已被 `97742a2` 的 EXIT trap 正確清掉(機制首戰驗證 OK),
+  所以**直接重跑同指令即可**,不會被舊佔位擋。log 留在
+  `bench-runs/m1-depth-20260804/native.log`(記著 Terminated),scratch 留在
+  `/var/folders/ck/.../tmp.stK0sAQJ6N`(可刪)。
+  **重跑注意**:原跑的 binary build 自 `97742a2`(pre-slice-020);現在 HEAD 是
+  slice-020 之後,腳本起跑會重新 build——**必須先 checkout `97742a2` build 或直接
+  `git worktree add` 舊 commit 來跑**,否則量到的是新 native,與 0803 chunks 不可比。
 - **slice-020 改了 native 行為但深度跑量的是舊 binary**——之後任何新 bench 跑起來
   就是新 native(`native 0.1.0`),與 0803 chunks(bare `native`)**不可 pool**。
   pooled 數字只用 0803 chunks + 0804 深度跑(皆舊 native)。
@@ -42,10 +46,15 @@ main 全推、CI 全綠、slice-020 落地;native 深度腿重跑**正在背景�
 ## 4. 下一步
 
 ```sh
-# 1) 確認深度跑完(別輪詢,查一次狀態就好)
-pgrep -fl "[b]ench-m1-depth" || tail -5 bench-runs/m1-depth-20260804/native.log
+# 1) 重跑深度腿——必須用 pre-slice-020 的 binary(可比性),用 worktree 最乾淨:
+git worktree add /tmp/orvena-97742a2 97742a2
+cd /tmp/orvena-97742a2
+OUT="/Users/william/dev/source/core/aine/orvena/bench-runs/m1-depth-20260804/native-qwen3-14b-m1x30.json" \
+  AGENT=native KEEP_SCRATCH=1 scripts/bench-m1-depth.sh 30 qwen3:14b \
+  > /Users/william/dev/source/core/aine/orvena/bench-runs/m1-depth-20260804/native.log 2>&1 &
+# (跑完記得 git worktree remove /tmp/orvena-97742a2)
 
-# 2) 深度跑完 → 補 provenance(finished 時間)、commit bench-runs/m1-depth-20260804/
+# 2) 跑完 → 補 provenance(finished 時間)、commit bench-runs/m1-depth-20260804/
 
 # 3) pooled 數字寫上 docs/benchmark-results.md(上一棒的紀律不變):
 #    - 兩條腿一起;M1 欄寫明對哪個 baseline 量的;agent 身分寫 bare "native"(舊 binary)
