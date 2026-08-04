@@ -12,9 +12,16 @@
 > bad investment before it was committed — which is what it is for.
 > **Cross-model check (2026-08-05):** `qwen3.6:35b` × native 0.2.0 solves the
 > set **24/24 (100%)** at 2.3 steps — including the task `qwen3:14b` failed
-> 0/9 across three envelopes. That failure was a model boundary, not a loop
-> defect, and the ruler is saturated for the 35b class: measuring further
-> loop investments there needs a harder set version.
+> 0/9 across three envelopes. The ruler is saturated for the 35b class:
+> measuring further loop investments there needs a harder set version.
+> **Harness matrix (2026-08-05, later the same day):** wrapped `aider` on the
+> same set scores **96% on both models** — which *refutes* the first reading
+> of the cross-model check ("the 14B wall is the model's"): under aider's
+> harness the same 14B solves that task 2/3, once in a single step. The wall
+> is **harness×model** — native never shows the model which files exist, and
+> aider's repo map does. Neither harness dominates: aider wins the 14B cell
+> (96% vs 88%), native wins the 35B cell (**100%** vs 96%). Discoverability
+> (a file inventory in context) is the loop's next named investment.
 >
 > **Second number (the governance differential), re-measured — 2026-08-02:**
 > on the 8-task **temptation set**, same model (`qwen3:14b`), same prompts, 3
@@ -155,6 +162,12 @@ is either a loop defect (fixable by driver feedback) or a model boundary
   search-nudge (the slice-024 postmortem's other candidate) would be
   compensating for a model that cannot act on the strategy — deferred, per
   the decision rule set before this run.
+  **Revised hours later by the harness matrix (next section):** a 14B under
+  *aider's* harness solves the same task 2/3 — so "model boundary" was the
+  wrong reading. The boundary is harness×model: this experiment could not
+  distinguish the two because it moved only the model axis. The original
+  wording above is kept as written; being refuted by the next measurement is
+  how this page is supposed to work.
 - **The ruler is saturated for the 35b class.** 100% at 2.3 steps means this
   set can no longer measure loop investments on 35b-class models; per the
   ruler protocol that calls for a harder set *version* (the set itself is
@@ -162,6 +175,45 @@ is either a loop defect (fixable by driver feedback) or a model boundary
 - **Cross-model numbers are never pooled.** The 88% and the 100% share every
   comparability-key element except the model; they sit side by side as two
   facts about two envelopes, not an average.
+
+### The harness matrix: native vs wrapped aider (2026-08-05)
+
+The same set, same models, same postures — the only moving part is who
+supplies the loop. Orvena wraps `aider` (slice-018): the OS sandbox confines
+it to the task's paths, Orvena supplies the scope, the gate, and the
+evidence; aider supplies the loop. This is the first direct answer to "does
+Orvena's loop design itself carry value?", measured instead of asserted:
+
+| Ground-truth solve rate | native 0.2.0 | aider 0.86.2 (wrapped) |
+|---|---|---|
+| `qwen3:14b` | 88% (21/24) | **96%** (23/24) |
+| `qwen3.6:35b` | **100%** (24/24) | 96% (23/24) |
+
+(Steps and tokens are deliberately absent from this table: an aider "step"
+is a whole aider invocation and its token counts are `agent_reported`, not
+`observed` — the cost columns are not comparable across agents. They remain
+in the raw reports: `20260805-capability-{qwen3-14b,qwen3.6-35b}-aider.json`.)
+
+- **Neither harness dominates.** aider wins the 14B cell; native wins the
+  35B cell — native + 35b is the only perfect cell in the matrix, and
+  aider's miss is the same task in both cells (`cap-locate-broken-ref`,
+  2/3 on each model).
+- **The 14B gap has a named mechanism.** aider's first solved run fixed
+  `cap-locate-broken-ref` in a *single step*: its repo map shows the model
+  every file in the project up front, so `docs/install.md` is a visible
+  choice rather than something to search for. Native's context shows the
+  contents of writable files and nothing else — the model cannot point at a
+  file it has no way to know exists. That reframes the loop's next
+  investment: not a search-nudge (slice-024's rejected direction), but a
+  **file inventory in context** — cheap, general, and directly testable on
+  this cell (does native × 14b close 88% → ~96%+ when the model can see the
+  file list?).
+- **What the 35B cell says for the thesis.** With a strong enough model,
+  Orvena's bounded, verify-gated loop converges completely on this set,
+  where aider — mature, repo-map and all — still drops a run. One cell on
+  one small set is a signal, not a headline; the differential claim worth
+  pursuing is that governance-shaped loops lose nothing in capability while
+  buying containment and evidence.
 
 ### Reproduce
 
@@ -172,6 +224,7 @@ is either a loop defect (fixable by driver feedback) or a model boundary
 orvena bench --tasks benchmarks/capability.yaml --governance engineering --repeat 3 \
   --out bench-runs/$(date +%Y%m%d)-capability-qwen3-14b.json
 # the cross-model leg swaps the init: --model qwen3.6:35b
+# the aider legs add: --agent aider
 ```
 
 ## The governance differential, re-measured (2026-08-02)

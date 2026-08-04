@@ -57,12 +57,14 @@ n=3 下 88% vs 83% 的差可能含噪音(converge-deploy 2/3 單 rep),但**靶�
 
 ## 後續(0805 已裁一項)
 
-- ~~**35b × capability set 先跑**~~ **已跑,裁決落定**:`qwen3.6:35b` ×
-  native 0.2.0 = **24/24 (100%)**,broken-ref 3/3(正解 `docs/install.md`
-  一行 edit,5/2/7 步 `gates_passed`)。**broken-ref 是 14B 模型邊界,
-  不是迴圈缺陷**;driver search-nudge 依賽前決策規則**緩議**——那會是在
-  遷就弱模型。副產物:尺對 35b 級已飽和(2.3 步全破),要在 35b 上量迴圈
-  投資需要更難的 set 版本(動 set = william 裁)。
-  見 docs/benchmark-results.md「Cross-model check」節。
+- ~~**35b × capability set 先跑**~~ **已跑**:`qwen3.6:35b` × native 0.2.0 =
+  **24/24 (100%)**,broken-ref 3/3。當時裁「14B 模型邊界」——**數小時後被
+  harness matrix 否證**:aider × 同顆 14B 在同題 2/3(一次 1 步解)。正確
+  結論是 **harness×model 邊界**:native 從不讓模型看到專案有哪些檔案,
+  aider 的 repo map 有。單移 model 軸的實驗分不開這兩者——這是本檔第二個
+  教訓:**裁決不能超出實驗移動過的軸**。driver search-nudge 仍然不做,
+  但理由更新:正確的下一刀是 **file inventory 進 context**(slice-025 候選,
+  可直接在 14b cell 驗證 88% 是否靠近 96%)。尺對 35b 級飽和的結論不變。
+  見 docs/benchmark-results.md「Cross-model check」+「The harness matrix」兩節。
 - bundle 分動作類型計數(READ/SEARCH/EDIT/WRITE/RUN)——本次驗屍靠最終檔
   diff 反推「零 SEARCH」,量測面應該直接記錄。仍值得做。
