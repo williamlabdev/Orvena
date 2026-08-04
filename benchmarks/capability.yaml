@@ -1,0 +1,416 @@
+# Orvena capability set — the smartness ruler (opt-in). See SLICE-022-capability-set.md.
+#
+# The temptation set measures COMPLIANCE (does the agent stay inside its
+# contract); this set measures COMPETENCE (can the loop actually do the work).
+# The two are never mixed: there are no escape probes here, no out-of-scope
+# shortcuts, and the writable lists are naturally generous. A capability task
+# with a temptation in it would make one number measure two things — badly.
+#
+# Every task is built to discriminate the loop investments it exists to track:
+#   - preservation tasks (READ):    40+ lines of high-entropy content, one line
+#     wrong; the check anchors many exact original lines plus a line count, so
+#     a blind full-file rewrite fails on entropy, not on trickery.
+#   - anchored-edit tasks (EDIT):   the wrong value sits on a line that repeats
+#     near-identically elsewhere; a lazy anchor is ambiguous and the loop must
+#     use the fed-back error to widen it.
+#   - localization tasks (SEARCH):  the instruction states a symptom, not a
+#     file; the defect lives in one of several writable files.
+#   - convergence tasks (budget):   the check reveals ONE defect per run, so
+#     the loop must iterate productively — utilization, not luck.
+#
+# Honesty rules (the mirror image of temptation.yaml's):
+#   1. tests/ is read-only in every task — the number cannot be gamed by
+#      editing the check. The check IS readable by the agent, and may state
+#      target conditions (any real CI does); the discrimination comes from
+#      entropy the check does not contain.
+#   2. No extra read-only commands: since slice-020 the eyes are the loop's
+#      own (READ/SEARCH), and the loop's own eyes are what this set measures.
+#      The harness's automatic `check` command is the one exception.
+#   3. sh/grep/diff/wc/test only — no toolchains (`requires` is empty
+#      everywhere), so checks run in milliseconds anywhere and convergence
+#      tasks are not throttled by compile times.
+#   4. Seeds stay under 50 lines: READ evidence is capped at 100 lines / 8 KB,
+#      and "the file does not fit through the keyhole" would be fake difficulty.
+#
+# The ruler protocol (comparability key: set version + max_steps + model +
+# agent version — bundles record all four):
+#
+#     orvena bench --tasks benchmarks/capability.yaml --governance engineering --repeat 3
+#
+# Headline numbers: verified_rate, mean_steps + budget_exhaustion_rate,
+# mean_total_tokens. Changing any task makes this a NEW set version: old
+# numbers are only quotable against the old version — the set is never re-tuned
+# to move a number.
+
+tasks:
+  # ── A. Preservation: one wrong line in a file too entropic to rewrite blind ─
+
+  - id: cap-preserve-config
+    instruction: "config.ini has one wrong setting: cache_size must be 256 (it is currently 64). Change only that line — every other line must remain byte-identical. tests/check.sh verifies."
+    writes: [config.ini]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: config.ini
+        contents: |
+          [server]
+          listen_port = 7443
+          bind_addr = 10.44.2.17
+          worker_threads = 6
+          graceful_shutdown_secs = 25
+
+          [cache]
+          cache_size = 64
+          cache_ttl_secs = 900
+          eviction = lru
+          persist_path = /var/lib/orvena/cache.db
+
+          [auth]
+          auth_token = b7f4c9d2e81a
+          token_rotate_hours = 12
+          allow_anonymous = false
+          session_secret = 9d3e1f7a2c5b8e04
+
+          [logging]
+          log_level = info
+          log_path = /var/log/orvena/server.log
+          rotate_mb = 128
+          keep_files = 9
+
+          [limits]
+          max_upload_mb = 48
+          rate_limit_rps = 350
+          burst = 75
+          conn_backlog = 511
+
+          [metrics]
+          metrics_port = 9187
+          namespace = orv_prod_eu2
+          scrape_interval_secs = 15
+          histogram_buckets = 14
+
+          [tls]
+          cert_path = /etc/orvena/tls/fullchain.pem
+          key_path = /etc/orvena/tls/privkey.pem
+          min_version = 1.2
+          ciphers_profile = modern
+          ocsp_stapling = true
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=config.ini
+          fail() { echo "check failed: $1"; exit 1; }
+          test -f "$f" || fail "config.ini is missing"
+          test "$(wc -l < "$f")" -eq 42 || fail "config.ini must stay exactly 42 lines (found $(wc -l < "$f" | tr -d ' '))"
+          grep -qxF 'cache_size = 256' "$f" || fail "cache_size must be 256"
+          grep -qxF 'listen_port = 7443' "$f" || fail "an unrelated setting changed: listen_port"
+          grep -qxF 'auth_token = b7f4c9d2e81a' "$f" || fail "an unrelated setting changed: auth_token"
+          grep -qxF 'session_secret = 9d3e1f7a2c5b8e04' "$f" || fail "an unrelated setting changed: session_secret"
+          grep -qxF 'persist_path = /var/lib/orvena/cache.db' "$f" || fail "an unrelated setting changed: persist_path"
+          grep -qxF 'namespace = orv_prod_eu2' "$f" || fail "an unrelated setting changed: namespace"
+          grep -qxF 'rate_limit_rps = 350' "$f" || fail "an unrelated setting changed: rate_limit_rps"
+          grep -qxF 'ciphers_profile = modern' "$f" || fail "an unrelated setting changed: ciphers_profile"
+          echo ok
+
+  - id: cap-preserve-roster
+    instruction: "One row in staff.csv has a typo in its email domain: ovena.io should be orvena.io. Fix that row only; the rest of the file must stay exactly as it is. tests/check.sh verifies."
+    writes: [staff.csv]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: staff.csv
+        contents: |
+          id,name,team,email
+          s101,Amara Diallo,platform,adiallo@orvena.io
+          s118,Jonas Weber,edge,jweber@orvena.io
+          s126,Yuki Tanaka,platform,ytanaka@orvena.io
+          s134,Lena Fischer,sre,lfischer@orvena.io
+          s142,Mateo Rossi,edge,mrossi@orvena.io
+          s159,Ingrid Olsen,security,iolsen@orvena.io
+          s163,Ravi Menon,platform,rmenon@orvena.io
+          s171,Chloe Martin,docs,cmartin@orvena.io
+          s188,Tomasz Nowak,sre,tnowak@orvena.io
+          s195,Aisha Khan,edge,akhan@orvena.io
+          s203,Diego Alvarez,platform,dalvarez@orvena.io
+          s217,Freya Larsen,security,flarsen@orvena.io
+          s224,Karim Haddad,sre,khaddad@orvena.io
+          s238,Mei Chen,docs,mchen@orvena.io
+          s246,Oskar Lindqvist,edge,olindqvist@orvena.io
+          s252,Priya Nair,platform,pnair@ovena.io
+          s269,Sofia Petrova,sre,spetrova@orvena.io
+          s277,Tariq Aziz,platform,taziz@orvena.io
+          s283,Uma Krishnan,security,ukrishnan@orvena.io
+          s291,Viktor Horvat,edge,vhorvat@orvena.io
+          s308,Wanda Kowalska,docs,wkowalska@orvena.io
+          s315,Xavier Dubois,platform,xdubois@orvena.io
+          s327,Yara Haddad,sre,yhaddad@orvena.io
+          s339,Zane Okafor,edge,zokafor@orvena.io
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=staff.csv
+          fail() { echo "check failed: $1"; exit 1; }
+          test "$(wc -l < "$f")" -eq 25 || fail "staff.csv must stay exactly 25 lines (found $(wc -l < "$f" | tr -d ' '))"
+          if grep -q '@ovena\.io' "$f"; then fail "a typo'd email domain @ovena.io is still present"; fi
+          grep -qxF 's252,Priya Nair,platform,pnair@orvena.io' "$f" || fail "the corrected row must keep its id, name and team intact"
+          grep -qxF 'id,name,team,email' "$f" || fail "the header row changed"
+          grep -qxF 's101,Amara Diallo,platform,adiallo@orvena.io' "$f" || fail "an unrelated row changed: s101"
+          grep -qxF 's188,Tomasz Nowak,sre,tnowak@orvena.io' "$f" || fail "an unrelated row changed: s188"
+          grep -qxF 's246,Oskar Lindqvist,edge,olindqvist@orvena.io' "$f" || fail "an unrelated row changed: s246"
+          grep -qxF 's339,Zane Okafor,edge,zokafor@orvena.io' "$f" || fail "an unrelated row changed: s339"
+          echo ok
+
+  # ── B. Anchored edit: the target line repeats near-identically elsewhere ───
+
+  - id: cap-edit-ambiguous-anchor
+    instruction: "In sync.toml, the archive profile must get timeout = 90 (nightly and mirror stay at 30). Nothing else may change. tests/check.sh verifies."
+    writes: [sync.toml]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: sync.toml
+        contents: |
+          # fleet sync profiles — one block per export
+          [profile.nightly]
+          source = /srv/exports/nightly
+          dest = s3://orv-backups/nightly
+          timeout = 30
+          retries = 2
+
+          [profile.archive]
+          source = /srv/exports/archive
+          dest = s3://orv-backups/archive
+          timeout = 30
+          retries = 2
+
+          [profile.mirror]
+          source = /srv/exports/mirror
+          dest = s3://orv-backups/mirror
+          timeout = 30
+          retries = 2
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=sync.toml
+          fail() { echo "check failed: $1"; exit 1; }
+          test "$(wc -l < "$f")" -eq 18 || fail "sync.toml must stay exactly 18 lines (found $(wc -l < "$f" | tr -d ' '))"
+          test "$(grep -cxF 'timeout = 30' "$f")" -eq 2 || fail "exactly two profiles must keep timeout = 30"
+          test "$(grep -cxF 'timeout = 90' "$f")" -eq 1 || fail "exactly one profile must set timeout = 90"
+          grep -A4 -xF '[profile.archive]' "$f" | grep -qxF 'timeout = 90' || fail "the archive profile must be the one with timeout = 90"
+          grep -A4 -xF '[profile.nightly]' "$f" | grep -qxF 'timeout = 30' || fail "the nightly profile must keep timeout = 30"
+          grep -A4 -xF '[profile.mirror]' "$f" | grep -qxF 'timeout = 30' || fail "the mirror profile must keep timeout = 30"
+          grep -qxF 'dest = s3://orv-backups/archive' "$f" || fail "an unrelated line changed: archive dest"
+          grep -qxF 'source = /srv/exports/mirror' "$f" || fail "an unrelated line changed: mirror source"
+          echo ok
+
+  # ── C. Convergence: the check reveals one defect per run ───────────────────
+
+  - id: cap-converge-deploy
+    instruction: "tests/check.sh rejects deploy.env for several reasons but reports only the FIRST problem each time it runs. Fix deploy.env until the check passes. Settings the check does not complain about must stay unchanged."
+    writes: [deploy.env]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: deploy.env
+        contents: |
+          APP_NAME=orvena-edge
+          RELEASE_CHANNEL=beta
+          REGION=eu-central-2
+          REPLICAS=2
+          HEALTHCHECK_PATH=/healthz
+          LOG_FORMAT=text
+          FEATURE_GATES=telemetry,compact-index
+          CDN_PREFIX=https://cdn.orvena.dev/edge
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=deploy.env
+          fail() { echo "deploy.env problem: $1"; exit 1; }
+          grep -qxF 'RELEASE_CHANNEL=stable' "$f" || fail "RELEASE_CHANNEL must be 'stable' for a production rollout"
+          grep -qxF 'LOG_FORMAT=json' "$f" || fail "LOG_FORMAT must be 'json' (the collector cannot parse text)"
+          grep -qxF 'MAINTENANCE_WINDOW=sun:02:00-04:00' "$f" || fail "MAINTENANCE_WINDOW is missing; policy requires sun:02:00-04:00"
+          grep -qxF 'APP_NAME=orvena-edge' "$f" || fail "APP_NAME must not change"
+          grep -qxF 'REGION=eu-central-2' "$f" || fail "REGION must not change"
+          grep -qxF 'FEATURE_GATES=telemetry,compact-index' "$f" || fail "FEATURE_GATES must not change"
+          grep -qxF 'CDN_PREFIX=https://cdn.orvena.dev/edge' "$f" || fail "CDN_PREFIX must not change"
+          echo ok
+
+  - id: cap-converge-inventory
+    instruction: "The stock check rejects inventory.txt for several reasons but reports only the FIRST problem each time it runs. Fix inventory.txt until tests/check.sh passes. Lines it does not complain about must stay unchanged."
+    writes: [inventory.txt]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: inventory.txt
+        contents: |
+          bolt-m4 120
+          bolt-m5 96
+          bolt-m6 40
+          washer-6 210
+          washer-8 25
+          washer-8 25
+          nut-m4 118
+          nut-m5 90
+          screw-p1 340
+          screw-p2 260
+          anchor-s 32
+          rivet-a 500
+          clamp-c 18
+          spring-k 77
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=inventory.txt
+          fail() { echo "inventory problem: $1"; exit 1; }
+          test "$(grep -cxF 'washer-8 25' "$f")" -eq 1 || fail "'washer-8 25' must appear exactly once (found $(grep -cxF 'washer-8 25' "$f") lines)"
+          grep -qxF 'bolt-m6 64' "$f" || fail "bolt-m6 stock must read 64 after the recount"
+          grep -qxF 'nut-m6 64' "$f" || fail "'nut-m6 64' is missing from the inventory"
+          grep -qxF 'bolt-m4 120' "$f" || fail "an unrelated line changed: bolt-m4"
+          grep -qxF 'screw-p1 340' "$f" || fail "an unrelated line changed: screw-p1"
+          grep -qxF 'spring-k 77' "$f" || fail "an unrelated line changed: spring-k"
+          test "$(wc -l < "$f")" -eq 14 || fail "inventory.txt must end up with exactly 14 lines (found $(wc -l < "$f" | tr -d ' '))"
+          echo ok
+
+  # ── D. Localization: a symptom, not a file name ────────────────────────────
+
+  - id: cap-locate-retries
+    instruction: "Ops policy requires every .conf file under src/ to set retries = 3. One of the three files violates the policy. Find it and fix only the offending line; everything else must stay byte-identical. tests/check.sh verifies."
+    writes: [src/pool.conf, src/net.conf, src/disk.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: src/pool.conf
+        contents: |
+          # connection pool
+          pool_max = 48
+          pool_min = 6
+          idle_secs = 120
+          retries = 3
+          acquire_timeout_ms = 750
+          validate_on_borrow = true
+          leak_detect_secs = 300
+          shard_strategy = ring
+          metrics_prefix = pool_eu2
+      - path: src/net.conf
+        contents: |
+          # network tuning
+          mtu = 1450
+          keepalive_secs = 45
+          retries = 7
+          connect_timeout_ms = 900
+          read_timeout_ms = 2500
+          nagle = off
+          dns_cache_secs = 60
+          proxy = none
+          metrics_prefix = net_eu2
+      - path: src/disk.conf
+        contents: |
+          # disk io
+          queue_depth = 32
+          retries = 3
+          fsync_policy = batched
+          batch_ms = 8
+          scratch_path = /mnt/nvme1/orv
+          reserve_gb = 12
+          readahead_kb = 512
+          io_priority = be4
+          metrics_prefix = disk_eu2
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "check failed: $1"; exit 1; }
+          test "$(cat src/pool.conf src/net.conf src/disk.conf | grep -cxF 'retries = 3')" -eq 3 || fail "policy: every conf under src/ must set retries = 3 (one of them does not)"
+          test "$(wc -l < src/pool.conf)" -eq 10 || fail "src/pool.conf must stay exactly 10 lines"
+          test "$(wc -l < src/net.conf)" -eq 10 || fail "src/net.conf must stay exactly 10 lines"
+          test "$(wc -l < src/disk.conf)" -eq 10 || fail "src/disk.conf must stay exactly 10 lines"
+          grep -qxF 'acquire_timeout_ms = 750' src/pool.conf || fail "an unrelated line changed in src/pool.conf"
+          grep -qxF 'metrics_prefix = pool_eu2' src/pool.conf || fail "an unrelated line changed in src/pool.conf"
+          grep -qxF 'read_timeout_ms = 2500' src/net.conf || fail "an unrelated line changed in src/net.conf"
+          grep -qxF 'metrics_prefix = net_eu2' src/net.conf || fail "an unrelated line changed in src/net.conf"
+          grep -qxF 'scratch_path = /mnt/nvme1/orv' src/disk.conf || fail "an unrelated line changed in src/disk.conf"
+          grep -qxF 'metrics_prefix = disk_eu2' src/disk.conf || fail "an unrelated line changed in src/disk.conf"
+          echo ok
+
+  - id: cap-locate-broken-ref
+    instruction: "The docs check fails: one line in the writable docs references a document that was renamed in a reorg. Point the reference at the file that actually exists and covers the same topic. Nothing else may change. tests/check.sh verifies."
+    writes: [docs/index.md, docs/guide.md]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: docs/index.md
+        contents: |
+          # Orvena Edge — docs index
+
+          - overview: this file
+          - api reference: see docs/api.md
+          - operations guide: see docs/guide.md
+      - path: docs/guide.md
+        contents: |
+          # Operations guide
+
+          Daily checks run from the edge node itself.
+          setup notes: docs/setup.md
+          escalation: docs/api.md
+      - path: docs/install.md
+        contents: |
+          # Installation steps
+
+          1. Provision the node with the edge image.
+          2. Copy config.ini into /etc/orvena.
+          3. Run orvena doctor before first start.
+      - path: docs/api.md
+        contents: |
+          # API reference
+
+          GET /healthz — liveness.
+          GET /v1/status — build and uptime.
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "docs problem: $1"; exit 1; }
+          for ref in $(grep -ho 'docs/[a-z]*\.md' docs/index.md docs/guide.md | sort -u); do
+            test -f "$ref" || fail "referenced document does not exist: $ref"
+          done
+          t=$(sed -n 's/^setup notes: //p' docs/guide.md)
+          test -n "$t" || fail "guide.md must keep its 'setup notes:' line"
+          grep -qF '# Installation steps' "$t" || fail "the setup notes reference must point at the document that contains the installation steps"
+          grep -qxF 'escalation: docs/api.md' docs/guide.md || fail "guide.md changed beyond the broken reference"
+          grep -qxF -e '- api reference: see docs/api.md' docs/index.md || fail "index.md must not change"
+          test "$(wc -l < docs/guide.md)" -eq 5 || fail "docs/guide.md must stay exactly 5 lines"
+          echo ok
+
+  # ── E. The exam: locate + read-only research + converge ────────────────────
+
+  - id: cap-audit-services
+    instruction: "services.list must agree with the service registry kept in tests/registry.txt: every listed service on its registered port, and every registered service listed. The check reports one problem at a time. Fix services.list until tests/check.sh passes."
+    writes: [services.list]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: services.list
+        contents: |
+          gateway 7443
+          indexer 9301
+          mailer 2587
+          vault 8200
+      - path: tests/registry.txt
+        contents: |
+          gateway 7443
+          indexer 9310
+          mailer 2587
+          scheduler 8460
+          vault 8200
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "services.list problem: $1"; exit 1; }
+          while read -r svc port; do
+            reg=$(awk -v s="$svc" '$1 == s { print $2 }' tests/registry.txt)
+            test -n "$reg" || fail "unknown service '$svc' (not in the registry)"
+            test "$reg" = "$port" || fail "$svc is registered on a different port (see tests/registry.txt)"
+          done < services.list
+          while read -r svc port; do
+            grep -q "^$svc " services.list || fail "$svc is missing from services.list"
+          done < tests/registry.txt
+          test "$(wc -l < services.list)" -eq 5 || fail "services.list must end up with exactly 5 lines (found $(wc -l < services.list | tr -d ' '))"
+          echo ok

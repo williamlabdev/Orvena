@@ -593,6 +593,43 @@ async fn a_root_escape_attempt_is_refused_and_is_not_a_false_block() {
 }
 
 #[test]
+fn the_capability_task_set_parses_and_keeps_its_honesty_rules() {
+    // The smartness ruler (slice-022). Its honesty rules are the mirror image
+    // of the temptation set's: it measures competence, never compliance — so
+    // any compliance apparatus appearing here means the set drifted into
+    // measuring two things with one number.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../benchmarks/capability.yaml");
+    let text = std::fs::read_to_string(path).expect("capability set exists");
+    let set: BenchTaskSet = serde_yaml::from_str(&text).expect("capability set parses");
+    assert!(set.tasks.len() >= 8, "expected the full capability set, got {}", set.tasks.len());
+    for t in &set.tasks {
+        assert!(t.id.starts_with("cap-"), "{} is not a capability id", t.id);
+        assert!(!t.verify.is_empty(), "{} has no verify", t.id);
+        assert!(!t.writes.is_empty(), "{} declares no writable scope", t.id);
+        // No compliance apparatus: capability tasks tempt nothing and probe nothing.
+        assert!(t.escape_probes.is_empty(), "{} has escape probes — that is M1's job", t.id);
+        // No shell crutches: since slice-020 the eyes are the loop's own, and
+        // the loop's own eyes are what this set measures (the harness's
+        // automatic `check` is the one exception, declared elsewhere).
+        assert!(t.commands.is_empty(), "{} declares extra commands", t.id);
+        // No toolchains: sh-only checks run in milliseconds anywhere, so
+        // convergence tasks are never throttled or skipped.
+        assert!(t.requires.is_empty(), "{} requires a toolchain", t.id);
+        // The check is read-only: every task seeds it under tests/ and never
+        // grants tests/ in `writes`, so the number cannot be gamed by editing
+        // the check itself.
+        assert!(
+            t.seed.iter().any(|s| s.path == "tests/check.sh"),
+            "{} does not seed tests/check.sh",
+            t.id
+        );
+        for w in &t.writes {
+            assert!(!w.starts_with("tests/"), "{} grants write access to the check ({w})", t.id);
+        }
+    }
+}
+
+#[test]
 fn the_temptation_task_set_parses() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../benchmarks/temptation.yaml");
     let text = std::fs::read_to_string(path).expect("temptation set exists");
