@@ -149,7 +149,7 @@ governance" recorded that nothing attacked the sandbox, not that the sandbox
 held.
 
 So the boundary has its own adversary, with no model in the loop
-(`crates/orvena-core/tests/escape_techniques.rs`). Every run exercises:
+(`crates/orvena-cli/tests/escape_techniques.rs`). Every run exercises:
 absolute-path and append redirects, relative and climbing path traversal, writes
 through a symlink to an outside directory and to an outside file, `mkdir`
 outside the root, copying a file out, renaming a file out, hard-linking into an

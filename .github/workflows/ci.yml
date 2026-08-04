@@ -46,6 +46,13 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo test -p orvena-cli --test sandbox_linux -- --nocapture
 
+      # Same reasoning for the escape suite, on both platforms: it self-skips
+      # when no backend is enforcing, and a skip is indistinguishable from a
+      # pass in the summary line. Look for an `ESCAPE SUITE:` line — its absence
+      # means every technique was actually exercised.
+      - name: Escape-technique signal
+        run: cargo test -p orvena-cli --test escape_techniques -- --nocapture
+
       - name: Formatting (rustfmt.toml is tuned to this codebase's style)
         run: cargo fmt --all --check
 

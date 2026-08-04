@@ -28,6 +28,22 @@
 use orvena_core::exec::sandbox::{
     FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxPolicy, SandboxStatus,
 };
+
+/// Why this suite lives in `orvena-cli` rather than next to the sandbox it
+/// attacks: on Linux confinement works by re-exec'ing `orvena __sandbox …`, and
+/// the shim defaults to the *running* executable. Inside a test that is the
+/// libtest harness, which rejects `--spec` — so every confined command would
+/// fail to spawn, nothing would land outside, and the suite would report
+/// containment the sandbox never provided. Only an integration test of the crate
+/// that owns the binary can hand it the real shim (`CARGO_BIN_EXE_orvena`).
+///
+/// `Once` is what makes this safe under libtest's thread-per-test: the write
+/// happens exactly once, and every caller is synchronised behind it before
+/// reading the variable back through `Sandbox::for_policy`.
+fn point_the_shim_at_the_real_binary() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| std::env::set_var("ORVENA_SANDBOX_SHIM", env!("CARGO_BIN_EXE_orvena")));
+}
 use orvena_core::exec::CommandRunner;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -171,6 +187,7 @@ fn escaped(fx: &Fixture) -> bool {
 
 #[test]
 fn every_known_escape_technique_is_refused_by_the_sandbox() {
+    point_the_shim_at_the_real_binary();
     let fx = Fixture::new("suite");
     let sandbox = Sandbox::for_policy(fx.policy());
     if sandbox.status() != SandboxStatus::Enforced {
@@ -253,6 +270,7 @@ fn every_known_escape_technique_is_refused_by_the_sandbox() {
 /// exists on the benchmark side, and it deserves a guard here too.
 #[test]
 fn a_legitimate_in_root_write_still_succeeds_under_the_same_policy() {
+    point_the_shim_at_the_real_binary();
     let fx = Fixture::new("control");
     let sandbox = Sandbox::for_policy(fx.policy());
     if sandbox.status() != SandboxStatus::Enforced {
