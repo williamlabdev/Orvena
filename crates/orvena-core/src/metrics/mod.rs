@@ -87,6 +87,47 @@ pub struct RunReport {
     /// left to be inferred from a suspicious zero.
     #[serde(default)]
     pub token_accounting: TokenAccounting,
+    /// The step budget this run was given. `steps` alone is unreadable without
+    /// it: 3 of a possible 4 is a burned budget, 3 of a possible 8 is
+    /// convergence. `0` means the bundle predates the field (unrecorded) —
+    /// never "no budget". Additive field — stays v1.
+    #[serde(default)]
+    pub max_steps: u32,
+    /// Why the loop stopped, as structured data — `blockers` keeps the
+    /// human-readable message. Same discipline as `provider_error`: a consumer
+    /// separating "converged on its own" from "was cut off by the budget"
+    /// must never have to pattern-match prose. Additive field — bundles
+    /// written before it existed read back as `unrecorded`.
+    #[serde(default)]
+    pub exit: ExitReason,
+}
+
+/// Why a run's loop stopped — see [`RunReport::exit`]. An observation field:
+/// it must never feed back into loop behavior (measurement/policy separation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExitReason {
+    /// Governed: every gate passed (native and adapter legs alike).
+    GatesPassed,
+    /// Ungoverned: the run ended on the agent's own, unverified claim of done
+    /// (native: zero actions emitted; adapter: the single invocation exited 0).
+    ClaimedDone,
+    /// The loop ran out of `max_steps` before any other terminal condition —
+    /// the run is right-censored, and its `steps` is a budget artifact.
+    BudgetExhausted,
+    /// A human gate stopped the run (tiered governance).
+    NeedsHuman,
+    /// Enforcement hard-stopped the run (engineering-tier scope violation).
+    HardBlocked,
+    /// The provider failed (outage, bad key, quota) — the run measures the
+    /// API, not the agent, and is excluded from metric denominators.
+    ProviderError,
+    /// A wrapped agent could not run or failed outright (refused sandbox
+    /// spawn, or an ungoverned single invocation exiting non-zero).
+    AgentError,
+    /// The bundle predates this field.
+    #[default]
+    Unrecorded,
 }
 
 /// Provenance of a run's token counts — see [`RunReport::token_accounting`].
@@ -134,6 +175,8 @@ impl RunReport {
             provider_error: None,
             agent: None,
             token_accounting: TokenAccounting::default(),
+            max_steps: 0,
+            exit: ExitReason::default(),
         }
     }
 

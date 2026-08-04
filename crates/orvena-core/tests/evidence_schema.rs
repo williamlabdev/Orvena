@@ -226,6 +226,10 @@ fn a_pre_v1_bundle_without_the_schema_field_still_deserializes_as_v1() {
     });
     let report: RunReport = serde_json::from_value(old).unwrap();
     assert_eq!(report.schema, orvena_core::metrics::EVIDENCE_SCHEMA_V1);
+    // Additive fields read back as "unrecorded", never as fabricated data: a
+    // legacy bundle has no step budget and no typed exit reason.
+    assert_eq!(report.max_steps, 0, "legacy budget is unrecorded (0), not invented");
+    assert_eq!(report.exit, orvena_core::metrics::ExitReason::Unrecorded);
     // But as a FILE on disk it predates the frozen contract and the validator
     // reports the missing fields — honesty over leniency.
 }

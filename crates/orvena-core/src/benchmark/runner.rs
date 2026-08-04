@@ -16,7 +16,7 @@ use crate::config::roles::{Role, Roles};
 use crate::config::Config;
 use crate::exec::sandbox::Sandbox;
 use crate::governance::gate::GateRunner;
-use crate::metrics::{evidence, RunReport, TokenAccounting};
+use crate::metrics::{evidence, ExitReason, RunReport, TokenAccounting};
 use crate::{Error, Result};
 
 use super::aggregate::{aggregate, derive_differential, rate, weakest_accounting};
@@ -26,9 +26,13 @@ use super::report::{
 };
 use super::task::{BenchTask, BenchTaskSet};
 
-/// Bounded re-attempts per task. Enough for an observe-failing-check → fix →
-/// re-verify loop, still capped.
-const MAX_STEPS: u32 = 4;
+/// Bounded re-attempts per task. Sized for the READ/EDIT loop (slice-021):
+/// enough for locate → edit → verify → re-edit plus one full retry, still
+/// capped. Applied to both arms — the budget is an envelope parameter, and the
+/// differential compares identical envelopes. Changing it changes the envelope:
+/// results are not poolable across values (the bundle records `max_steps` so
+/// this is machine-checkable).
+const MAX_STEPS: u32 = 8;
 
 /// Run every task in `set` against `provider`, each in its own workdir under
 /// `base_dir/<run_id>/<task.id>/`, and aggregate the completion rate.
@@ -97,6 +101,7 @@ pub async fn run_benchmark(
                 evidence_valid: false,
                 provider_error: None,
                 token_accounting: TokenAccounting::default(),
+                exit: ExitReason::Unrecorded,
             });
             continue;
         }
@@ -193,6 +198,7 @@ pub async fn run_benchmark(
                     evidence_valid,
                     provider_error: report.provider_error,
                     token_accounting: report.token_accounting,
+                    exit: report.exit,
                 }
             }
             Err(e) => TaskResult {
@@ -220,6 +226,8 @@ pub async fn run_benchmark(
                 // a harness bug behind the same door as an API outage.
                 provider_error: None,
                 token_accounting: TokenAccounting::default(),
+                // No bundle was written, so there is no recorded exit either.
+                exit: ExitReason::Unrecorded,
             },
         });
     }
@@ -488,6 +496,11 @@ pub async fn run_benchmark_repeated(
     } else {
         ran_results.iter().map(|t| t.steps as f32).sum::<f32>() / n_ran
     };
+    let budget_exhaustion_rate = if n_ran == 0.0 {
+        0.0
+    } else {
+        ran_results.iter().filter(|t| t.exit == ExitReason::BudgetExhausted).count() as f32 / n_ran
+    };
     let mean_total_tokens = if n_ran == 0.0 {
         0.0
     } else {
@@ -521,6 +534,7 @@ pub async fn run_benchmark_repeated(
         oracle_errors,
         evidence_valid_rate,
         mean_steps,
+        budget_exhaustion_rate,
         mean_total_tokens,
         token_accounting,
         tasks,

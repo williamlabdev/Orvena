@@ -36,6 +36,25 @@
       "minimum": 0,
       "description": "Loop iterations used (bounded by max_steps)."
     },
+    "max_steps": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The step budget the run was given — `steps` alone cannot distinguish convergence from a burned budget. 0 means the bundle predates the field (unrecorded), never 'no budget'. Additive, 2026-08-04 (slice-021)."
+    },
+    "exit": {
+      "type": "string",
+      "enum": [
+        "gates_passed",
+        "claimed_done",
+        "budget_exhausted",
+        "needs_human",
+        "hard_blocked",
+        "provider_error",
+        "agent_error",
+        "unrecorded"
+      ],
+      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. Additive, 2026-08-04 (slice-021)."
+    },
     "input_tokens": { "type": "integer", "minimum": 0 },
     "output_tokens": { "type": "integer", "minimum": 0 },
     "tool_calls": { "type": "integer", "minimum": 0 },

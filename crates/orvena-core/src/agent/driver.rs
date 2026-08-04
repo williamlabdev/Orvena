@@ -14,7 +14,7 @@ use crate::error::{Error, Result};
 use crate::exec::sandbox::Sandbox;
 use crate::governance::gate::GateRunner;
 use crate::governance::scope::Scope;
-use crate::metrics::{GateRecord, RunReport};
+use crate::metrics::{ExitReason, GateRecord, RunReport};
 use crate::provider::ChatRequest;
 use crate::tools::fs::FsTool;
 use crate::tools::grep::GrepTool;
@@ -96,6 +96,9 @@ pub(crate) async fn run_loop_with(
     };
 
     let mut report = RunReport::new(&task.instruction).with_provenance(&cfg.agent.provider);
+    // The budget travels with the evidence: `steps` alone cannot distinguish
+    // "converged in 3" from "was cut off at 3".
+    report.max_steps = max_steps;
     // Record whether children are actually confined, so the evidence bundle can
     // distinguish enforcement from intention. A degradation (unavailable backend)
     // is surfaced as a blocker rather than left silent.
@@ -137,6 +140,7 @@ pub(crate) async fn run_loop_with(
                 // model never answered" without parsing this string.
                 report.blockers.push(format!("provider error: {e}"));
                 report.provider_error = Some(e.to_string());
+                report.exit = ExitReason::ProviderError;
                 return Ok(report.finished(false));
             }
         };
@@ -163,6 +167,7 @@ pub(crate) async fn run_loop_with(
                         }
                         report.blockers.push(e.to_string());
                         if cfg.agent.tier.enforces() {
+                            report.exit = ExitReason::HardBlocked;
                             return Ok(report.finished(false));
                         }
                     }
@@ -177,6 +182,7 @@ pub(crate) async fn run_loop_with(
                             report.scope_refusals.push(path.clone());
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
+                                report.exit = ExitReason::HardBlocked;
                                 return Ok(report.finished(false));
                             }
                         }
@@ -206,6 +212,7 @@ pub(crate) async fn run_loop_with(
                         Err(e @ Error::Scope(_)) => {
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
+                                report.exit = ExitReason::HardBlocked;
                                 return Ok(report.finished(false));
                             }
                         }
@@ -237,6 +244,7 @@ pub(crate) async fn run_loop_with(
                             // Role boundary: same handling as a forbidden write.
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
+                                report.exit = ExitReason::HardBlocked;
                                 return Ok(report.finished(false));
                             }
                         }
@@ -274,6 +282,7 @@ pub(crate) async fn run_loop_with(
                             // same handling as a forbidden write.
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
+                                report.exit = ExitReason::HardBlocked;
                                 return Ok(report.finished(false));
                             }
                         }
@@ -294,6 +303,7 @@ pub(crate) async fn run_loop_with(
         // benchmark harness measures ground truth with an external verify.
         if opts.ungoverned {
             if action_count == 0 {
+                report.exit = ExitReason::ClaimedDone;
                 return Ok(report.finished(true));
             }
             prior_evidence = tool_evidence;
@@ -333,12 +343,14 @@ pub(crate) async fn run_loop_with(
         }
 
         if all_passed {
+            report.exit = ExitReason::GatesPassed;
             return Ok(report.finished(true));
         }
         if needs_human {
             report
                 .blockers
                 .push("a gate requires human judgment — stopping (tiered governance)".into());
+            report.exit = ExitReason::NeedsHuman;
             return Ok(report.finished(false));
         }
 
@@ -351,5 +363,6 @@ pub(crate) async fn run_loop_with(
     } else {
         format!("reached max_steps ({max_steps}) without passing all gates")
     });
+    report.exit = ExitReason::BudgetExhausted;
     Ok(report.finished(false))
 }

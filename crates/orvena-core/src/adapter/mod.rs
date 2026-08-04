@@ -48,7 +48,7 @@ use crate::config::gates::Gate;
 use crate::exec::sandbox::{FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxPolicy};
 use crate::exec::{CommandOutput, CommandRunner, RunError};
 use crate::governance::gate::GateRunner;
-use crate::metrics::{GateRecord, RunReport, TokenAccounting};
+use crate::metrics::{ExitReason, GateRecord, RunReport, TokenAccounting};
 use crate::{Error, Result};
 
 /// Directory inside the workdir an adapter may hand the agent for its own
@@ -391,6 +391,10 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
 
     let ungoverned = cfg.gates.is_empty();
     let max_steps = if ungoverned { 1 } else { cfg.max_steps.max(1) };
+    // Recorded as-is: the ungoverned single invocation really is a budget of 1
+    // (the wrapped agent's own loop lives inside it — these are invocations,
+    // not steps).
+    report.max_steps = max_steps;
     let mut prior_evidence = String::new();
 
     for step_no in 1..=max_steps {
@@ -407,6 +411,7 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
                 // Fail-closed: the agent was never spawned. Recorded, and the run
                 // ends — a refused sandbox must never look like a completed run.
                 report.blockers.push(format!("agent not started: {e}"));
+                report.exit = ExitReason::AgentError;
                 return Ok(report.finished(false));
             }
             Err(RunError::Spawn(e)) => {
@@ -453,6 +458,10 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         }
 
         if ungoverned {
+            // Exit 0 is the agent's own, unverified claim of done; a non-zero
+            // exit is the agent failing outright, not a budget artifact.
+            report.exit =
+                if out.success() { ExitReason::ClaimedDone } else { ExitReason::AgentError };
             return Ok(report.finished(out.success()));
         }
 
@@ -481,12 +490,14 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
             }
         }
         if all_passed {
+            report.exit = ExitReason::GatesPassed;
             return Ok(report.finished(true));
         }
         if needs_human {
             report
                 .blockers
                 .push("a gate requires human judgment — stopping (tiered governance)".into());
+            report.exit = ExitReason::NeedsHuman;
             return Ok(report.finished(false));
         }
         prior_evidence = evidence;
@@ -508,6 +519,7 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         exhausted.push_str(&format!(" — last gate evidence: {tail}"));
     }
     report.blockers.push(exhausted);
+    report.exit = ExitReason::BudgetExhausted;
     Ok(report.finished(false))
 }
 

@@ -66,7 +66,7 @@ An unknown provider or `openai_compat` without `base_url` is an error, safe for 
 
 ```bash
 orvena run "add a hello module" --scope src/hello.rs
-# The agent can only read/write src/hello.rs, and stops at max_steps (default 3).
+# The agent can only read/write src/hello.rs, and stops at max_steps (default 8).
 # Report lands in .orvena/bench/<timestamp>/report.json
 ```
 

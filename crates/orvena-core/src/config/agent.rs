@@ -118,7 +118,11 @@ fn default_role() -> String {
 }
 
 fn default_max_steps() -> u32 {
-    3
+    // Sized for the READ/EDIT loop (slice-021): locate → edit → verify → read
+    // the evidence → re-edit → verify is 4-5 steps for one honest attempt; 8
+    // buys a full retry. The v0.1 default of 3 was sized for the blind
+    // full-file-WRITE loop.
+    8
 }
 
 #[cfg(test)]
@@ -132,6 +136,14 @@ mod tests {
             base_url: base_url.map(Into::into),
             api_key_env: None,
         }
+    }
+
+    #[test]
+    fn the_default_step_budget_is_sized_for_the_read_edit_loop() {
+        // slice-021: 4-5 steps is one honest locate → edit → verify → re-edit
+        // attempt; 8 buys a full retry. Changing this changes the measurement
+        // envelope — update SLICE-021-step-budget.md alongside.
+        assert_eq!(default_max_steps(), 8);
     }
 
     #[test]

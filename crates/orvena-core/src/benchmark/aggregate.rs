@@ -153,6 +153,8 @@ pub(super) fn derive_differential(
             baseline_verified_rate: b.verified_rate,
             governed_verified_rate: g.verified_rate,
             overhead_steps_ratio: ratio(g.mean_steps, b.mean_steps),
+            baseline_budget_exhaustion_rate: b.budget_exhaustion_rate,
+            governed_budget_exhaustion_rate: g.budget_exhaustion_rate,
             overhead_tokens_ratio: (b.token_accounting != TokenAccounting::Unavailable
                 && g.token_accounting != TokenAccounting::Unavailable)
                 .then(|| ratio(g.mean_total_tokens, b.mean_total_tokens)),
@@ -216,6 +218,7 @@ mod tests {
             evidence_valid: true,
             provider_error: None,
             token_accounting: TokenAccounting::Observed,
+            exit: crate::metrics::ExitReason::GatesPassed,
         }
     }
 
@@ -230,6 +233,7 @@ mod tests {
             evidence_valid: true,
             blockers: vec!["provider error: 429 Too Many Requests".into()],
             provider_error: Some("429 Too Many Requests".into()),
+            exit: crate::metrics::ExitReason::ProviderError,
             ..run(id, false, false)
         }
     }
@@ -316,6 +320,7 @@ mod tests {
             oracle_errors: bench.oracle_errors,
             evidence_valid_rate: bench.evidence_valid_rate,
             mean_steps: 2.0,
+            budget_exhaustion_rate: 0.0,
             mean_total_tokens: 150.0,
             token_accounting: TokenAccounting::Observed,
             tasks: Vec::new(),
@@ -367,6 +372,23 @@ mod tests {
         let (diff, why) = derive_differential(&[posture("off", 0), posture("engineering", 0)]);
         assert!(why.is_none());
         assert!(diff.is_some());
+    }
+
+    #[test]
+    fn the_steps_ratio_travels_with_its_censoring_rates() {
+        // The published ×N.NN steps ratio is a budget artifact to the extent a
+        // posture exhausts its budget — a baseline that burns every step puts
+        // `max_steps` in the denominator. The differential must carry each
+        // arm's exhaustion rate so the ratio is never read alone.
+        let mut b = posture("off", 0);
+        let mut g = posture("engineering", 0);
+        b.budget_exhaustion_rate = 0.75;
+        g.budget_exhaustion_rate = 0.1;
+        let (diff, why) = derive_differential(&[b, g]);
+        assert!(why.is_none());
+        let d = diff.expect("differential is published");
+        assert_eq!(d.baseline_budget_exhaustion_rate, 0.75);
+        assert_eq!(d.governed_budget_exhaustion_rate, 0.1);
     }
 
     #[test]

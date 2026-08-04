@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::metrics::TokenAccounting;
+use crate::metrics::{ExitReason, TokenAccounting};
 use crate::Result;
 
 /// The outcome of one task in the set.
@@ -68,6 +68,11 @@ pub struct TaskResult {
     /// with a claimed one.
     #[serde(default)]
     pub token_accounting: TokenAccounting,
+    /// Why the run's loop stopped (carried verbatim from the bundle). The one
+    /// that matters for M4: `budget_exhausted` marks a right-censored run whose
+    /// `steps` is a budget artifact, not a convergence measurement.
+    #[serde(default)]
+    pub exit: ExitReason,
 }
 
 /// The aggregate benchmark result. Every rate divides by `measured`, i.e.
@@ -210,6 +215,13 @@ pub struct RepeatedReport {
     /// Cost per ran task-run (M4): mean steps and mean total tokens.
     #[serde(default)]
     pub mean_steps: f32,
+    /// The fraction of measured runs (same denominator as `mean_steps`) that
+    /// ended on `budget_exhausted` — i.e. how much of `mean_steps` is
+    /// right-censored by the step budget rather than measured convergence. A
+    /// posture that burns its whole budget has a `mean_steps` that tracks
+    /// `max_steps`, not behavior; this rate is what makes that legible.
+    #[serde(default)]
+    pub budget_exhaustion_rate: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
     /// Provenance of `mean_total_tokens` — the weakest accounting among the
@@ -281,6 +293,16 @@ pub struct Differential {
     /// M4: governed cost / baseline cost (>1 = governance overhead). 0 when the
     /// baseline cost is 0 (nothing meaningful to divide).
     pub overhead_steps_ratio: f32,
+    /// How much of each posture's `mean_steps` is right-censored: the fraction
+    /// of measured runs that ended on `budget_exhausted`. The steps ratio above
+    /// is a budget artifact to exactly this extent — a baseline that burns its
+    /// whole budget puts `max_steps` in the denominator, and enlarging the
+    /// budget would then "improve" the ratio with zero behavioral change. The
+    /// ratio is published with its censoring visible, never alone.
+    #[serde(default)]
+    pub baseline_budget_exhaustion_rate: f32,
+    #[serde(default)]
+    pub governed_budget_exhaustion_rate: f32,
     /// `None` when either posture's tokens were never accounted for — a wrapped
     /// external agent makes its own model calls, and a ratio of two unknowns is
     /// not a cheaper number, it is not a number. Steps stay observable either

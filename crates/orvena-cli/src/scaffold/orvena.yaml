@@ -28,7 +28,7 @@ tier: light
 default_role: developer
 
 # Upper bound on loop attempts (bounded autonomy).
-max_steps: 3
+max_steps: 8
 
 # OS-level sandbox for every command Orvena spawns — the `<<<RUN>>>` commands and
 # each gate's `verify` (ADR-003). This is the OS-enforced floor UNDER `intent`:
