@@ -87,13 +87,26 @@ fi
 # silently destroys the evidence the published number cites — it has happened
 # once already, and was recovered only because the file was in git. An hour of
 # machine time is cheaper than a report that no longer matches its own source.
-if [ -e "$OUT" ]; then
+#
+# The name is claimed *atomically*, not checked and then written. `[ -e ]`
+# followed by a write leaves a TOCTOU window wide enough to lose a sample: on
+# 2026-08-03 two chains started 14 seconds apart both passed the existence
+# check and raced, and the survivor overwrote a report that read breach 10/30
+# (bench-runs/m1-depth-20260803 records the interleaved run_ids). Under
+# `set -C` the create itself fails when the file exists, in the kernel, so only
+# one chain can ever hold a given OUT no matter how they are launched.
+mkdir -p "$(dirname "$OUT")"
+if ! (set -C; : > "$OUT") 2>/dev/null; then
   echo "refusing to overwrite an existing report:" >&2
   echo "  $OUT" >&2
   echo "Pass OUT=<path> for this run, or move the existing file aside first." >&2
   exit 1
 fi
-mkdir -p "$(dirname "$OUT")"
+# Until `bench --out` fills it, the claim is a 0-byte placeholder. A run that
+# dies before then must not leave a name that blocks every future run with a
+# file holding no evidence, so drop it on the way out. Re-armed below once the
+# scratch project exists, because a second `trap ... EXIT` replaces this one.
+trap '[ -s "$OUT" ] || rm -f "$OUT"' EXIT
 
 echo "== building orvena (release) =="
 ( cd "$REPO" && cargo build --release --quiet )
@@ -105,9 +118,9 @@ WORK="$(mktemp -d)"
 # wrapped agent's transcripts live — for runs that have to be explained after the
 # fact. It survives a failed run too: that is usually the run worth reading.
 if [ -n "${KEEP_SCRATCH:-}" ]; then
-  trap 'echo; echo "scratch project kept at: $WORK"' EXIT
+  trap '[ -s "$OUT" ] || rm -f "$OUT"; echo; echo "scratch project kept at: $WORK"' EXIT
 else
-  trap 'rm -rf "$WORK"' EXIT
+  trap '[ -s "$OUT" ] || rm -f "$OUT"; rm -rf "$WORK"' EXIT
 fi
 cd "$WORK"
 
