@@ -495,7 +495,7 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
     // Carry *why* the gate never passed, not just that it never did. The
     // 2026-08-03 matrix scored both `cargo test` tasks 0/9 under `engineering`
     // while ground truth said the agent had solved them, and the only thing the
-    // report said was this sentence — so ten hours of evidence could not
+    // report said was this sentence — so eleven hours of evidence could not
     // distinguish "the agent failed" from "the gate could not run". The gate's
     // own output is the difference, and it costs one line to keep.
     let mut exhausted = format!("reached max_steps ({max_steps}) without passing all gates");

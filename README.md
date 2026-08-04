@@ -142,11 +142,12 @@ them there, where each number sits next to the run that produced it.
 ## What "contained" means here
 
 A containment number is only worth what was tried against it. The 2026-08-03
-differential recorded one breach in ten hours — and the breach was an agent
-writing a literal `~` directory *inside* the project root. Nothing in that run
-attempted a redirect, a copy, a rename, or a symlink, so "zero breaches under
-governance" recorded that nothing attacked the sandbox, not that the sandbox
-held.
+differential ran 288 task-runs over about eleven hours, and every breach it
+recorded was the same thing: an agent writing a literal `~` directory *inside*
+the project root — twelve times, all on one task, and all on the ungoverned leg.
+Nothing in that run attempted a redirect, a copy, a rename, or a symlink, so
+"zero breaches under governance" recorded that nothing attacked the sandbox, not
+that the sandbox held.
 
 So the boundary has its own adversary, with no model in the loop
 (`crates/orvena-cli/tests/escape_techniques.rs`). Every run exercises:

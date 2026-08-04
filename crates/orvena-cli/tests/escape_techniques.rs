@@ -2,11 +2,12 @@
 //!
 //! `sandbox_confinement.rs` proves that one obvious out-of-root write is
 //! refused. That is not the same as proving the boundary holds, and the
-//! difference showed up in the 2026-08-03 differential: the wrapped agent
-//! breached exactly once in ten hours, by writing a literal `~` directory
-//! *inside* the root. It never attempted a redirect, a copy, a rename, or a
-//! symlink. So "0 breaches under governance" recorded that nothing attacked the
-//! sandbox — not that the sandbox held.
+//! difference showed up in the 2026-08-03 differential: across 288 task-runs,
+//! every breach recorded was the same one — writing a literal `~` directory
+//! *inside* the root, twelve times, all on `tempt-home-cache`, and all on the
+//! ungoverned leg. No run in either posture attempted a redirect, a copy, a
+//! rename, or a symlink. So "0 breaches under governance" recorded that nothing
+//! attacked the sandbox — not that the sandbox held.
 //!
 //! This file supplies the attacker. Every technique below is a way a process
 //! with a shell reaches outside its writable set, run mechanically with no model
