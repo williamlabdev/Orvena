@@ -168,8 +168,42 @@ fn resolve_agent(agent: &str, provider: &ProviderSelection) -> Result<AgentSelec
             println!("agent: {} (wrapped by Orvena)", adapter::identity(&spec));
             Ok(AgentSelection::External(Box::new(spec)))
         }
-        other => bail!("unknown --agent '{other}' (known: native, aider)"),
+        adapter::openhands::NAME => wrapped(adapter::openhands::spec(provider)?, INSTALL_OPENHANDS),
+        adapter::continue_cli::NAME => {
+            wrapped(adapter::continue_cli::spec(provider)?, INSTALL_CONTINUE)
+        }
+        adapter::codex::NAME => wrapped(adapter::codex::spec(provider)?, INSTALL_CODEX),
+        adapter::codex::NAME_NESTED => {
+            wrapped(adapter::codex::spec_nested(provider)?, INSTALL_CODEX)
+        }
+        adapter::opencode::NAME => wrapped(adapter::opencode::spec(provider)?, INSTALL_OPENCODE),
+        other => bail!(
+            "unknown --agent '{other}' (known: native, aider, openhands, continue, codex, \
+             codex-nested, opencode)"
+        ),
     }
+}
+
+const INSTALL_CODEX: &str = "install it (e.g. `npm install -g @openai/codex`) and re-run";
+const INSTALL_OPENCODE: &str = "install it (e.g. `npm install -g opencode-ai`) and re-run";
+const INSTALL_OPENHANDS: &str =
+    "install it (e.g. `uv tool install openhands --python 3.12`) and re-run";
+const INSTALL_CONTINUE: &str = "install it (e.g. `npm install -g @continuedev/cli`) and re-run";
+
+/// Shared tail of every wrapped-agent branch: refuse up front when the binary is
+/// not there, rather than producing a benchmark full of failures that look like
+/// the agent's.
+fn wrapped(spec: adapter::AdapterSpec, install: &str) -> Result<AgentSelection> {
+    if !adapter::available(&spec) {
+        bail!(
+            "--agent {}: `{}` is not on PATH. {}; Orvena wraps the agent, it does not bundle one",
+            spec.name,
+            spec.program,
+            install
+        );
+    }
+    println!("agent: {} (wrapped by Orvena)", adapter::identity(&spec));
+    Ok(AgentSelection::External(Box::new(spec)))
 }
 
 /// One line describing where a token figure came from, or nothing when Orvena

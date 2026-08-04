@@ -70,6 +70,7 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
         ],
         env,
         version_args: vec!["--version".into()],
+        config_files: vec![],
     })
 }
 

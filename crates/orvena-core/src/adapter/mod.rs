@@ -34,6 +34,10 @@
 //! distribution. Adapters are how the same guarantees reach agents we don't own.
 
 pub mod aider;
+pub mod codex;
+pub mod continue_cli;
+pub mod opencode;
+pub mod openhands;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -63,6 +67,10 @@ pub const DEFAULT_AGENT_TIMEOUT_SECS: u64 = 600;
 /// How to invoke one external agent. Declarative on purpose: a built-in profile
 /// (see [`aider`]) is just a value of this type, so supporting another agent is
 /// data, not code.
+/// Placeholder in a profile's environment values, expanded to the agent's
+/// scratch directory at run time.
+pub const SCRATCH_PLACEHOLDER: &str = "{scratch}";
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AdapterSpec {
     /// Short identifier used in reports and on the CLI (`--agent aider`).
@@ -79,6 +87,21 @@ pub struct AdapterSpec {
     /// Arguments that make the program print its version, for the record.
     #[serde(default)]
     pub version_args: Vec<String>,
+    /// Configuration files the agent needs, written into its scratch directory
+    /// before the run as `(path relative to the scratch dir, contents)`.
+    ///
+    /// Not every agent is configurable through argv and environment. Continue
+    /// selects its model through `config.yaml` and offers no flag or variable
+    /// for it, so an adapter that can only pass arguments cannot point it at the
+    /// model the comparison requires — and a benchmark that silently drove a
+    /// different model on one leg would be measuring nothing.
+    ///
+    /// They land in the agent scratch directory on purpose: it is already
+    /// writable under the strict policy, and the violation oracle already
+    /// excludes it, so a generated config can never read as a write the task
+    /// never declared.
+    #[serde(default)]
+    pub config_files: Vec<(String, String)>,
 }
 
 /// Which agent drives a run: Orvena's own bounded loop, or a wrapped external
@@ -313,12 +336,41 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
     let scratch_cache = scratch.join("cache");
     std::fs::create_dir_all(&scratch_tmp)?;
     std::fs::create_dir_all(&scratch_cache)?;
+    // Before confinement, for the same reason the scratch dirs are: a confined
+    // child cannot create what it was not given.
+    for (rel, contents) in &cfg.spec.config_files {
+        let path = scratch.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, contents)?;
+    }
     let mut env = vec![
         ("TMPDIR".to_string(), scratch_tmp.to_string_lossy().into_owned()),
         ("XDG_CACHE_HOME".to_string(), scratch_cache.to_string_lossy().into_owned()),
+        // An agent console that wraps its output splits an error across two
+        // lines, and `refusal_lines` — which reads that output as text, because
+        // Orvena does not control this process — then keeps the half without the
+        // path. The 2026-08-03 matrix recorded 75 write refusals sheared down to
+        // `refused: rs after 5 attempts: [Errno 1] Operation not permitted:`,
+        // which says a refusal happened and not what was refused. Wrapping is a
+        // property of the harness's pipe, not of any one agent, so the width is
+        // asked for here rather than in a profile. `refusal_lines` stitches the
+        // continuation anyway; this keeps there from being one.
+        ("COLUMNS".to_string(), "1000".to_string()),
     ];
     // The profile's own environment is applied last, so a spec can override.
-    env.extend(cfg.spec.env.iter().cloned());
+    //
+    // `{scratch}` expands to the agent's scratch directory, because a profile is
+    // built before any workdir exists and some agents can only be redirected by
+    // absolute path. OpenHands caches under `Path.home()/.openhands` with no
+    // environment variable to move it, so the only way to keep its state inside
+    // the writable set — and out of the operator's real home — is to hand it a
+    // different `HOME`.
+    let scratch_str = scratch.to_string_lossy().into_owned();
+    env.extend(
+        cfg.spec.env.iter().map(|(k, v)| (k.clone(), v.replace(SCRATCH_PLACEHOLDER, &scratch_str))),
+    );
 
     // The gate needs the same redirect for the same reason — it is confined too,
     // and a toolchain that cannot reach temp fails on permission instead of on
@@ -389,8 +441,14 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         }
         // An agent that hit the write boundary says so on its own stderr. Keep
         // that line: it is the auditable trace of enforcement doing its job on a
-        // process Orvena does not control.
+        // process Orvena does not control. Whether it *was* doing its job is the
+        // oracle's call, not this loop's — so the path also goes out as
+        // structured data, or `false_blocks` cannot be computed for this leg at
+        // all (see `refused_path`).
         for line in refusal_lines(&transcript) {
+            if let Some(path) = refused_path(&line, cfg.workdir) {
+                report.scope_refusals.push(path);
+            }
             report.blockers.push(format!("agent write refused: {line}"));
         }
 
@@ -434,7 +492,22 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         prior_evidence = evidence;
     }
 
-    report.blockers.push(format!("reached max_steps ({max_steps}) without passing all gates"));
+    // Carry *why* the gate never passed, not just that it never did. The
+    // 2026-08-03 matrix scored both `cargo test` tasks 0/9 under `engineering`
+    // while ground truth said the agent had solved them, and the only thing the
+    // report said was this sentence — so ten hours of evidence could not
+    // distinguish "the agent failed" from "the gate could not run". The gate's
+    // own output is the difference, and it costs one line to keep.
+    let mut exhausted = format!("reached max_steps ({max_steps}) without passing all gates");
+    let last = prior_evidence.trim();
+    if !last.is_empty() {
+        let mut tail: String = last.chars().take(400).collect();
+        if last.chars().count() > 400 {
+            tail.push('…');
+        }
+        exhausted.push_str(&format!(" — last gate evidence: {tail}"));
+    }
+    report.blockers.push(exhausted);
     Ok(report.finished(false))
 }
 
@@ -487,16 +560,70 @@ fn compose_message(
 /// Lines in an agent's output that look like the OS refusing a write. Best
 /// effort by construction — an agent's phrasing is not a contract — so this only
 /// ever *adds* an auditable blocker line; nothing branches on it.
+///
+/// A console that wrapped the line puts the refused path on the *next* one, so a
+/// match ending at the colon is stitched to its continuation. Without that the
+/// record names an error and no path, which is exactly what the 2026-08-03
+/// matrix captured 75 times: enough to know a refusal happened, not enough to
+/// tell a correctly-refused temptation from a wrongly-refused declared path.
 fn refusal_lines(transcript: &str) -> Vec<String> {
-    transcript
-        .lines()
-        .filter(|l| {
-            let l = l.to_lowercase();
-            l.contains("operation not permitted") || l.contains("permission denied")
-        })
-        .map(|l| l.trim().to_string())
-        .take(5)
-        .collect()
+    let lines: Vec<&str> = transcript.lines().collect();
+    let mut out = Vec::new();
+    for (i, raw) in lines.iter().enumerate() {
+        let low = raw.to_lowercase();
+        if !(low.contains("operation not permitted") || low.contains("permission denied")) {
+            continue;
+        }
+        let mut line = raw.trim().to_string();
+        if line.ends_with(':') {
+            if let Some(next) = lines.get(i + 1).map(|l| l.trim()) {
+                if !next.is_empty() {
+                    line.push(' ');
+                    line.push_str(next);
+                }
+            }
+        }
+        out.push(line);
+        if out.len() == 5 {
+            break;
+        }
+    }
+    out
+}
+
+/// The path a refusal line names, workdir-relative, or `None` when the line
+/// carries none.
+///
+/// The wrapped leg's refusals arrive as text on the agent's own stderr, so they
+/// reached `blockers` and stopped there: `RunReport::scope_refusals` was only
+/// ever populated by the native loop (`agent::driver`). That left
+/// `OracleVerdict::false_blocks` — M1's over-blocking side — a *structural* zero
+/// on precisely the leg that produces refusals. The 2026-08-03 matrix recorded
+/// 75 wrapped refusals and `false_blocks: 0` beside every one of them, which
+/// reads as "no over-blocking" when it means "never measured". Parsed here so
+/// the oracle cross-checks this leg the way it already cross-checks the native
+/// one.
+///
+/// Best effort, like its caller. A line whose path cannot be recovered yields
+/// `None` rather than a guess — an unparsed refusal must not quietly become a
+/// clean one.
+fn refused_path(line: &str, workdir: &Path) -> Option<String> {
+    // Python's OSError renders the path quoted (`[Errno 1] ...: '/abs/path'`).
+    // Quoted first: it stays unambiguous when the path contains spaces.
+    let quoted = |open: char| {
+        line.split_once(open)
+            .and_then(|(_, rest)| rest.rsplit_once(open).map(|(p, _)| p.to_string()))
+            .filter(|p| !p.is_empty())
+    };
+    let raw = quoted('\'').or_else(|| quoted('"')).or_else(|| {
+        line.split_whitespace()
+            .find(|t| t.starts_with('/'))
+            .map(|t| t.trim_end_matches(':').to_string())
+    })?;
+    let p = Path::new(&raw);
+    let root = workdir.canonicalize().unwrap_or_else(|_| workdir.to_path_buf());
+    let rel = p.strip_prefix(&root).or_else(|_| p.strip_prefix(workdir)).unwrap_or(p);
+    Some(rel.to_string_lossy().into_owned())
 }
 
 /// Resolve a program name on `PATH` (a value containing `/` is a direct path).
@@ -531,6 +658,7 @@ mod tests {
             args: vec!["--message".into(), "{instruction}".into(), "{files}".into()],
             env: vec![],
             version_args: vec!["--version".into()],
+            config_files: vec![],
         }
     }
 
@@ -656,6 +784,40 @@ mod tests {
         let lines = refusal_lines(t);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("tests/it.rs"));
+    }
+
+    /// The 2026-08-03 regression: a console that wrapped the line left the
+    /// refused path on the next one, and the record kept only the half without
+    /// it. A refusal that does not name a path cannot be judged.
+    #[test]
+    fn a_wrapped_refusal_keeps_the_path_from_the_continuation_line() {
+        let t = "Unable to write file /x/src/lib.\nrs after 5 attempts: [Errno 1] Operation not permitted:\n'/x/src/lib.rs'\n";
+        let lines = refusal_lines(t);
+        assert_eq!(lines.len(), 1);
+        assert!(
+            lines[0].contains("/x/src/lib.rs"),
+            "the continuation carries the path: {}",
+            lines[0]
+        );
+    }
+
+    #[test]
+    fn a_refused_path_is_reported_relative_to_the_workdir() {
+        let dir = std::env::temp_dir().join("orvena-refused-path");
+        std::fs::create_dir_all(&dir).unwrap();
+        let root = dir.canonicalize().unwrap();
+        let line =
+            format!("[Errno 1] Operation not permitted: '{}'", root.join("tests/it.rs").display());
+        assert_eq!(refused_path(&line, &root).as_deref(), Some("tests/it.rs"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A refusal Orvena cannot parse must stay unparsed. Inventing a path would
+    /// feed the oracle a fact the agent never stated, and the oracle's whole job
+    /// is to be independent of what the agent says.
+    #[test]
+    fn a_refusal_without_a_path_yields_none_rather_than_a_guess() {
+        assert_eq!(refused_path("[Errno 1] Operation not permitted:", Path::new("/x")), None);
     }
 
     #[test]
