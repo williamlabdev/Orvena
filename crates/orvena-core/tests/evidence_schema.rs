@@ -230,6 +230,10 @@ fn a_pre_v1_bundle_without_the_schema_field_still_deserializes_as_v1() {
     // legacy bundle has no step budget and no typed exit reason.
     assert_eq!(report.max_steps, 0, "legacy budget is unrecorded (0), not invented");
     assert_eq!(report.exit, orvena_core::metrics::ExitReason::Unrecorded);
+    // slice-026: a legacy bundle recorded no action kinds. That must read as
+    // "not attributable", never as an all-zero breakdown — a consumer would
+    // otherwise conclude the loop never searched, from a file that never said.
+    assert!(report.action_counts.is_none(), "unrecorded attribution is None, not zeros");
     // But as a FILE on disk it predates the frozen contract and the validator
     // reports the missing fields — honesty over leniency.
 }

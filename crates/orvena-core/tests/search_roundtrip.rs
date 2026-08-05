@@ -105,6 +105,12 @@ async fn search_results_drive_the_next_write() {
     assert!(report.completed, "gate should pass; blockers: {:?}", report.blockers);
     assert_eq!(report.steps, 2, "step 1 searches, step 2 writes");
     assert!(report.tool_calls >= 2, "one search + one write");
+    // Per-action attribution (slice-026): `tool_calls` alone cannot answer
+    // "did the loop search?", which is the question the ruler keeps asking.
+    let counts = report.action_counts.expect("the native loop attributes its own actions");
+    assert_eq!(counts.search, 1, "one SEARCH emitted");
+    assert_eq!(counts.write, 1, "one WRITE emitted");
+    assert_eq!(counts.read, 0);
 
     let written = std::fs::read_to_string(root.join("hello.txt")).unwrap();
     assert_eq!(written.trim(), "greet politely", "content must come from the search hit");

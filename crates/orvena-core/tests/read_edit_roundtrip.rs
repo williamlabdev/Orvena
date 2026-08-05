@@ -109,6 +109,10 @@ async fn read_evidence_drives_the_next_edit() {
     assert!(report.completed, "gate should pass; blockers: {:?}", report.blockers);
     assert_eq!(report.steps, 2, "step 1 reads, step 2 edits");
     assert!(report.tool_calls >= 2, "one read + one edit");
+    let counts = report.action_counts.expect("the native loop attributes its own actions");
+    assert_eq!(counts.read, 1, "one READ emitted");
+    assert_eq!(counts.edit, 1, "one EDIT emitted");
+    assert_eq!(counts.search, 0, "this loop never searched — and the record says so");
 
     // The edit is surgical: the anchored line changed, the neighbor did not.
     let written = std::fs::read_to_string(root.join("config.txt")).unwrap();

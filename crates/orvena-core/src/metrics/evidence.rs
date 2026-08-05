@@ -84,6 +84,25 @@ pub fn validate_bundle_value(value: &serde_json::Value) -> Vec<String> {
     require("scope_refusals", is_string_array, "an array of strings");
     require("gate_outcomes", Value::is_array, "an array");
 
+    // Optional (a bundle may be from a wrapped agent or predate the field), but
+    // if present it must be usable without guessing: every counter an unsigned
+    // integer, or a consumer computing a search-use rate silently gets nonsense.
+    if let Some(v) = obj.get("action_counts") {
+        if !v.is_null() {
+            match v.as_object() {
+                None => problems.push("field `action_counts` is not an object".into()),
+                Some(counts) => {
+                    for (k, val) in counts {
+                        if !is_uint(val) {
+                            problems
+                                .push(format!("action_counts.{k} is not a non-negative integer"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(s) = obj.get("schema").and_then(Value::as_str) {
         if s != super::EVIDENCE_SCHEMA_V1 {
             problems.push(format!(

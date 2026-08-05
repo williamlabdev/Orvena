@@ -106,6 +106,10 @@ pub(crate) async fn run_loop_with(
     if let Some(warning) = sandbox.warning() {
         report.blockers.push(warning);
     }
+    // This loop parses the actions itself, so it can attribute them. Claimed
+    // here rather than on first action: a run that emitted none must read as
+    // "attributable, and it did nothing", not as "not attributable".
+    report.action_counts = Some(crate::metrics::ActionCounts::default());
     let mut prior_evidence = String::new();
 
     for step_no in 1..=max_steps {
@@ -157,6 +161,15 @@ pub(crate) async fn run_loop_with(
         let action_count = actions.len();
         for action in actions {
             report.tool_calls += 1;
+            if let Some(counts) = report.action_counts.as_mut() {
+                match &action {
+                    step::Action::Write { .. } => counts.write += 1,
+                    step::Action::Edit { .. } => counts.edit += 1,
+                    step::Action::Read { .. } => counts.read += 1,
+                    step::Action::Search { .. } => counts.search += 1,
+                    step::Action::Run { .. } => counts.run += 1,
+                }
+            }
             match action {
                 step::Action::Write { path, content } => {
                     if let Err(e) = fs.write(&path, &content) {

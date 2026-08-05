@@ -1,0 +1,502 @@
+# ⚠️  INVALID AS BUILT (2026-08-05, first run) — DO NOT QUOTE ITS NUMBERS.
+# qwen3:14b solved both scales 3/3 in ONE step with a single EDIT and zero
+# SEARCH, zero READ. Not a finding about the model: constraint 2 below (every
+# config writable, to keep temptation out) collides with how context is
+# assembled — the contents of every WRITABLE file are printed into the prompt.
+# The needle was handed over, so nothing was ever localized. General lesson for
+# the v2 set: "localization among writable files" is not a measurable dimension
+# at all; the corpus to be searched must be READ-ONLY (v1's cap-audit-services
+# has the honest shape — registry read-only, one small writable target).
+# Fix before re-running: keep svc/ read-only and give the task a separate
+# writable target. The seeds below are reusable as-is.
+#
+# Orvena instrument probe — SEARCH at two inventory scales. NOT a ruler.
+#
+# Question: since slice-025 the prompt lists every file by name. At what
+# inventory size does that listing stop being a menu the model can just scan,
+# and start requiring SEARCH? slice-024 asked whether a prompt rule could
+# induce SEARCH (no); slice-025 gave a map of five files (too small to ask).
+# This probe asks the same task at 12 files and at 40, changing nothing else.
+#
+# READ THE ACTION COUNTS, NOT THE PASS RATE. The judgement is `action_counts`
+# per run (slice-026): did the loop SEARCH, or READ its way down the list, or
+# burn the budget? A solved run that read 40 files is a different finding from
+# a solved run that searched once.
+#
+# Design constraints, both of which the probe is worthless without:
+#   1. The check's feedback is SYMPTOM-level, never location-level. It says a
+#      retired policy is requested "somewhere under svc/" — naming the file
+#      would hand over the localization for the price of one RUN.
+#   2. Every config is writable. The temptation axis stays out of the
+#      capability instrument: "which file is it" must never become "may I
+#      touch that file" (see SLICE-026-capability-set-v2.md, rule 6).
+#
+# Numbers from this file are about the INSTRUMENT, not the agent, and are
+# never quoted on the capability ladder.
+
+tasks:
+  - id: probe-needle-12
+    instruction: "The nightly rollup fails with: unknown retention policy 'archive-cold'. Exactly one service config still requests that retired policy; switch it to archive-warm. Nothing else may change. tests/check.sh verifies."
+    writes: [svc/beacon.conf, svc/courier.conf, svc/gateway.conf, svc/indexer.conf, svc/ledger.conf, svc/mailer.conf, svc/quarry.conf, svc/rollup.conf, svc/scheduler.conf, svc/telemetry.conf, svc/vault.conf, svc/warden.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 60
+    seed:
+      - path: svc/beacon.conf
+        contents: |
+          service = beacon
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 200
+          alert_channel = ops-bea
+          enabled = true
+      - path: svc/courier.conf
+        contents: |
+          service = courier
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 207
+          alert_channel = ops-cou
+          enabled = true
+      - path: svc/gateway.conf
+        contents: |
+          service = gateway
+          region = ap-south-1
+          retention = archive-frozen
+          max_batch = 214
+          alert_channel = ops-gat
+          enabled = true
+      - path: svc/indexer.conf
+        contents: |
+          service = indexer
+          region = us-west-1
+          retention = archive-warm
+          max_batch = 221
+          alert_channel = ops-ind
+          enabled = true
+      - path: svc/ledger.conf
+        contents: |
+          service = ledger
+          region = eu-west-1
+          retention = archive-hot
+          max_batch = 228
+          alert_channel = ops-led
+          enabled = true
+      - path: svc/mailer.conf
+        contents: |
+          service = mailer
+          region = us-east-2
+          retention = archive-frozen
+          max_batch = 235
+          alert_channel = ops-mai
+          enabled = true
+      - path: svc/quarry.conf
+        contents: |
+          service = quarry
+          region = ap-south-1
+          retention = archive-warm
+          max_batch = 242
+          alert_channel = ops-qua
+          enabled = true
+      - path: svc/rollup.conf
+        contents: |
+          service = rollup
+          region = us-west-1
+          retention = archive-hot
+          max_batch = 249
+          alert_channel = ops-rol
+          enabled = true
+      - path: svc/scheduler.conf
+        contents: |
+          service = scheduler
+          region = eu-west-1
+          retention = archive-cold
+          max_batch = 256
+          alert_channel = ops-sch
+          enabled = true
+      - path: svc/telemetry.conf
+        contents: |
+          service = telemetry
+          region = us-east-2
+          retention = archive-warm
+          max_batch = 263
+          alert_channel = ops-tel
+          enabled = true
+      - path: svc/vault.conf
+        contents: |
+          service = vault
+          region = ap-south-1
+          retention = archive-hot
+          max_batch = 270
+          alert_channel = ops-vau
+          enabled = true
+      - path: svc/warden.conf
+        contents: |
+          service = warden
+          region = us-west-1
+          retention = archive-frozen
+          max_batch = 277
+          alert_channel = ops-war
+          enabled = true
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Symptom-level feedback ONLY. Naming the offending file here would hand the
+          # localization to the agent and the probe would measure nothing.
+          fail() { echo "rollup problem: $1"; exit 1; }
+          grep -rqF 'archive-cold' svc/ && fail "a retired retention policy is still requested somewhere under svc/"
+          test "$(grep -hxF 'retention = archive-warm' svc/*.conf | wc -l)" -eq 5 \
+            || fail "expected exactly 5 services on archive-warm"
+          test "$(grep -hxF 'retention = archive-hot' svc/*.conf | wc -l)" -eq 4 \
+            || fail "the archive-hot services must not change"
+          test "$(grep -hxF 'retention = archive-frozen' svc/*.conf | wc -l)" -eq 3 \
+            || fail "the archive-frozen services must not change"
+          test "$(grep -hxF 'enabled = true' svc/*.conf | wc -l)" -eq 12 \
+            || fail "the services must all stay enabled — only the retention line changes"
+          test "$(ls svc/ | wc -l)" -eq 12 || fail "no config may be added or removed"
+          test "$(cat svc/*.conf | wc -l)" -eq 72 || fail "the configs must keep their exact line count"
+          echo ok
+
+  - id: probe-needle-40
+    instruction: "The nightly rollup fails with: unknown retention policy 'archive-cold'. Exactly one service config still requests that retired policy; switch it to archive-warm. Nothing else may change. tests/check.sh verifies."
+    writes: [svc/alcove.conf, svc/beacon.conf, svc/bramble.conf, svc/cinder.conf, svc/courier.conf, svc/dovetail.conf, svc/ember.conf, svc/fathom.conf, svc/gateway.conf, svc/girder.conf, svc/harbor.conf, svc/hollow.conf, svc/indexer.conf, svc/ivory.conf, svc/juniper.conf, svc/kelp.conf, svc/kestrel.conf, svc/lantern.conf, svc/lattice.conf, svc/ledger.conf, svc/mailer.conf, svc/meridian.conf, svc/orchard.conf, svc/pylon.conf, svc/quarry.conf, svc/quill.conf, svc/ravine.conf, svc/rollup.conf, svc/sablefish.conf, svc/scheduler.conf, svc/telemetry.conf, svc/tundra.conf, svc/umbra.conf, svc/vault.conf, svc/verdant.conf, svc/warden.conf, svc/willow.conf, svc/xenon.conf, svc/yarrow.conf, svc/zephyr.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 60
+    seed:
+      - path: svc/alcove.conf
+        contents: |
+          service = alcove
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 200
+          alert_channel = ops-alc
+          enabled = true
+      - path: svc/beacon.conf
+        contents: |
+          service = beacon
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 207
+          alert_channel = ops-bea
+          enabled = true
+      - path: svc/bramble.conf
+        contents: |
+          service = bramble
+          region = ap-south-1
+          retention = archive-frozen
+          max_batch = 214
+          alert_channel = ops-bra
+          enabled = true
+      - path: svc/cinder.conf
+        contents: |
+          service = cinder
+          region = us-west-1
+          retention = archive-warm
+          max_batch = 221
+          alert_channel = ops-cin
+          enabled = true
+      - path: svc/courier.conf
+        contents: |
+          service = courier
+          region = eu-west-1
+          retention = archive-hot
+          max_batch = 228
+          alert_channel = ops-cou
+          enabled = true
+      - path: svc/dovetail.conf
+        contents: |
+          service = dovetail
+          region = us-east-2
+          retention = archive-frozen
+          max_batch = 235
+          alert_channel = ops-dov
+          enabled = true
+      - path: svc/ember.conf
+        contents: |
+          service = ember
+          region = ap-south-1
+          retention = archive-warm
+          max_batch = 242
+          alert_channel = ops-emb
+          enabled = true
+      - path: svc/fathom.conf
+        contents: |
+          service = fathom
+          region = us-west-1
+          retention = archive-hot
+          max_batch = 249
+          alert_channel = ops-fat
+          enabled = true
+      - path: svc/gateway.conf
+        contents: |
+          service = gateway
+          region = eu-west-1
+          retention = archive-frozen
+          max_batch = 256
+          alert_channel = ops-gat
+          enabled = true
+      - path: svc/girder.conf
+        contents: |
+          service = girder
+          region = us-east-2
+          retention = archive-warm
+          max_batch = 263
+          alert_channel = ops-gir
+          enabled = true
+      - path: svc/harbor.conf
+        contents: |
+          service = harbor
+          region = ap-south-1
+          retention = archive-hot
+          max_batch = 270
+          alert_channel = ops-har
+          enabled = true
+      - path: svc/hollow.conf
+        contents: |
+          service = hollow
+          region = us-west-1
+          retention = archive-frozen
+          max_batch = 277
+          alert_channel = ops-hol
+          enabled = true
+      - path: svc/indexer.conf
+        contents: |
+          service = indexer
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 284
+          alert_channel = ops-ind
+          enabled = true
+      - path: svc/ivory.conf
+        contents: |
+          service = ivory
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 291
+          alert_channel = ops-ivo
+          enabled = true
+      - path: svc/juniper.conf
+        contents: |
+          service = juniper
+          region = ap-south-1
+          retention = archive-frozen
+          max_batch = 298
+          alert_channel = ops-jun
+          enabled = true
+      - path: svc/kelp.conf
+        contents: |
+          service = kelp
+          region = us-west-1
+          retention = archive-warm
+          max_batch = 305
+          alert_channel = ops-kel
+          enabled = true
+      - path: svc/kestrel.conf
+        contents: |
+          service = kestrel
+          region = eu-west-1
+          retention = archive-hot
+          max_batch = 312
+          alert_channel = ops-kes
+          enabled = true
+      - path: svc/lantern.conf
+        contents: |
+          service = lantern
+          region = us-east-2
+          retention = archive-frozen
+          max_batch = 319
+          alert_channel = ops-lan
+          enabled = true
+      - path: svc/lattice.conf
+        contents: |
+          service = lattice
+          region = ap-south-1
+          retention = archive-warm
+          max_batch = 326
+          alert_channel = ops-lat
+          enabled = true
+      - path: svc/ledger.conf
+        contents: |
+          service = ledger
+          region = us-west-1
+          retention = archive-hot
+          max_batch = 333
+          alert_channel = ops-led
+          enabled = true
+      - path: svc/mailer.conf
+        contents: |
+          service = mailer
+          region = eu-west-1
+          retention = archive-frozen
+          max_batch = 340
+          alert_channel = ops-mai
+          enabled = true
+      - path: svc/meridian.conf
+        contents: |
+          service = meridian
+          region = us-east-2
+          retention = archive-warm
+          max_batch = 347
+          alert_channel = ops-mer
+          enabled = true
+      - path: svc/orchard.conf
+        contents: |
+          service = orchard
+          region = ap-south-1
+          retention = archive-hot
+          max_batch = 354
+          alert_channel = ops-orc
+          enabled = true
+      - path: svc/pylon.conf
+        contents: |
+          service = pylon
+          region = us-west-1
+          retention = archive-frozen
+          max_batch = 361
+          alert_channel = ops-pyl
+          enabled = true
+      - path: svc/quarry.conf
+        contents: |
+          service = quarry
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 368
+          alert_channel = ops-qua
+          enabled = true
+      - path: svc/quill.conf
+        contents: |
+          service = quill
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 375
+          alert_channel = ops-qui
+          enabled = true
+      - path: svc/ravine.conf
+        contents: |
+          service = ravine
+          region = ap-south-1
+          retention = archive-cold
+          max_batch = 382
+          alert_channel = ops-rav
+          enabled = true
+      - path: svc/rollup.conf
+        contents: |
+          service = rollup
+          region = us-west-1
+          retention = archive-warm
+          max_batch = 389
+          alert_channel = ops-rol
+          enabled = true
+      - path: svc/sablefish.conf
+        contents: |
+          service = sablefish
+          region = eu-west-1
+          retention = archive-hot
+          max_batch = 396
+          alert_channel = ops-sab
+          enabled = true
+      - path: svc/scheduler.conf
+        contents: |
+          service = scheduler
+          region = us-east-2
+          retention = archive-frozen
+          max_batch = 403
+          alert_channel = ops-sch
+          enabled = true
+      - path: svc/telemetry.conf
+        contents: |
+          service = telemetry
+          region = ap-south-1
+          retention = archive-warm
+          max_batch = 410
+          alert_channel = ops-tel
+          enabled = true
+      - path: svc/tundra.conf
+        contents: |
+          service = tundra
+          region = us-west-1
+          retention = archive-hot
+          max_batch = 417
+          alert_channel = ops-tun
+          enabled = true
+      - path: svc/umbra.conf
+        contents: |
+          service = umbra
+          region = eu-west-1
+          retention = archive-frozen
+          max_batch = 424
+          alert_channel = ops-umb
+          enabled = true
+      - path: svc/vault.conf
+        contents: |
+          service = vault
+          region = us-east-2
+          retention = archive-warm
+          max_batch = 431
+          alert_channel = ops-vau
+          enabled = true
+      - path: svc/verdant.conf
+        contents: |
+          service = verdant
+          region = ap-south-1
+          retention = archive-hot
+          max_batch = 438
+          alert_channel = ops-ver
+          enabled = true
+      - path: svc/warden.conf
+        contents: |
+          service = warden
+          region = us-west-1
+          retention = archive-frozen
+          max_batch = 445
+          alert_channel = ops-war
+          enabled = true
+      - path: svc/willow.conf
+        contents: |
+          service = willow
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 452
+          alert_channel = ops-wil
+          enabled = true
+      - path: svc/xenon.conf
+        contents: |
+          service = xenon
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 459
+          alert_channel = ops-xen
+          enabled = true
+      - path: svc/yarrow.conf
+        contents: |
+          service = yarrow
+          region = ap-south-1
+          retention = archive-frozen
+          max_batch = 466
+          alert_channel = ops-yar
+          enabled = true
+      - path: svc/zephyr.conf
+        contents: |
+          service = zephyr
+          region = us-west-1
+          retention = archive-warm
+          max_batch = 473
+          alert_channel = ops-zep
+          enabled = true
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Symptom-level feedback ONLY. Naming the offending file here would hand the
+          # localization to the agent and the probe would measure nothing.
+          fail() { echo "rollup problem: $1"; exit 1; }
+          grep -rqF 'archive-cold' svc/ && fail "a retired retention policy is still requested somewhere under svc/"
+          test "$(grep -hxF 'retention = archive-warm' svc/*.conf | wc -l)" -eq 15 \
+            || fail "expected exactly 15 services on archive-warm"
+          test "$(grep -hxF 'retention = archive-hot' svc/*.conf | wc -l)" -eq 13 \
+            || fail "the archive-hot services must not change"
+          test "$(grep -hxF 'retention = archive-frozen' svc/*.conf | wc -l)" -eq 12 \
+            || fail "the archive-frozen services must not change"
+          test "$(grep -hxF 'enabled = true' svc/*.conf | wc -l)" -eq 40 \
+            || fail "the services must all stay enabled — only the retention line changes"
+          test "$(ls svc/ | wc -l)" -eq 40 || fail "no config may be added or removed"
+          test "$(cat svc/*.conf | wc -l)" -eq 240 || fail "the configs must keep their exact line count"
+          echo ok

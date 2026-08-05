@@ -90,6 +90,7 @@ pub async fn run_benchmark(
                 skip_reason: Some(format!("requires `{missing}` (not found on PATH)")),
                 steps: 0,
                 tool_calls: 0,
+                action_counts: None,
                 input_tokens: 0,
                 output_tokens: 0,
                 evidence_path: None,
@@ -187,6 +188,7 @@ pub async fn run_benchmark(
                     skip_reason: None,
                     steps: report.steps,
                     tool_calls: report.tool_calls,
+                    action_counts: report.action_counts,
                     input_tokens: report.input_tokens,
                     output_tokens: report.output_tokens,
                     evidence_path: Some(evidence_path),
@@ -209,6 +211,7 @@ pub async fn run_benchmark(
                 skip_reason: None,
                 steps: 0,
                 tool_calls: 0,
+                action_counts: None,
                 input_tokens: 0,
                 output_tokens: 0,
                 evidence_path: None,
@@ -367,6 +370,22 @@ fn verify_gate(task: &BenchTask) -> Gate {
 
 /// Does `cmd` resolve to an executable? A value containing `/` is treated as a
 /// direct path; otherwise `PATH` is scanned. Dep-free (no `which` crate).
+/// The fraction of runs that emitted at least one SEARCH, over the runs whose
+/// actions were attributable at all.
+///
+/// The denominator is the whole point. A wrapped agent's `action_counts` is
+/// `None` — its loop is its own — and folding those in as "did not search"
+/// would turn a gap in the record into a finding about behaviour. `None` out
+/// when nothing was attributable, so a consumer cannot mistake "we could not
+/// tell" for "it never searched".
+fn search_use_rate(ran: &[&TaskResult]) -> Option<f32> {
+    let attributable: Vec<_> = ran.iter().filter_map(|t| t.action_counts).collect();
+    if attributable.is_empty() {
+        return None;
+    }
+    Some(attributable.iter().filter(|c| c.search > 0).count() as f32 / attributable.len() as f32)
+}
+
 fn command_exists(cmd: &str) -> bool {
     if cmd.contains('/') {
         return Path::new(cmd).is_file();
@@ -506,6 +525,7 @@ pub async fn run_benchmark_repeated(
     } else {
         ran_results.iter().map(|t| (t.input_tokens + t.output_tokens) as f32).sum::<f32>() / n_ran
     };
+    let search_use_rate = search_use_rate(&ran_results);
     // The weakest accounting wins: one unaccounted run makes the mean a partial
     // number, and calling it "observed" would be the flattering read.
     let token_accounting = ran_results
@@ -536,6 +556,7 @@ pub async fn run_benchmark_repeated(
         mean_steps,
         budget_exhaustion_rate,
         mean_total_tokens,
+        search_use_rate,
         token_accounting,
         tasks,
         runs,
@@ -672,6 +693,51 @@ mod tests {
             escape_probes: vec![],
             commands,
         }
+    }
+
+    fn result_with(counts: Option<crate::metrics::ActionCounts>) -> TaskResult {
+        TaskResult {
+            id: "t".into(),
+            completed: true,
+            verified: true,
+            skipped: false,
+            skip_reason: None,
+            steps: 1,
+            tool_calls: 1,
+            action_counts: counts,
+            input_tokens: 0,
+            output_tokens: 0,
+            evidence_path: None,
+            blockers: Vec::new(),
+            violations: Vec::new(),
+            false_blocks: Vec::new(),
+            contained: true,
+            oracle_error: None,
+            evidence_valid: true,
+            provider_error: None,
+            token_accounting: TokenAccounting::default(),
+            exit: ExitReason::GatesPassed,
+        }
+    }
+
+    #[test]
+    fn search_use_rate_counts_only_runs_whose_actions_we_can_attribute() {
+        use crate::metrics::ActionCounts;
+        let searched = result_with(Some(ActionCounts { search: 1, ..Default::default() }));
+        let did_not = result_with(Some(ActionCounts { read: 3, ..Default::default() }));
+        // A wrapped agent: its loop is its own, so this run is not evidence
+        // either way. Counting it as "did not search" would invent a finding.
+        let wrapped = result_with(None);
+
+        let rows = [&searched, &did_not, &wrapped];
+        assert_eq!(search_use_rate(&rows), Some(0.5), "denominator is the two attributable runs");
+    }
+
+    #[test]
+    fn nothing_attributable_reads_as_unknown_not_as_zero() {
+        let wrapped = result_with(None);
+        let rows = [&wrapped];
+        assert_eq!(search_use_rate(&rows), None, "'we could not tell' is not '0% searched'");
     }
 
     #[test]

@@ -30,6 +30,12 @@ pub struct TaskResult {
     pub skip_reason: Option<String>,
     pub steps: u32,
     pub tool_calls: u32,
+    /// Which kinds of action those calls were, when the loop could attribute
+    /// them (native only — see [`crate::metrics::ActionCounts`]). This is what
+    /// makes "did it search or did it read its way there?" a number instead of
+    /// a transcript-reading exercise.
+    #[serde(default)]
+    pub action_counts: Option<crate::metrics::ActionCounts>,
     pub input_tokens: u32,
     pub output_tokens: u32,
     /// Path to the task's evidence bundle (`None` if skipped, or if the run
@@ -224,6 +230,13 @@ pub struct RepeatedReport {
     pub budget_exhaustion_rate: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
+    /// The fraction of *attributable* runs that emitted at least one SEARCH.
+    /// Denominator is runs with `action_counts` present, not all ran runs: a
+    /// wrapped agent's actions are not Orvena's to attribute, and folding those
+    /// in as "never searched" would read as a finding about the loop when it is
+    /// only a gap in the record. `None` when nothing was attributable.
+    #[serde(default)]
+    pub search_use_rate: Option<f32>,
     /// Provenance of `mean_total_tokens` — the weakest accounting among the
     /// measured runs. `unavailable` means the mean is **0 because nobody
     /// counted**, not because the runs were free; a reader must be able to tell

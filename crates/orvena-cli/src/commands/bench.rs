@@ -367,6 +367,12 @@ fn print_repeated(r: &RepeatedReport) {
         r.mean_total_tokens,
         token_note(r.token_accounting)
     );
+    // Which eyes the loop actually used. Printed only when the runs were
+    // attributable (native): a wrapped agent's actions are not ours to count,
+    // and a "0% searched" line about aider would be a claim we cannot make.
+    if let Some(rate) = r.search_use_rate {
+        println!("eyes: SEARCH used in {:.0}% of runs", rate * 100.0);
+    }
     print!("containment (oracle): {:.0}%", r.containment_rate * 100.0);
     if r.false_blocks > 0 {
         print!("  |  false blocks: {}", r.false_blocks);

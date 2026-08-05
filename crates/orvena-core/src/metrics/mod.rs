@@ -20,6 +20,25 @@ fn evidence_schema_v1() -> String {
     EVIDENCE_SCHEMA_V1.into()
 }
 
+/// Per-action breakdown of a native loop's tool calls, one counter per action
+/// kind the model can emit (see [`crate::agent::step::Action`]). These count
+/// what the model *emitted*, not what succeeded — same basis as `tool_calls`,
+/// so a scope-refused write still counts as a write it tried. Additive: a
+/// bundle without it reads back as [`RunReport::action_counts`] = `None`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionCounts {
+    #[serde(default)]
+    pub write: u32,
+    #[serde(default)]
+    pub edit: u32,
+    #[serde(default)]
+    pub read: u32,
+    #[serde(default)]
+    pub search: u32,
+    #[serde(default)]
+    pub run: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunReport {
     /// Self-describing schema identifier — an artifact of record must say what
@@ -47,6 +66,18 @@ pub struct RunReport {
     pub input_tokens: u32,
     pub output_tokens: u32,
     pub tool_calls: u32,
+    /// Which *kinds* of action those tool calls were. `tool_calls` alone cannot
+    /// answer the question the ruler keeps asking — "did the loop ever search,
+    /// or did it read its way to the answer?" — and slice-024 had to be judged
+    /// by hand-reading transcripts for exactly that reason.
+    ///
+    /// `None` means **not attributable**, which is not the same as all-zero: a
+    /// wrapped third-party agent runs its own loop inside one invocation (its
+    /// `tool_calls` counts invocations, not actions), and bundles written before
+    /// this field existed never recorded it. Consumers must exclude `None` from
+    /// their denominators rather than counting it as "never searched".
+    #[serde(default)]
+    pub action_counts: Option<ActionCounts>,
     pub gate_outcomes: Vec<GateRecord>,
     pub blockers: Vec<String>,
     /// Write paths the enforcement layer refused (scope violations), as
@@ -168,6 +199,9 @@ impl RunReport {
             input_tokens: 0,
             output_tokens: 0,
             tool_calls: 0,
+            // `None` until a loop that can attribute actions claims it — the
+            // native driver does so on entry, wrapped agents never do.
+            action_counts: None,
             gate_outcomes: Vec::new(),
             blockers: Vec::new(),
             scope_refusals: Vec::new(),
