@@ -7,8 +7,9 @@
 > tasks *guessed* values instead of reading them) → **native 0.2.0
 > (grounded loop, slice-023): 88%**, cheaper (3.8 → 3.0 steps) → native
 > 0.3.0 (a search-to-locate prompt rule): **83%, rejected and reverted** —
-> its target task did not move and an unrelated task regressed. The shipped
-> agent is 0.2.0. One ruler, one variable per rung, and the ruler killed a
+> its target task did not move and an unrelated task regressed → **native
+> 0.4.0 (file inventory, slice-025): 100% (24/24)** at 2.2 steps and 0%
+> budget exhaustion. One ruler, one variable per rung, and the ruler killed a
 > bad investment before it was committed — which is what it is for.
 > **Cross-model check (2026-08-05):** `qwen3.6:35b` × native 0.2.0 solves the
 > set **24/24 (100%)** at 2.3 steps — including the task `qwen3:14b` failed
@@ -19,9 +20,13 @@
 > of the cross-model check ("the 14B wall is the model's"): under aider's
 > harness the same 14B solves that task 2/3, once in a single step. The wall
 > is **harness×model** — native never shows the model which files exist, and
-> aider's repo map does. Neither harness dominates: aider wins the 14B cell
-> (96% vs 88%), native wins the 35B cell (**100%** vs 96%). Discoverability
-> (a file inventory in context) is the loop's next named investment.
+> aider's repo map does. **That reading held and the fix landed the same day:**
+> slice-025 put a file inventory in native's context (names only), and the
+> 14B cell went 88% → **100%**, past aider's 96%, with the target task solved
+> in a single step in all three runs — the same shape as aider's solve. The
+> matrix is now native {100%, 100%} vs aider {96%, 96%}, and the ruler is
+> saturated on both models: measuring the next loop investment needs a harder
+> set version, not another rung on this one.
 >
 > **Second number (the governance differential), re-measured — 2026-08-02:**
 > on the 8-task **temptation set**, same model (`qwen3:14b`), same prompts, 3
@@ -112,15 +117,19 @@ a guessed target; it converged on the registry audit but invented ports (8201,
 check's own feedback said to see. Two prompt investments followed, one rung
 per variable, same comparability key except the agent version:
 
-| Measurement | native 0.1.0 | native 0.2.0 (slice-023) | native 0.3.0 (rejected) |
-|---|---|---|---|
-| **Ground-truth solve rate** | 75% (18/24) | **88%** (21/24) | 83% (20/24) |
-| **M4 — cost** (mean/task-run) | 3.8 steps / 5,761 tok | **3.0 / 5,728** | 3.4 / 7,079 |
-| **Budget exhaustion** | 25% | **12.5%** | 16.7% |
-| `cap-audit-services` | 0/3 | **3/3** | 3/3 |
-| `cap-locate-broken-ref` | 0/3 | 0/3 | 0/3 |
-| `cap-converge-deploy` | 3/3 | 3/3 | **2/3 (regression)** |
-| Raw report | `…-capability-qwen3-14b.json` | `…-native020.json` | `…-native030.json` |
+| Measurement | native 0.1.0 | native 0.2.0 (slice-023) | native 0.3.0 (rejected) | native 0.4.0 (slice-025) |
+|---|---|---|---|---|
+| **Ground-truth solve rate** | 75% (18/24) | 88% (21/24) | 83% (20/24) | **100%** (24/24) |
+| **M4 — cost** (mean/task-run) | 3.8 steps / 5,761 tok | 3.0 / 5,728 | 3.4 / 7,079 | **2.2 / 3,043** |
+| **Budget exhaustion** | 25% | 12.5% | 16.7% | **0%** |
+| `cap-audit-services` | 0/3 | **3/3** | 3/3 | 3/3 |
+| `cap-locate-broken-ref` | 0/3 | 0/3 | 0/3 | **3/3** |
+| `cap-converge-deploy` | 3/3 | 3/3 | **2/3 (regression)** | 3/3 |
+| Raw report | `…-capability-qwen3-14b.json` | `…-native020.json` | `…-native030.json` | [`…-native040.json`](../bench-runs/20260805-capability-qwen3-14b-native040.json) |
+
+(Version numbering skips 0.3.0: the rejected rung's bundle is committed and
+stamped `agent: native 0.3.0`, and the comparability key's fourth element must
+not name two different code states.)
 
 - **0.2.0 — grounded loop (slice-023, shipped).** Two rules joined the system
   prompt (identically in both postures, parity-pinned): never invent a value
@@ -135,11 +144,32 @@ per variable, same comparability key except the agent version:
   satisfy the check — and `cap-converge-deploy` regressed with degenerate
   edits (+24% tokens). n=3 leaves noise room on the aggregate, but a target
   at 0/3 with zero SEARCH calls is a clean null: the rule bought nothing and
-  charged for it. Reverted before commit; the shipped agent is 0.2.0. Lesson
-  recorded in `SLICE-024-search-to-locate.md`: on this model, prompt rules
-  can discipline the use of tools the evidence points at, but do not induce
-  a tool the model never reaches for — that lever is either driver feedback
-  or a stronger model, and deciding which is the next measurement.
+  charged for it. Reverted before commit; the shipped agent stayed 0.2.0.
+  Lesson recorded in `SLICE-024-search-to-locate.md`: on this model, prompt
+  rules can discipline the use of tools the evidence points at, but do not
+  induce a tool the model never reaches for — that lever is either driver
+  feedback or a stronger model, and deciding which is the next measurement.
+- **0.4.0 — file inventory (slice-025, shipped).** The prompt now lists every
+  file in the workspace by name (contents excluded, same visibility as the
+  loop's own SEARCH, present identically in both postures). Not a rule about
+  looking — the map that makes looking possible: `docs/install.md` is not
+  writable, not named by the instruction, and not linked from the index, so
+  for three envelopes it did not exist as far as the model was concerned.
+  `cap-locate-broken-ref` went 0/3 (8 steps, budget exhausted, 25,241 tok) →
+  **3/3 at one step and 1,750 tok**.
+  **The aggregate saving is one task, and the listing is not free.** Six of
+  the eight tasks got *more* expensive (+3% to +31% tokens — the inventory's
+  own cost, on a workspace of five files; a real repository pays more), and
+  the set-wide 5,728 → 3,043 tok comes from deleting a single 8-step flail.
+  No task regressed in solve rate. Recording the tax alongside the headline is
+  the direct lesson of the rejected rung above.
+  **How the target was actually solved:** one step, one tool call, no READ —
+  the model inferred the right file from its *name* in the listing, the same
+  single-step shape aider's repo map produces. So the task now discriminates
+  "knowing what exists" rather than "verifying before pointing"; a future set
+  version wanting to measure the latter needs a file whose name does not give
+  its contents away. The current set is not re-tuned for it (changing a task
+  makes a new set version, and this ladder would lose its key).
 
 ### Cross-model check: the 14B wall is the model's, not the loop's (2026-08-05)
 
@@ -208,6 +238,11 @@ in the raw reports: `20260805-capability-{qwen3-14b,qwen3.6-35b}-aider.json`.)
   **file inventory in context** — cheap, general, and directly testable on
   this cell (does native × 14b close 88% → ~96%+ when the model can see the
   file list?).
+  **Answered the same day (slice-025, native 0.4.0): yes, and past the
+  prediction — 88% → 100%**, with `cap-locate-broken-ref` solved in one step
+  in all three runs. The matrix reads native {100%, 100%} vs aider {96%, 96%},
+  so "aider wins the 14B cell" holds only against native 0.2.0. Both native
+  cells are now saturated on this set.
 - **What the 35B cell says for the thesis.** With a strong enough model,
   Orvena's bounded, verify-gated loop converges completely on this set,
   where aider — mature, repo-map and all — still drops a run. One cell on

@@ -8,6 +8,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **File inventory in context — the map the loop never had** (slice-025,
+  `crates/orvena-core/src/agent/context.rs`) — the prompt now lists every file
+  in the workspace by name under `PROJECT FILES`, contents excluded. Until now
+  it showed the writable files and nothing else, so a read-only file the
+  instruction did not name simply did not exist as far as the model was
+  concerned; it could only be reached by guessing a path or by a search the
+  model had no reason to run. slice-024 tried to induce that search with a
+  prompt rule and the ruler rejected it — this slice supplies the map instead
+  of exhorting the search. Names only, deliberately (a path is enough to aim a
+  READ; printing contents would hand over every task's `check.sh`), with the
+  same visibility as `grep.rs` so the listing promises exactly what the loop's
+  own eyes can reach. It is capability, not obligation: present identically in
+  both postures and pinned by a parity test, like READ/EDIT and the grounding
+  rules before it. The writable files' contents are priced first and the
+  listing spends only what is left, so a name list can never evict the file
+  the task is about; a 200-entry cap bounds it on real repositories and says so
+  when it truncates. On the capability ruler (`qwen3:14b`, same set, same
+  `max_steps = 8`): **verified 88% → 100% (24/24)**, mean 3.0 → 2.2 steps,
+  budget exhaustion 12.5% → 0%, and `cap-locate-broken-ref` 0/3 → 3/3 at one
+  step. The listing is not free — six of eight tasks got 3–31% more expensive
+  and the aggregate saving comes from deleting one 8-step flail. The workspace
+  version goes to 0.4.0, skipping 0.3.0: that number is already committed in
+  the rejected rung's bundle, and the comparability key's agent element must
+  not name two different code states.
 - **Grounded loop — read the evidence before you write** (slice-023,
   `crates/orvena-core/src/agent/context.rs`) — the capability set's first run
   (native 0.1.0, `qwen3:14b`: verified 75%, perfectly bimodal) showed both
