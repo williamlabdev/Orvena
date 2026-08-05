@@ -31,32 +31,32 @@ pub fn build(
 ) -> BuiltContext {
     let system = system_prompt(role, scope.unrestricted);
 
-    let mut user = String::new();
-    user.push_str(&format!("Task: {instruction}\n\n"));
+    let mut head = String::new();
+    head.push_str(&format!("Task: {instruction}\n\n"));
 
     // Which commands the model may actually run. The system prompt has always
     // described `<<<RUN name>>>`, but never said which names exist — leaving the
     // tool discoverable only by guessing, which is the same as not shipping it.
     // Only `read_only` commands are listed: the runtime refuses a `mutating` one
     // anyway (ADR-001), so advertising it would only invite a blocked call.
-    user.push_str(&runnable_commands(role, commands));
+    head.push_str(&runnable_commands(role, commands));
 
     // Machine-readable list of writable targets (also consumed by the offline
     // provider). Everything else is read-only.
-    user.push_str("WRITABLE:\n");
+    head.push_str("WRITABLE:\n");
     if scope.allowed_modifications.is_empty() {
-        user.push_str("(none — read-only task)\n");
+        head.push_str("(none — read-only task)\n");
     } else {
         for p in &scope.allowed_modifications {
-            user.push_str(&format!("- {p}\n"));
+            head.push_str(&format!("- {p}\n"));
         }
     }
-    user.push('\n');
+    head.push('\n');
 
     // Current contents of the writable files, high-value first, within budget.
     let fs = FsTool::new(root, scope, role);
-    let mut used = estimate_tokens(&system) + estimate_tokens(&user);
-    user.push_str("Current files in scope:\n");
+    let mut used = estimate_tokens(&system) + estimate_tokens(&head);
+    let mut files = String::from("Current files in scope:\n");
     for p in &scope.allowed_modifications {
         let body = match fs.read_opt(p) {
             Ok(Some(c)) => c,
@@ -66,12 +66,20 @@ pub fn build(
         let block = format!("--- {p} ---\n{body}\n");
         let cost = estimate_tokens(&block);
         if used + cost > budget_tokens {
-            user.push_str("(remaining files omitted: context budget reached)\n");
+            files.push_str("(remaining files omitted: context budget reached)\n");
             break;
         }
         used += cost;
-        user.push_str(&block);
+        files.push_str(&block);
     }
+
+    // slice-025: the inventory is priced *after* the writable contents, though it
+    // is printed before them — a name list must never evict the file the task is
+    // about. It spends only what those contents left behind.
+    let inventory = file_inventory(root, role, budget_tokens.saturating_sub(used));
+    used += estimate_tokens(&inventory);
+
+    let mut user = format!("{head}{inventory}{files}");
 
     if !prior_evidence.trim().is_empty() {
         let note = format!(
@@ -113,6 +121,90 @@ fn runnable_commands(role: &Role, commands: &Commands) -> String {
         "RUNNABLE (read-only commands; emit <<<RUN name>>> to see their output):\n{}\n\n",
         names.iter().map(|n| format!("- {n}")).collect::<Vec<_>>().join("\n")
     )
+}
+
+/// How many paths the inventory will print before it stops. A real repository has
+/// thousands of files; the cap is what keeps "here is the project" from becoming
+/// the whole prompt on a codebase the task barely touches.
+const MAX_INVENTORY_ENTRIES: usize = 200;
+
+/// The `PROJECT FILES:` block — every file in the workspace by NAME, contents
+/// excluded (slice-025).
+///
+/// The gap this closes: until now the prompt showed the writable files and
+/// nothing else, so a read-only file the instruction did not name simply did not
+/// exist as far as the model was concerned — it could only be found by guessing a
+/// path into READ, or by a SEARCH whose pattern the model had no reason to write.
+/// The loop already has eyes (slice-020) and the discipline to use them
+/// (slice-023); what it lacked is knowing what there is to look at. This is the
+/// hypothesis the 2×2 harness matrix pointed at: wrapped aider, which lists the
+/// repo, scored 96% against native's 88% on the same model.
+///
+/// **Names only, deliberately** — same reasoning as `runnable_commands`. A path is
+/// enough to aim a READ at; the contents are what the model is supposed to go and
+/// fetch, and fetching them is the behaviour being measured. Printing them here
+/// would hand over `tests/check.sh` in every task.
+///
+/// Visibility matches `grep.rs` exactly (same walker settings, `.git`/`target`
+/// excluded, dotfiles kept, gitignore honoured): the inventory promises the model
+/// what its own eyes can actually reach, and a list naming files SEARCH cannot see
+/// would be worse than no list.
+fn file_inventory(root: &Path, role: &Role, budget_tokens: u32) -> String {
+    // No eyes, no point: a role that can neither read nor search cannot act on a
+    // path, so the block would be pure cost.
+    if !role.tool_allowed("fs.read") && !role.tool_allowed("grep.search") {
+        return String::new();
+    }
+    const HEADER: &str = "PROJECT FILES (names only; the whole workspace, not just \
+                          the writable ones — READ or SEARCH one to see inside):\n";
+
+    let walk = ignore::WalkBuilder::new(root)
+        .follow_links(false)
+        .hidden(false)
+        .sort_by_file_path(std::cmp::Ord::cmp)
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            name != ".git" && name != "target"
+        })
+        .build();
+
+    let mut body = String::new();
+    let mut used = estimate_tokens(HEADER);
+    let mut listed = 0usize;
+    let mut truncated = false;
+    for entry in walk.flatten() {
+        if !entry.file_type().is_some_and(|t| t.is_file()) {
+            continue;
+        }
+        let rel = entry
+            .path()
+            .strip_prefix(root)
+            .unwrap_or(entry.path())
+            .to_string_lossy()
+            .replace('\\', "/");
+        if rel.is_empty() {
+            continue;
+        }
+        let line = format!("- {rel}\n");
+        let cost = estimate_tokens(&line);
+        if listed >= MAX_INVENTORY_ENTRIES || used + cost > budget_tokens {
+            truncated = true;
+            break;
+        }
+        used += cost;
+        body.push_str(&line);
+        listed += 1;
+    }
+
+    if listed == 0 {
+        return String::new();
+    }
+    if truncated {
+        // Say so: a silently short list reads as "that is all there is", and a
+        // model that believes it will stop looking.
+        body.push_str("(more files exist; listing truncated)\n");
+    }
+    format!("{HEADER}{body}\n")
 }
 
 /// The scope paragraph. Governed runs state it as an obligation; the bench-only
@@ -215,9 +307,25 @@ mod tests {
         }
     }
 
-    fn build_user(role: &Role, commands: &Commands) -> String {
+    /// A workspace shaped like a capability task: one writable file, one
+    /// read-only file the instruction never names, and the two directories the
+    /// walker must skip.
+    fn temp_root(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("orvena-ctx-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("tests")).unwrap();
+        std::fs::write(dir.join("a.txt"), "alpha\n").unwrap();
+        std::fs::write(dir.join("tests/registry.txt"), "gateway on port seven\n").unwrap();
+        std::fs::create_dir_all(dir.join(".git")).unwrap();
+        std::fs::write(dir.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+        std::fs::create_dir_all(dir.join("target")).unwrap();
+        std::fs::write(dir.join("target/gen.txt"), "build output\n").unwrap();
+        dir
+    }
+
+    fn build_user(tag: &str, role: &Role, commands: &Commands) -> String {
         let scope = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
-        let ctx = build(Path::new("."), &scope, role, 4096, "do the thing", "", commands);
+        let ctx = build(&temp_root(tag), &scope, role, 4096, "do the thing", "", commands);
         ctx.messages.iter().map(|m| m.content.clone()).collect::<Vec<_>>().join("\n")
     }
 
@@ -226,7 +334,7 @@ mod tests {
         // Without this the RUN tool is undiscoverable: the system prompt explains
         // the syntax but never says which names the project declared, so using it
         // means guessing.
-        let prompt = build_user(&role(&["fs.write", "shell.run"]), &commands());
+        let prompt = build_user("runnable", &role(&["fs.write", "shell.run"]), &commands());
         assert!(prompt.contains("RUNNABLE"));
         assert!(prompt.contains("- check"));
     }
@@ -235,7 +343,7 @@ mod tests {
     fn the_command_string_itself_never_reaches_the_prompt() {
         // Printing argv would be friendlier and would hand over the expected
         // answer of every check that hardcodes one.
-        let prompt = build_user(&role(&["fs.write", "shell.run"]), &commands());
+        let prompt = build_user("noargv", &role(&["fs.write", "shell.run"]), &commands());
         assert!(!prompt.contains("42"), "a check's own answer must not leak into the prompt");
         assert!(!prompt.contains("cat a.txt"));
     }
@@ -244,25 +352,25 @@ mod tests {
     fn a_mutating_command_is_not_advertised() {
         // The runtime refuses it anyway (ADR-001); listing it would only invite a
         // call that comes back as a scope violation.
-        let prompt = build_user(&role(&["fs.write", "shell.run"]), &commands());
+        let prompt = build_user("nomutating", &role(&["fs.write", "shell.run"]), &commands());
         assert!(!prompt.contains("deploy"));
     }
 
     #[test]
     fn a_role_without_shell_run_sees_no_block_at_all() {
-        let prompt = build_user(&role(&["fs.write"]), &commands());
+        let prompt = build_user("norun", &role(&["fs.write"]), &commands());
         assert!(!prompt.contains("RUNNABLE"), "no shell.run, no listing");
     }
 
     #[test]
     fn no_declared_commands_means_no_empty_header() {
-        let prompt = build_user(&role(&["fs.write", "shell.run"]), &Commands::default());
+        let prompt = build_user("nocmds", &role(&["fs.write", "shell.run"]), &Commands::default());
         assert!(!prompt.contains("RUNNABLE"));
     }
 
-    fn build_with(scope: &Scope) -> String {
-        let r = role(&["fs.write", "shell.run"]);
-        let ctx = build(Path::new("."), scope, &r, 4096, "do the thing", "", &commands());
+    fn build_with(tag: &str, scope: &Scope) -> String {
+        let r = role(&["fs.read", "fs.write", "shell.run"]);
+        let ctx = build(&temp_root(tag), scope, &r, 4096, "do the thing", "", &commands());
         ctx.messages.iter().map(|m| m.content.clone()).collect::<Vec<_>>().join("\n")
     }
 
@@ -275,8 +383,8 @@ mod tests {
         let governed = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
         let baseline = Scope::unrestricted_baseline(vec!["a.txt".into()], Tier::Light);
 
-        let g = build_with(&governed);
-        let b = build_with(&baseline);
+        let g = build_with("gov-oblig", &governed);
+        let b = build_with("base-oblig", &baseline);
 
         assert!(g.contains("never expand scope"), "the governed prompt keeps the obligation");
         assert!(g.contains("modify ONLY files listed under WRITABLE"));
@@ -293,7 +401,7 @@ mod tests {
         // again — the exact defect slice-019 fixed. A differential measured
         // against a blindfolded opponent is not a measurement.
         let baseline = Scope::unrestricted_baseline(vec!["a.txt".into()], Tier::Light);
-        let b = build_with(&baseline);
+        let b = build_with("base-info", &baseline);
 
         assert!(b.contains("WRITABLE:"), "the writable list is information, not obligation");
         assert!(b.contains("- a.txt"));
@@ -316,8 +424,8 @@ mod tests {
         let governed = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
         let baseline = Scope::unrestricted_baseline(vec!["a.txt".into()], Tier::Light);
 
-        for scope in [&governed, &baseline] {
-            let prompt = build_with(scope);
+        for (tag, scope) in [("gov-ground", &governed), ("base-ground", &baseline)] {
+            let prompt = build_with(tag, scope);
             assert!(
                 prompt.contains("never invent a"),
                 "grounding rule is a capability, present in both postures"
@@ -327,5 +435,91 @@ mod tests {
                 "evidence-pointer rule is a capability, present in both postures"
             );
         }
+    }
+
+    // ── slice-025: the file inventory ──────────────────────────────────────
+
+    #[test]
+    fn a_read_only_file_the_instruction_never_names_is_listed() {
+        // The gap: `tests/registry.txt` is not writable and not named anywhere,
+        // so before slice-025 the only way to it was guessing the path.
+        let scope = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
+        let prompt = build_with("inv-listed", &scope);
+
+        assert!(prompt.contains("PROJECT FILES"));
+        assert!(prompt.contains("- tests/registry.txt"), "read-only files are in the inventory");
+        assert!(prompt.contains("- a.txt"));
+    }
+
+    #[test]
+    fn the_inventory_prints_names_and_never_contents() {
+        // Names are an aiming device; contents are what the loop must go and
+        // fetch. Printing them here would hand over every task's check.sh.
+        let scope = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
+        let prompt = build_with("inv-names", &scope);
+
+        assert!(prompt.contains("- tests/registry.txt"));
+        assert!(
+            !prompt.contains("gateway on port seven"),
+            "a read-only file's contents must not ride along with its name"
+        );
+    }
+
+    #[test]
+    fn the_inventory_does_not_promise_what_the_loop_cannot_see() {
+        // Same walker settings as grep.rs. Listing `.git/HEAD` would advertise a
+        // path SEARCH skips and READ has no business in.
+        let scope = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
+        let prompt = build_with("inv-skips", &scope);
+
+        assert!(!prompt.contains(".git/HEAD"));
+        assert!(!prompt.contains("target/gen.txt"));
+    }
+
+    #[test]
+    fn the_inventory_is_present_in_both_postures() {
+        // Knowing what files exist is capability, not obligation: a baseline
+        // that cannot see the project would be blindfolded relative to the
+        // governed run, and the differential would measure the blindfold.
+        let governed = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
+        let baseline = Scope::unrestricted_baseline(vec!["a.txt".into()], Tier::Light);
+
+        for (tag, scope) in [("gov-inv", &governed), ("base-inv", &baseline)] {
+            let prompt = build_with(tag, scope);
+            assert!(prompt.contains("PROJECT FILES"), "the inventory appears in both postures");
+            assert!(prompt.contains("- tests/registry.txt"));
+        }
+    }
+
+    #[test]
+    fn a_role_with_neither_read_nor_search_gets_no_inventory() {
+        // It could not act on a path, so the block would be pure cost — same
+        // discipline as RUNNABLE for a role without shell.run.
+        let prompt = build_user("inv-noeyes", &role(&["fs.write"]), &commands());
+        assert!(!prompt.contains("PROJECT FILES"));
+    }
+
+    #[test]
+    fn the_inventory_never_evicts_the_file_the_task_is_about() {
+        // The priority order the module header promises: writable contents are
+        // priced first, and the inventory spends only what is left. A budget
+        // that fits the file but not the listing must still show the file.
+        let scope = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
+        let r = role(&["fs.read", "fs.write", "shell.run"]);
+        let root = temp_root("inv-budget");
+        let system_and_head = build(&root, &scope, &r, 4096, "do the thing", "", &commands());
+        // Just enough for everything the prompt already had, nothing spare.
+        let tight = system_and_head.used_tokens
+            - estimate_tokens("PROJECT FILES")
+            - estimate_tokens("- tests/registry.txt\n- a.txt\n");
+
+        let ctx = build(&root, &scope, &r, tight, "do the thing", "", &commands());
+        let prompt = ctx.messages.iter().map(|m| m.content.clone()).collect::<Vec<_>>().join("\n");
+
+        assert!(prompt.contains("alpha"), "the writable file's contents survive a tight budget");
+        assert!(
+            !prompt.contains("- tests/registry.txt"),
+            "the inventory yields to the file the task is about"
+        );
     }
 }
