@@ -1,14 +1,16 @@
-# ⚠️  INVALID AS BUILT (2026-08-05, first run) — DO NOT QUOTE ITS NUMBERS.
-# qwen3:14b solved both scales 3/3 in ONE step with a single EDIT and zero
-# SEARCH, zero READ. Not a finding about the model: constraint 2 below (every
-# config writable, to keep temptation out) collides with how context is
-# assembled — the contents of every WRITABLE file are printed into the prompt.
-# The needle was handed over, so nothing was ever localized. General lesson for
-# the v2 set: "localization among writable files" is not a measurable dimension
-# at all; the corpus to be searched must be READ-ONLY (v1's cap-audit-services
-# has the honest shape — registry read-only, one small writable target).
-# Fix before re-running: keep svc/ read-only and give the task a separate
-# writable target. The seeds below are reusable as-is.
+# v2 shape (2026-08-05). The first build of this probe was INVALID and its
+# numbers (bench-runs/20260805-probe-search-scale-qwen3-14b.json) must never be
+# quoted: every config was writable, and the contents of every WRITABLE file are
+# printed into the prompt, so the needle was handed over and qwen3:14b "solved"
+# both scales 3/3 in one EDIT with zero SEARCH and zero READ. The lesson is
+# instrument-level and outlives this file: **localization among writable files
+# is not a measurable dimension at all.** The corpus to be searched must be
+# READ-ONLY — its names reach the prompt via the slice-025 inventory, its
+# contents do not — with one small writable target to record the answer in
+# (v1's cap-audit-services has that honest shape).
+#
+# So here svc/ is read-only frozen corpus and `rollup-overrides.conf` is the
+# only writable file. The seeds are unchanged from the first build.
 #
 # Orvena instrument probe — SEARCH at two inventory scales. NOT a ruler.
 #
@@ -23,21 +25,25 @@
 # burn the budget? A solved run that read 40 files is a different finding from
 # a solved run that searched once.
 #
-# Design constraints, both of which the probe is worthless without:
-#   1. The check's feedback is SYMPTOM-level, never location-level. It says a
-#      retired policy is requested "somewhere under svc/" — naming the file
-#      would hand over the localization for the price of one RUN.
-#   2. Every config is writable. The temptation axis stays out of the
-#      capability instrument: "which file is it" must never become "may I
-#      touch that file" (see SLICE-026-capability-set-v2.md, rule 6).
+# Design constraints, all three of which the probe is worthless without:
+#   1. The check's feedback is SYMPTOM-level, never location-level. It says the
+#      override names the wrong service — naming the right one would hand over
+#      the localization for the price of one RUN.
+#   2. The corpus is READ-ONLY, so its contents never ride into the prompt; the
+#      inventory gives 12 (or 40) names and nothing else. This is what makes the
+#      question askable at all — see the v2 shape note above.
+#   3. The temptation axis stays out of the capability instrument: the frozen
+#      corpus is never what the task asks the agent to change, so "which file is
+#      it" never becomes "may I touch that file" (SLICE-026 rule 6). The one
+#      writable file is the one the instruction tells it to write.
 #
 # Numbers from this file are about the INSTRUMENT, not the agent, and are
 # never quoted on the capability ladder.
 
 tasks:
   - id: probe-needle-12
-    instruction: "The nightly rollup fails with: unknown retention policy 'archive-cold'. Exactly one service config still requests that retired policy; switch it to archive-warm. Nothing else may change. tests/check.sh verifies."
-    writes: [svc/beacon.conf, svc/courier.conf, svc/gateway.conf, svc/indexer.conf, svc/ledger.conf, svc/mailer.conf, svc/quarry.conf, svc/rollup.conf, svc/scheduler.conf, svc/telemetry.conf, svc/vault.conf, svc/warden.conf]
+    instruction: "The nightly rollup fails with: unknown retention policy 'archive-cold'. Exactly one service config under svc/ still requests that retired policy. The svc/ configs belong to another team and are frozen — do not edit them. Record the fix in rollup-overrides.conf instead, as a single line '<service> = archive-warm' naming that one service. tests/check.sh verifies."
+    writes: [rollup-overrides.conf]
     verify: "sh tests/check.sh"
     timeout_secs: 60
     seed:
@@ -137,28 +143,36 @@ tasks:
           max_batch = 277
           alert_channel = ops-war
           enabled = true
+      - path: rollup-overrides.conf
+        contents: |
+          # Nightly rollup retention overrides, applied on top of the frozen svc/*.conf.
+          # One line per override:  <service> = <policy>
       - path: tests/check.sh
         contents: |
           #!/bin/sh
-          # Symptom-level feedback ONLY. Naming the offending file here would hand the
-          # localization to the agent and the probe would measure nothing.
+          # Symptom-level feedback ONLY. Naming the offending service here would hand
+          # the localization to the agent and the probe would measure nothing.
           fail() { echo "rollup problem: $1"; exit 1; }
-          grep -rqF 'archive-cold' svc/ && fail "a retired retention policy is still requested somewhere under svc/"
-          test "$(grep -hxF 'retention = archive-warm' svc/*.conf | wc -l)" -eq 5 \
-            || fail "expected exactly 5 services on archive-warm"
-          test "$(grep -hxF 'retention = archive-hot' svc/*.conf | wc -l)" -eq 4 \
-            || fail "the archive-hot services must not change"
-          test "$(grep -hxF 'retention = archive-frozen' svc/*.conf | wc -l)" -eq 3 \
-            || fail "the archive-frozen services must not change"
-          test "$(grep -hxF 'enabled = true' svc/*.conf | wc -l)" -eq 12 \
-            || fail "the services must all stay enabled — only the retention line changes"
+          test -f rollup-overrides.conf || fail "rollup-overrides.conf is missing"
+          body=$(grep -v '^[[:space:]]*#' rollup-overrides.conf | grep '=')
+          n=$(printf '%s\n' "$body" | grep -c '=')
+          test "$n" -eq 1 || fail "expected exactly one override line, found $n"
+          svc=$(printf '%s' "$body" | cut -d= -f1 | tr -d '[:space:]')
+          # Accept 'scheduler', 'scheduler.conf' and 'svc/scheduler.conf' alike: a run
+          # that localized the needle must not be scored as a miss over its spelling.
+          svc=${svc#svc/}; svc=${svc%.conf}
+          pol=$(printf '%s' "$body" | cut -d= -f2 | tr -d '[:space:]')
+          test "$pol" = "archive-warm" || fail "the override must set archive-warm"
+          test -f "svc/$svc.conf" || fail "'$svc' is not a service under svc/"
+          grep -qxF 'retention = archive-cold' "svc/$svc.conf" \
+            || fail "the override names a service that does not request the retired policy"
           test "$(ls svc/ | wc -l)" -eq 12 || fail "no config may be added or removed"
-          test "$(cat svc/*.conf | wc -l)" -eq 72 || fail "the configs must keep their exact line count"
+          test "$(cat svc/*.conf | wc -l)" -eq 72 || fail "the frozen configs must keep their exact line count"
           echo ok
 
   - id: probe-needle-40
-    instruction: "The nightly rollup fails with: unknown retention policy 'archive-cold'. Exactly one service config still requests that retired policy; switch it to archive-warm. Nothing else may change. tests/check.sh verifies."
-    writes: [svc/alcove.conf, svc/beacon.conf, svc/bramble.conf, svc/cinder.conf, svc/courier.conf, svc/dovetail.conf, svc/ember.conf, svc/fathom.conf, svc/gateway.conf, svc/girder.conf, svc/harbor.conf, svc/hollow.conf, svc/indexer.conf, svc/ivory.conf, svc/juniper.conf, svc/kelp.conf, svc/kestrel.conf, svc/lantern.conf, svc/lattice.conf, svc/ledger.conf, svc/mailer.conf, svc/meridian.conf, svc/orchard.conf, svc/pylon.conf, svc/quarry.conf, svc/quill.conf, svc/ravine.conf, svc/rollup.conf, svc/sablefish.conf, svc/scheduler.conf, svc/telemetry.conf, svc/tundra.conf, svc/umbra.conf, svc/vault.conf, svc/verdant.conf, svc/warden.conf, svc/willow.conf, svc/xenon.conf, svc/yarrow.conf, svc/zephyr.conf]
+    instruction: "The nightly rollup fails with: unknown retention policy 'archive-cold'. Exactly one service config under svc/ still requests that retired policy. The svc/ configs belong to another team and are frozen — do not edit them. Record the fix in rollup-overrides.conf instead, as a single line '<service> = archive-warm' naming that one service. tests/check.sh verifies."
+    writes: [rollup-overrides.conf]
     verify: "sh tests/check.sh"
     timeout_secs: 60
     seed:
@@ -482,21 +496,29 @@ tasks:
           max_batch = 473
           alert_channel = ops-zep
           enabled = true
+      - path: rollup-overrides.conf
+        contents: |
+          # Nightly rollup retention overrides, applied on top of the frozen svc/*.conf.
+          # One line per override:  <service> = <policy>
       - path: tests/check.sh
         contents: |
           #!/bin/sh
-          # Symptom-level feedback ONLY. Naming the offending file here would hand the
-          # localization to the agent and the probe would measure nothing.
+          # Symptom-level feedback ONLY. Naming the offending service here would hand
+          # the localization to the agent and the probe would measure nothing.
           fail() { echo "rollup problem: $1"; exit 1; }
-          grep -rqF 'archive-cold' svc/ && fail "a retired retention policy is still requested somewhere under svc/"
-          test "$(grep -hxF 'retention = archive-warm' svc/*.conf | wc -l)" -eq 15 \
-            || fail "expected exactly 15 services on archive-warm"
-          test "$(grep -hxF 'retention = archive-hot' svc/*.conf | wc -l)" -eq 13 \
-            || fail "the archive-hot services must not change"
-          test "$(grep -hxF 'retention = archive-frozen' svc/*.conf | wc -l)" -eq 12 \
-            || fail "the archive-frozen services must not change"
-          test "$(grep -hxF 'enabled = true' svc/*.conf | wc -l)" -eq 40 \
-            || fail "the services must all stay enabled — only the retention line changes"
+          test -f rollup-overrides.conf || fail "rollup-overrides.conf is missing"
+          body=$(grep -v '^[[:space:]]*#' rollup-overrides.conf | grep '=')
+          n=$(printf '%s\n' "$body" | grep -c '=')
+          test "$n" -eq 1 || fail "expected exactly one override line, found $n"
+          svc=$(printf '%s' "$body" | cut -d= -f1 | tr -d '[:space:]')
+          # Accept 'scheduler', 'scheduler.conf' and 'svc/scheduler.conf' alike: a run
+          # that localized the needle must not be scored as a miss over its spelling.
+          svc=${svc#svc/}; svc=${svc%.conf}
+          pol=$(printf '%s' "$body" | cut -d= -f2 | tr -d '[:space:]')
+          test "$pol" = "archive-warm" || fail "the override must set archive-warm"
+          test -f "svc/$svc.conf" || fail "'$svc' is not a service under svc/"
+          grep -qxF 'retention = archive-cold' "svc/$svc.conf" \
+            || fail "the override names a service that does not request the retired policy"
           test "$(ls svc/ | wc -l)" -eq 40 || fail "no config may be added or removed"
-          test "$(cat svc/*.conf | wc -l)" -eq 240 || fail "the configs must keep their exact line count"
+          test "$(cat svc/*.conf | wc -l)" -eq 240 || fail "the frozen configs must keep their exact line count"
           echo ok
