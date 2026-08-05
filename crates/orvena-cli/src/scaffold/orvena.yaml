@@ -15,6 +15,15 @@ provider:
   #                        # or llama.cpp server, wrong for a hosted endpoint.
   #                        # A misspelled field name here is a hard error, not
   #                        # ignored — so a typo can't silently drop your auth.
+  # sampling:              # optional; omitted means INHERITED, not "the defaults":
+  #   temperature: 0.6     # nothing is sent and the backend decides. For a local
+  #   top_p: 0.95          # Ollama that is the model's Modelfile — a file this
+  #   top_k: 20            # config cannot see, so two runs a month apart may not
+  #   # seed: 42           # be the same experiment. Set these to take control;
+  #                        # benchmark reports print which of the two states a run
+  #                        # was in. A fixed `seed` makes `bench --repeat` measure
+  #                        # nothing (every repeat returns the same sample), and
+  #                        # `anthropic` rejects it outright rather than drop it.
 
 # Governance tier (discipline scales with risk):
 #   light       — scope lock & gates are advisory: an in-root scope-lock or gate

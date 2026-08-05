@@ -138,6 +138,11 @@ if [ -n "$API_KEY_ENV" ]; then
 fi
 "$BIN" "${INIT_ARGS[@]}" >/dev/null
 
+# One set of sampling for every model (B1, 0806) — without it the backend
+# decides and the two calibration cells are not comparable. slice-029.
+. "$REPO/scripts/lib/calibration-sampling.sh"
+apply_calibration_sampling .orvena/orvena.yaml "$BIN"
+
 # The key lives in the repo's .env (git-ignored); the scratch project has none.
 [ -f "$REPO/.env" ] && cp "$REPO/.env" .env
 
