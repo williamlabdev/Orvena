@@ -49,6 +49,7 @@ fn config(commands: Commands, gates: Gates) -> Config {
                 model: "scripted".into(),
                 base_url: None,
                 api_key_env: None,
+                sampling: None,
             },
             tier: Tier::Engineering,
             default_role: "developer".into(),

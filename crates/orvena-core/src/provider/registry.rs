@@ -147,6 +147,7 @@ mod tests {
             model: "m".into(),
             base_url: base_url.map(Into::into),
             api_key_env: api_key_env.map(Into::into),
+            sampling: None,
         }
     }
 

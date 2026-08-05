@@ -58,6 +58,7 @@ async fn offline_benchmark_reports_a_known_completion_rate() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let report = benchmark::run_benchmark(
@@ -142,6 +143,7 @@ async fn a_task_with_a_missing_toolchain_is_skipped_not_failed() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let report = benchmark::run_benchmark(
@@ -226,6 +228,7 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let report = benchmark::run_benchmark_repeated(
@@ -296,6 +299,7 @@ async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = read_only_trap_set();
 
@@ -344,6 +348,7 @@ async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_exter
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
@@ -387,6 +392,7 @@ async fn the_matrix_pairs_modes_and_derives_the_differential() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = read_only_trap_set();
 
@@ -431,6 +437,7 @@ async fn a_single_governed_mode_yields_no_differential() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = read_only_trap_set();
 
@@ -462,6 +469,7 @@ async fn governed_completion_is_cross_checked_by_the_external_verify() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
@@ -506,6 +514,7 @@ async fn a_compliant_run_is_judged_contained_end_to_end() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {
@@ -554,6 +563,7 @@ async fn a_root_escape_attempt_is_refused_and_is_not_a_false_block() {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = BenchTaskSet {
         tasks: vec![BenchTask {

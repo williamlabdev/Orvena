@@ -29,11 +29,13 @@ const MAX_DEAD_RUN_SHARE: f32 = 0.2;
 ///   claim.
 ///
 /// Everything else is `measured`, and every rate below divides by it.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn aggregate(
     provider: String,
     model: String,
     endpoint: Option<String>,
     run_id: String,
+    provenance: Option<crate::benchmark::report::RunProvenance>,
     governance: String,
     agent: String,
     results: Vec<TaskResult>,
@@ -72,6 +74,7 @@ pub(super) fn aggregate(
         model,
         endpoint,
         run_id,
+        provenance,
         governance,
         agent,
         task_count,
@@ -255,6 +258,7 @@ mod tests {
             "m".into(),
             None,
             "r".into(),
+            None,
             "off".into(),
             "native".into(),
             results,
@@ -306,6 +310,7 @@ mod tests {
             model: "m".into(),
             endpoint: None,
             run_id: "r".into(),
+            provenance: None,
             governance: governance.into(),
             agent: "native".into(),
             repeat: 1,

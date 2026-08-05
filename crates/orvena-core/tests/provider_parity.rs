@@ -81,7 +81,7 @@ async fn provider_satisfies_the_parity_contract() {
     let root = temp_dir(&kind);
     let config = Config {
         agent: AgentConfig {
-            provider: ProviderSelection { kind: kind.clone(), model, base_url, api_key_env },
+            provider: ProviderSelection { kind: kind.clone(), model, base_url, api_key_env, sampling: None },
             tier: Tier::Light,
             default_role: "developer".into(),
             max_steps: MAX_STEPS,

@@ -154,6 +154,7 @@ mod tests {
             model: model.into(),
             base_url: base_url.map(String::from),
             api_key_env: None,
+            sampling: None,
         }
     }
 

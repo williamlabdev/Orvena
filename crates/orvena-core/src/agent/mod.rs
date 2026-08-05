@@ -107,6 +107,7 @@ mod prompt_reaches_provider {
                     model: "stub".into(),
                     base_url: None,
                     api_key_env: None,
+                    sampling: None,
                 },
                 tier: Tier::Engineering,
                 default_role: "developer".into(),

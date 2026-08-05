@@ -8,7 +8,7 @@
 //! proactively (`ORVENA_MIN_REQUEST_INTERVAL_MS`) to stay under a known limit.
 
 use super::{ChatRequest, ChatResponse, Provider};
-use crate::config::agent::ProviderSelection;
+use crate::config::agent::{ProviderSelection, Sampling};
 use crate::error::{Error, Result};
 use async_trait::async_trait;
 use std::sync::{Mutex, OnceLock};
@@ -41,6 +41,7 @@ pub struct OpenAiCompat {
     max_retries: u32,
     /// Proactive minimum spacing between requests; `ZERO` disables throttling.
     min_interval: Duration,
+    sampling: Option<Sampling>,
 }
 
 impl OpenAiCompat {
@@ -96,6 +97,7 @@ impl OpenAiCompat {
             id,
             max_retries,
             min_interval,
+            sampling: sel.sampling,
         })
     }
 
@@ -141,11 +143,22 @@ impl Provider for OpenAiCompat {
             .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
             .collect();
 
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": self.model,
             "max_tokens": req.max_tokens,
             "messages": messages,
         });
+        if let Some(s) = self.sampling {
+            body["temperature"] = serde_json::json!(s.temperature);
+            body["top_p"] = serde_json::json!(s.top_p);
+            // No `top_k` here on purpose: the OpenAI chat-completions schema has
+            // no such parameter. Sending it would be silently dropped by some
+            // servers and rejected by others — neither is the sampling the
+            // config asked for, so the gap is recorded in provenance instead.
+            if let Some(seed) = s.seed {
+                body["seed"] = serde_json::json!(seed);
+            }
+        }
 
         let mut attempt: u32 = 0;
         loop {
@@ -264,6 +277,7 @@ mod tests {
             model: "whatever".into(),
             base_url: None,
             api_key_env: None,
+            sampling: None,
         };
         let Err(err) = OpenAiCompat::from_env(&sel) else {
             panic!("expected an error when base_url is missing for openai_compat");
@@ -278,6 +292,7 @@ mod tests {
             model: "whatever".into(),
             base_url: Some("http://localhost:1234/v1".into()),
             api_key_env: None,
+            sampling: None,
         };
         let provider = OpenAiCompat::from_env(&sel).expect("no key required when unset");
         assert!(provider.api_key.is_none());

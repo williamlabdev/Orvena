@@ -30,6 +30,7 @@ fn config(gates: Gates, tier: Tier) -> Config {
                 model: "stub".into(),
                 base_url: None,
                 api_key_env: None,
+                sampling: None,
             },
             tier,
             default_role: "developer".into(),
@@ -104,6 +105,7 @@ async fn offline_run(
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let cfg = config(gates, tier);
     let provider = orvena_core::build_chat_provider(&sel).unwrap();

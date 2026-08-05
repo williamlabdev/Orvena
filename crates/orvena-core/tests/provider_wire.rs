@@ -85,6 +85,7 @@ async fn a_keyless_config_sends_no_authorization_header_at_all() {
         model: "test-model".into(),
         base_url: Some(base_url),
         api_key_env: None,
+        sampling: None,
     };
 
     let provider = build_chat_provider(&sel).expect("keyless openai_compat builds");
@@ -117,6 +118,7 @@ async fn a_keyed_config_sends_exactly_the_bearer_it_was_pointed_at() {
         model: "test-model".into(),
         base_url: Some(base_url),
         api_key_env: Some(KEY_VAR.into()),
+        sampling: None,
     };
 
     let provider = build_chat_provider(&sel).expect("keyed openai_compat builds");

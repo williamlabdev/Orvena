@@ -9,7 +9,7 @@ use super::{config_dir, is_initialized, load_dotenv, preflight_provider, run_tim
 use anyhow::{bail, Context, Result};
 use orvena_core::adapter::{self, AgentSelection};
 use orvena_core::benchmark::{
-    self, BenchReport, BenchTaskSet, GovernanceMode, MatrixReport, RepeatedReport,
+    self, BenchReport, BenchTaskSet, GovernanceMode, MatrixReport, RepeatedReport, RunProvenance,
 };
 use orvena_core::config::agent::ProviderSelection;
 use orvena_core::config::Config;
@@ -233,6 +233,7 @@ fn print_report(r: &BenchReport) {
         println!("endpoint:  {endpoint}");
     }
     println!("agent:     {}", r.agent);
+    print_provenance(r.provenance.as_ref());
     for res in &r.results {
         if res.skipped {
             let why = res.skip_reason.as_deref().unwrap_or("skipped");
@@ -312,6 +313,51 @@ fn print_provider_errors(provider_errors: u32, attempted: u32) {
     );
 }
 
+/// The two lines that say whether this report may be compared to another one.
+///
+/// Both lines print even when the fields behind them are empty, and an
+/// unrecorded field prints `—` rather than being omitted: a reader scanning two
+/// reports has to be able to see that something was *not known*, which is
+/// precisely what a missing line hides. `sampling: inherited` is the loudest
+/// case — it means the numbers below came out of a Modelfile this repo does not
+/// control (slice-029).
+fn print_provenance(p: Option<&RunProvenance>) {
+    let show = |o: &Option<String>| o.clone().unwrap_or_else(|| "—".into());
+    let num = |o: Option<u32>| o.map(|n| n.to_string()).unwrap_or_else(|| "—".into());
+    let Some(p) = p else {
+        println!("provenance: not recorded  |  sampling: not recorded");
+        return;
+    };
+    let b = &p.backend;
+    // Digests are 64 hex chars; the first 12 distinguish everything on one host
+    // while staying readable. The full value stays in the JSON.
+    let digest = b
+        .model_digest
+        .as_deref()
+        .map(|d| d.chars().take(12).collect::<String>())
+        .unwrap_or_else(|| "—".into());
+    println!(
+        "provenance: {}  |  digest {}  |  {}  |  ctx {} of {}",
+        show(&b.server_version),
+        digest,
+        show(&b.quantization),
+        num(b.context_length_effective),
+        num(b.context_length_declared),
+    );
+    match p.sampling {
+        None => println!(
+            "sampling:   inherited from the backend — not repo-controlled, not reproducible"
+        ),
+        Some(s) => println!(
+            "sampling:   temperature {}  top_p {}  top_k {}  seed {}",
+            s.temperature,
+            s.top_p,
+            s.top_k,
+            s.seed.map(|v| v.to_string()).unwrap_or_else(|| "—".into()),
+        ),
+    }
+}
+
 fn print_repeated(r: &RepeatedReport) {
     println!("── benchmark ({} runs/task) [{}] ──", r.repeat, r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
@@ -319,6 +365,7 @@ fn print_repeated(r: &RepeatedReport) {
         println!("endpoint:  {endpoint}");
     }
     println!("agent:     {}", r.agent);
+    print_provenance(r.provenance.as_ref());
     for t in &r.tasks {
         if t.skipped {
             println!("  {:<18} SKIP", t.id);

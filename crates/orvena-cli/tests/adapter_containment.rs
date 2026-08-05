@@ -115,6 +115,7 @@ async fn a_wrapped_agent_cannot_edit_a_file_the_task_never_declared() {
         model: "unused".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     let set = task_set();
 
@@ -215,6 +216,7 @@ async fn a_gate_that_writes_build_artifacts_still_passes_under_confinement() {
         model: "unused".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let mut set = task_set();
@@ -308,6 +310,7 @@ async fn a_gate_that_needs_temp_still_passes_under_confinement() {
         model: "unused".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let mut set = task_set();
@@ -390,6 +393,7 @@ async fn a_missing_agent_binary_fails_loudly_rather_than_scoring_a_zero() {
         model: "unused".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let err = benchmark::run_benchmark(
@@ -438,6 +442,7 @@ async fn a_gate_that_needs_the_toolchain_home_still_passes_under_confinement() {
         model: "unused".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
 
     let mut set = task_set();

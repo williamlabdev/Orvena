@@ -61,6 +61,43 @@ pub struct ProviderSelection {
     /// rejects unknown fields at parse time.
     #[serde(default)]
     pub api_key_env: Option<String>,
+    /// Sampling parameters, when this repo takes control of them.
+    ///
+    /// `None` means **inherited**, not "the defaults": nothing is sent and the
+    /// backend decides. For Ollama that is the model's Modelfile — a file this
+    /// repo neither versions nor can see from a published report. Measured
+    /// 0806: `qwen3:14b` ships `temperature 0.6` while `qwen3.6:27b` and
+    /// `qwen3.6:35b` ship `temperature 1`, so the floor cell and the ceiling
+    /// cell of the capability ladder were never sampled under equal conditions
+    /// — and nothing in the report said so. Provenance now distinguishes the
+    /// two states rather than printing a number for both (slice-029).
+    #[serde(default)]
+    pub sampling: Option<Sampling>,
+}
+
+/// Sampling parameters the repo sends explicitly.
+///
+/// Whatever is here becomes part of a reading's identity: two reports with
+/// different sampling are not comparable, and a report with `None` is not
+/// comparable to anything — including a later run of itself.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Sampling {
+    /// `f64`, not `f32`, because these values are **transmitted and published**
+    /// rather than computed: `0.6f32` serializes as `0.6000000238418579`, which
+    /// would reach the backend and land in every report as a number nobody
+    /// configured. Rates elsewhere in this crate stay `f32` — they are derived,
+    /// and their last bits carry no intent.
+    pub temperature: f64,
+    pub top_p: f64,
+    pub top_k: u32,
+    /// Fixing the seed makes one path reproducible — and makes `--repeat`
+    /// measure nothing, because every repeat returns the same sample. Left
+    /// `None` on purpose: how stable a model is under resampling is itself the
+    /// reading slice-028 was built to take. A seeded regression run belongs
+    /// beside `repeat`, never in place of it.
+    #[serde(default)]
+    pub seed: Option<u64>,
 }
 
 impl ProviderSelection {
@@ -135,6 +172,7 @@ mod tests {
             model: "m".into(),
             base_url: base_url.map(Into::into),
             api_key_env: None,
+            sampling: None,
         }
     }
 

@@ -86,6 +86,29 @@ pub struct TaskResult {
     pub exit: ExitReason,
 }
 
+/// The identity of a run, as opposed to its configuration.
+///
+/// Three invocations of one probe on 0805–06 agreed on every field the report
+/// then carried — provider, model, endpoint, governance, agent — and one of
+/// them still read 3/3 on a task the other two read 0/12 on. The record could
+/// not say whether they had measured the same thing, and the scratch dir that
+/// might have answered it was gone. Everything here exists to make that
+/// question answerable next time (slice-029).
+///
+/// Provenance is **identity, never a reading**: nothing here enters the
+/// numerator or denominator of any rate. Its only job is to let a reader decide
+/// whether two reports may be compared at all.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RunProvenance {
+    #[serde(flatten)]
+    pub backend: crate::provider::ProviderProvenance,
+    /// The sampling this run asked for. `None` means **inherited** — the
+    /// backend's own defaults applied, so the numbers in this report are not
+    /// repo-controlled and a later run under a changed Modelfile would differ
+    /// with nothing in the record to show it.
+    pub sampling: Option<crate::config::agent::Sampling>,
+}
+
 /// The aggregate benchmark result. Every rate divides by `measured`, i.e.
 /// `task_count - skipped - provider_errors`: a task whose toolchain was absent
 /// was never attempted, and a run the provider killed never reached the model.
@@ -105,6 +128,13 @@ pub struct BenchReport {
     #[serde(default)]
     pub endpoint: Option<String>,
     pub run_id: String,
+    /// What actually ran, as opposed to what was configured — backend version,
+    /// weight digest, effective context, and the sampling this run requested.
+    /// `None` on reports written before slice-029, which is the honest reading:
+    /// those runs are not known to be comparable to anything, including each
+    /// other. See [`RunProvenance`].
+    #[serde(default)]
+    pub provenance: Option<RunProvenance>,
     /// Governance posture this report was measured under.
     #[serde(default = "default_governance")]
     pub governance: String,
@@ -186,6 +216,13 @@ pub struct RepeatedReport {
     #[serde(default)]
     pub endpoint: Option<String>,
     pub run_id: String,
+    /// What actually ran, as opposed to what was configured — backend version,
+    /// weight digest, effective context, and the sampling this run requested.
+    /// `None` on reports written before slice-029, which is the honest reading:
+    /// those runs are not known to be comparable to anything, including each
+    /// other. See [`RunProvenance`].
+    #[serde(default)]
+    pub provenance: Option<RunProvenance>,
     /// Governance posture this report was measured under.
     #[serde(default = "default_governance")]
     pub governance: String,
@@ -281,6 +318,12 @@ pub struct MatrixReport {
     #[serde(default)]
     pub endpoint: Option<String>,
     pub run_id: String,
+    /// Backend identity for the whole matrix. The differential's entire claim is
+    /// that only *enforcement* differed between postures — a claim that needs the
+    /// backend to have been the same thing throughout, which is exactly what was
+    /// unrecorded until slice-029. See [`RunProvenance`].
+    #[serde(default)]
+    pub provenance: Option<RunProvenance>,
     /// Which agent drove every posture in this matrix (`native`, or a wrapped
     /// agent + version). The differential compares postures, never agents — one
     /// matrix, one agent.

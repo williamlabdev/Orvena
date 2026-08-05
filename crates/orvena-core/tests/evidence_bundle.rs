@@ -63,6 +63,7 @@ fn offline_agent(root: &std::path::Path, config: Config) -> Agent {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     };
     Agent::with_provider(config, root, Box::new(Offline::new(&sel)))
 }
@@ -148,5 +149,6 @@ fn sel() -> ProviderSelection {
         model: "stub".into(),
         base_url: None,
         api_key_env: None,
+        sampling: None,
     }
 }

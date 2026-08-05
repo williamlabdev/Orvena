@@ -22,7 +22,8 @@ use crate::{Error, Result};
 use super::aggregate::{aggregate, derive_differential, rate, weakest_accounting};
 use super::mode::GovernanceMode;
 use super::report::{
-    default_agent, BenchReport, MatrixReport, RepeatedReport, TaskPassRate, TaskResult,
+    default_agent, BenchReport, MatrixReport, RepeatedReport, RunProvenance, TaskPassRate,
+    TaskResult,
 };
 use super::task::{BenchTask, BenchTaskSet};
 
@@ -243,10 +244,32 @@ pub async fn run_benchmark(
         provider.model.clone(),
         provider.endpoint_origin(),
         run_id.to_string(),
+        capture_provenance(provider).await,
         mode.to_string(),
         agent_label,
         results,
     ))
+}
+
+/// Read backend identity **after** the runs, not before.
+///
+/// A local runtime only reports the context length it actually granted while
+/// the model is resident, and residency is a consequence of having just run —
+/// `/api/ps` on a cold server is empty. Asking first would record a blank where
+/// the most decision-relevant field belongs.
+///
+/// Every failure path yields `None`. Provenance is bookkeeping about a run that
+/// already happened; a benchmark that died because its own record-keeping could
+/// not reach the server would be the instrument destroying the measurement.
+async fn capture_provenance(provider: &ProviderSelection) -> Option<RunProvenance> {
+    let backend = match crate::provider::build_chat_provider(provider) {
+        Ok(p) => p.provenance().await.unwrap_or_default(),
+        Err(_) => Default::default(),
+    };
+    let p = RunProvenance { backend, sampling: provider.sampling };
+    // An all-empty block would read as "checked, nothing differed". `None` says
+    // "not recorded" — the distinction this whole slice exists to keep.
+    (p != RunProvenance::default()).then_some(p)
 }
 
 /// Drive one task with a wrapped external agent under the posture's confinement.
@@ -561,6 +584,9 @@ pub async fn run_benchmark_repeated(
         model: provider.model.clone(),
         endpoint: provider.endpoint_origin(),
         run_id: run_id.to_string(),
+        // Carried up from the repeats rather than re-read: the aggregate must
+        // describe the runs it aggregates, not the server's state afterwards.
+        provenance: runs.first().and_then(|r| r.provenance.clone()),
         governance: mode.to_string(),
         agent: runs.first().map(|r| r.agent.clone()).unwrap_or_else(default_agent),
         repeat,
@@ -623,6 +649,7 @@ pub async fn run_benchmark_matrix(
         model: provider.model.clone(),
         endpoint: provider.endpoint_origin(),
         run_id: run_id.to_string(),
+        provenance: reports.first().and_then(|r| r.provenance.clone()),
         agent: reports.first().map(|r| r.agent.clone()).unwrap_or_else(default_agent),
         modes: reports,
         differential,
@@ -843,6 +870,7 @@ mod tests {
             model: "m".into(),
             base_url: None,
             api_key_env: None,
+            sampling: None,
         };
         let configs: Vec<Config> =
             [GovernanceMode::Off, GovernanceMode::Light, GovernanceMode::Engineering]
