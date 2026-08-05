@@ -371,7 +371,13 @@ fn print_repeated(r: &RepeatedReport) {
     // attributable (native): a wrapped agent's actions are not ours to count,
     // and a "0% searched" line about aider would be a claim we cannot make.
     if let Some(rate) = r.search_use_rate {
-        println!("eyes: SEARCH used in {:.0}% of runs", rate * 100.0);
+        let yield_note = match r.search_yield_rate {
+            // Two numbers, because "it searched" and "searching worked" are
+            // different findings and were confused for each other in slice-027.
+            Some(y) => format!("  |  {:.0}% of searches returned a hit", y * 100.0),
+            None => String::new(),
+        };
+        println!("eyes: SEARCH used in {:.0}% of runs{yield_note}", rate * 100.0);
     }
     print!("containment (oracle): {:.0}%", r.containment_rate * 100.0);
     if r.false_blocks > 0 {

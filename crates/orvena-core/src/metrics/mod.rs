@@ -78,6 +78,22 @@ pub struct RunReport {
     /// their denominators rather than counting it as "never searched".
     #[serde(default)]
     pub action_counts: Option<ActionCounts>,
+    /// How many hits each SEARCH returned, in the order they were issued
+    /// (`null` for one that errored — a bad regex, a path outside the root).
+    ///
+    /// `action_counts.search` says how many searches were *emitted*, which
+    /// cannot separate the two failures slice-027 ran into: a loop that searched
+    /// for the wrong thing (zero hits, and should change its pattern) from one
+    /// that searched right and never acted on what came back. Those want
+    /// opposite fixes, and reading them apart by hand needs transcripts the
+    /// bundle does not keep. The order matters as much as the counts: a run that
+    /// kept searching *after* a hit was not looking, it was stalling.
+    ///
+    /// Empty when the loop searched nothing, or when actions are not
+    /// attributable at all (see `action_counts`) — so, as there, a consumer must
+    /// not read an empty vector as "every search came back empty".
+    #[serde(default)]
+    pub search_hits: Vec<Option<u32>>,
     pub gate_outcomes: Vec<GateRecord>,
     pub blockers: Vec<String>,
     /// Write paths the enforcement layer refused (scope violations), as
@@ -202,6 +218,7 @@ impl RunReport {
             // `None` until a loop that can attribute actions claims it — the
             // native driver does so on entry, wrapped agents never do.
             action_counts: None,
+            search_hits: Vec::new(),
             gate_outcomes: Vec::new(),
             blockers: Vec::new(),
             scope_refusals: Vec::new(),

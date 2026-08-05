@@ -91,6 +91,7 @@ pub async fn run_benchmark(
                 steps: 0,
                 tool_calls: 0,
                 action_counts: None,
+                search_hits: Vec::new(),
                 input_tokens: 0,
                 output_tokens: 0,
                 evidence_path: None,
@@ -189,6 +190,7 @@ pub async fn run_benchmark(
                     steps: report.steps,
                     tool_calls: report.tool_calls,
                     action_counts: report.action_counts,
+                    search_hits: report.search_hits.clone(),
                     input_tokens: report.input_tokens,
                     output_tokens: report.output_tokens,
                     evidence_path: Some(evidence_path),
@@ -212,6 +214,7 @@ pub async fn run_benchmark(
                 steps: 0,
                 tool_calls: 0,
                 action_counts: None,
+                search_hits: Vec::new(),
                 input_tokens: 0,
                 output_tokens: 0,
                 evidence_path: None,
@@ -386,6 +389,25 @@ fn search_use_rate(ran: &[&TaskResult]) -> Option<f32> {
     Some(attributable.iter().filter(|c| c.search > 0).count() as f32 / attributable.len() as f32)
 }
 
+/// Of the searches that ran, the fraction that returned at least one hit.
+///
+/// `search_use_rate` answers "did the loop look?"; this answers "did looking
+/// work?". slice-027 needed both and had only the first: qwen3:14b emitted up to
+/// eight searches per run and still wrote nothing, and the bundle could not say
+/// whether it was searching for the wrong string or ignoring what came back.
+///
+/// Errored searches (`None`) are excluded from the denominator rather than
+/// counted as misses — a rejected search never looked at a file, and folding it
+/// in would blame the model for a tool boundary. `None` when nothing searched.
+fn search_yield_rate(ran: &[&TaskResult]) -> Option<f32> {
+    let outcomes: Vec<u32> =
+        ran.iter().flat_map(|t| t.search_hits.iter().flatten()).copied().collect();
+    if outcomes.is_empty() {
+        return None;
+    }
+    Some(outcomes.iter().filter(|h| **h > 0).count() as f32 / outcomes.len() as f32)
+}
+
 fn command_exists(cmd: &str) -> bool {
     if cmd.contains('/') {
         return Path::new(cmd).is_file();
@@ -526,6 +548,7 @@ pub async fn run_benchmark_repeated(
         ran_results.iter().map(|t| (t.input_tokens + t.output_tokens) as f32).sum::<f32>() / n_ran
     };
     let search_use_rate = search_use_rate(&ran_results);
+    let search_yield_rate = search_yield_rate(&ran_results);
     // The weakest accounting wins: one unaccounted run makes the mean a partial
     // number, and calling it "observed" would be the flattering read.
     let token_accounting = ran_results
@@ -557,6 +580,7 @@ pub async fn run_benchmark_repeated(
         budget_exhaustion_rate,
         mean_total_tokens,
         search_use_rate,
+        search_yield_rate,
         token_accounting,
         tasks,
         runs,
@@ -705,6 +729,7 @@ mod tests {
             steps: 1,
             tool_calls: 1,
             action_counts: counts,
+            search_hits: Vec::new(),
             input_tokens: 0,
             output_tokens: 0,
             evidence_path: None,
@@ -718,6 +743,44 @@ mod tests {
             token_accounting: TokenAccounting::default(),
             exit: ExitReason::GatesPassed,
         }
+    }
+
+    fn result_with_hits(hits: Vec<Option<u32>>) -> TaskResult {
+        let mut r = result_with(Some(crate::metrics::ActionCounts {
+            search: hits.len() as u32,
+            ..Default::default()
+        }));
+        r.search_hits = hits;
+        r
+    }
+
+    #[test]
+    fn search_yield_rate_is_per_search_not_per_run() {
+        // Six searches across two runs, two of which found something. A per-run
+        // rate would read 100% here (both runs searched, both found something at
+        // least once) and hide the four that came back empty — which is exactly
+        // the shape of a loop hunting with the wrong pattern.
+        let a = result_with_hits(vec![Some(0), Some(0), Some(3)]);
+        let b = result_with_hits(vec![Some(0), Some(0), Some(1)]);
+        let rows = [&a, &b];
+        assert_eq!(search_yield_rate(&rows), Some(2.0 / 6.0));
+    }
+
+    #[test]
+    fn an_errored_search_is_not_counted_as_a_miss() {
+        // A rejected search never looked at a file. Folding it in as a miss would
+        // blame the model for a tool boundary — the mistake slice-027 spent a
+        // whole 14b leg on.
+        let r = result_with_hits(vec![None, None, Some(2)]);
+        let rows = [&r];
+        assert_eq!(search_yield_rate(&rows), Some(1.0), "denominator is the one search that ran");
+    }
+
+    #[test]
+    fn nothing_searched_is_none_not_zero() {
+        let r = result_with(Some(crate::metrics::ActionCounts::default()));
+        let rows = [&r];
+        assert_eq!(search_yield_rate(&rows), None, "'nobody searched' is not '0% found'");
     }
 
     #[test]

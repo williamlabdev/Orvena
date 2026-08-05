@@ -244,6 +244,7 @@ pub(crate) async fn run_loop_with(
                             } else {
                                 ""
                             };
+                            report.search_hits.push(Some(hits.len() as u32));
                             tool_evidence.push_str(&format!(
                                 "SEARCH '{pattern}' → {} hit(s){capped}:\n",
                                 hits.len()
@@ -255,6 +256,7 @@ pub(crate) async fn run_loop_with(
                         }
                         Err(e @ Error::Scope(_)) => {
                             // Role boundary: same handling as a forbidden write.
+                            report.search_hits.push(None);
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
                                 report.exit = ExitReason::HardBlocked;
@@ -263,7 +265,11 @@ pub(crate) async fn run_loop_with(
                         }
                         Err(e) => {
                             // e.g. an invalid regex — recorded and fed back so the
-                            // model can correct it on the next bounded attempt.
+                            // model can correct it on the next bounded attempt. The
+                            // `None` keeps this search in the sequence: a run that
+                            // errored twice then searched well is a different shape
+                            // from one that searched well twice.
+                            report.search_hits.push(None);
                             report.blockers.push(e.to_string());
                             tool_evidence.push_str(&format!("SEARCH '{pattern}' failed: {e}\n"));
                         }

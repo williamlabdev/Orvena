@@ -164,6 +164,14 @@ fn the_validator_and_the_schema_engine_agree_on_broken_bundles() {
     assert!(evidence::validate_bundle_value(&good).is_empty());
     assert!(validator.is_valid(&good));
 
+    let with_nulls = {
+        let mut v = good.clone();
+        v["search_hits"] = serde_json::json!([2, null, 0]);
+        v
+    };
+    assert!(evidence::validate_bundle_value(&with_nulls).is_empty());
+    assert!(validator.is_valid(&with_nulls), "a search that errored is null, not a breakage");
+
     let breakages: Vec<(&str, serde_json::Value)> = vec![
         ("missing completed", {
             let mut v = good.clone();
@@ -188,6 +196,19 @@ fn the_validator_and_the_schema_engine_agree_on_broken_bundles() {
         ("malformed gate outcome", {
             let mut v = good.clone();
             v["gate_outcomes"] = serde_json::json!([{ "gate": "g" }]);
+            v
+        }),
+        // slice-028: `null` in search_hits is meaningful (a search that errored),
+        // so both engines must accept it and reject anything else in there — a
+        // string would make the yield rate silently wrong instead of loudly bad.
+        ("search_hits with a non-number entry", {
+            let mut v = good.clone();
+            v["search_hits"] = serde_json::json!([1, "two"]);
+            v
+        }),
+        ("search_hits not an array", {
+            let mut v = good.clone();
+            v["search_hits"] = serde_json::json!(3);
             v
         }),
     ];

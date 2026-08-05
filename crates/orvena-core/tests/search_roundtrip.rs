@@ -111,6 +111,10 @@ async fn search_results_drive_the_next_write() {
     assert_eq!(counts.search, 1, "one SEARCH emitted");
     assert_eq!(counts.write, 1, "one WRITE emitted");
     assert_eq!(counts.read, 0);
+    // slice-028: the count says it searched; this says the search found something.
+    // Without it, a loop that searched the wrong string and one that found the
+    // answer and froze are the same row in the bundle.
+    assert_eq!(report.search_hits, vec![Some(1)], "one search, one hit, recorded in order");
 
     let written = std::fs::read_to_string(root.join("hello.txt")).unwrap();
     assert_eq!(written.trim(), "greet politely", "content must come from the search hit");
@@ -147,6 +151,14 @@ async fn invalid_regex_is_a_blocker_but_does_not_stop_the_loop() {
         report.blockers.iter().any(|b| b.contains("invalid search pattern")),
         "the regex failure is recorded as a blocker: {:?}",
         report.blockers
+    );
+    // A search that never ran is `null`, not zero hits: it looked at no file, so
+    // counting it as a miss would blame the model for its own bad regex twice —
+    // once in `blockers`, again in the yield rate.
+    assert!(
+        report.search_hits.iter().all(Option::is_none),
+        "errored searches hold their place as null: {:?}",
+        report.search_hits
     );
 
     let _ = std::fs::remove_dir_all(&root);

@@ -103,6 +103,26 @@ pub fn validate_bundle_value(value: &serde_json::Value) -> Vec<String> {
         }
     }
 
+    // Same contract as `action_counts`, one level down: present or absent, but
+    // never ambiguous. `null` inside the array is meaningful (a search that
+    // errored) — anything else in there would make a yield rate nonsense.
+    if let Some(v) = obj.get("search_hits") {
+        if !v.is_null() {
+            match v.as_array() {
+                None => problems.push("field `search_hits` is not an array".into()),
+                Some(items) => {
+                    for (i, item) in items.iter().enumerate() {
+                        if !item.is_null() && !is_uint(item) {
+                            problems.push(format!(
+                                "search_hits[{i}] is neither null nor a non-negative integer"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if let Some(s) = obj.get("schema").and_then(Value::as_str) {
         if s != super::EVIDENCE_SCHEMA_V1 {
             problems.push(format!(

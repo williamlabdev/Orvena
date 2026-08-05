@@ -36,6 +36,11 @@ pub struct TaskResult {
     /// a transcript-reading exercise.
     #[serde(default)]
     pub action_counts: Option<crate::metrics::ActionCounts>,
+    /// Hits per SEARCH, in order (see [`crate::metrics::RunReport::search_hits`]).
+    /// Carried up from the bundle so a summary can separate a loop that searched
+    /// for the wrong thing from one that searched right and never acted.
+    #[serde(default)]
+    pub search_hits: Vec<Option<u32>>,
     pub input_tokens: u32,
     pub output_tokens: u32,
     /// Path to the task's evidence bundle (`None` if skipped, or if the run
@@ -237,6 +242,15 @@ pub struct RepeatedReport {
     /// only a gap in the record. `None` when nothing was attributable.
     #[serde(default)]
     pub search_use_rate: Option<f32>,
+    /// Of the SEARCHes that ran, the fraction that came back with at least one
+    /// hit. `search_use_rate` says the loop looked; this says looking worked.
+    /// The pair is what separates the two failures they used to be confused for:
+    /// a low yield means the loop searched for the wrong thing, a high yield with
+    /// a low pass rate means it found the answer and did not act on it.
+    /// Denominator is searches with a recorded outcome — errored ones (`null`)
+    /// are excluded, not counted as misses. `None` when nothing searched.
+    #[serde(default)]
+    pub search_yield_rate: Option<f32>,
     /// Provenance of `mean_total_tokens` — the weakest accounting among the
     /// measured runs. `unavailable` means the mean is **0 because nobody
     /// counted**, not because the runs were free; a reader must be able to tell

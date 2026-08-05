@@ -58,6 +58,11 @@
     "input_tokens": { "type": "integer", "minimum": 0 },
     "output_tokens": { "type": "integer", "minimum": 0 },
     "tool_calls": { "type": "integer", "minimum": 0 },
+    "search_hits": {
+      "type": "array",
+      "description": "Hits returned by each SEARCH, in the order issued; `null` for one that errored. `action_counts.search` says how many searches were emitted — this says whether they found anything, which is what separates 'searched for the wrong thing' from 'searched right and never acted'. Absent is not 'every search came back empty'. Additive, 2026-08-05 (slice-028).",
+      "items": { "type": ["integer", "null"], "minimum": 0 }
+    },
     "gate_outcomes": {
       "type": "array",
       "description": "Full gate history across every step — how the run converged, not only the final round.",
