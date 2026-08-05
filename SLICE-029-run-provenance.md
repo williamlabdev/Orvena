@@ -88,6 +88,8 @@ sampling:   temperature 0.6  top_k 20  top_p 0.95  seed —
 
 - **digest 不同** → 兩份報表不可比,不必再看下去。
 - **`num_ctx` 不同** → 可比性存疑;這正是 028 與 A/B 之間最可能的差異點。
+  但**這一欄記得出值、記不出值從哪來**,見下面的實地驗收:在這台機器上它由
+  server 端的 `OLLAMA_CONTEXT_LENGTH` 釘死,而那個環境變數不在報表裡。
 - **sampling 不同** → 不可比。而 `seed —` 這一行本身就在說:**這份讀數不可重現,
   只能重複抽樣**。
 
@@ -200,5 +202,39 @@ harness matrix 兩張表各加一段 0806 註記,說明它們量的是「各模�
 也會落進每一份公開報表。crate 其他地方的 rate 維持 `f32`(那些是算出來的,
 末位不帶意圖)。
 
-實地驗收:拿本刀後的 binary 重跑同一支探針兩次,**檔頭應完全一致**;
-若某次不一致,那就是 028 當時發生過而我們沒看見的那件事。
+## 實地驗收(0806 已執行)
+
+拿本刀後的 binary(含 B1 取樣)重跑同一支探針四次,`qwen3.6:35b` × `probes/search-scale.yaml`
+× `--governance engineering --repeat 1`,每跑各自一個 `orvena init` 的 scratch 專案:
+
+| 跑 | 條件 |
+|---|---|
+| A | 熱駐留 |
+| B | A 之後 50 秒,仍熱 |
+| C | **冷啟動**——先 `ollama stop`,`ollama ps` 確認空的再跑 |
+| D | 先讓 `qwen3.6:27b` 駐留,再跑 35b |
+
+**十個欄位零漂移**:`server_version` / `model_digest` / `quantization` /
+`context_length_declared` / `context_length_effective` / `sampling` /
+`provider` / `model` / `governance` / `agent`。檔頭確實可重現。
+
+**但通過的理由不是原本假設的那個,這件事比結論本身重要。**
+`context_length_effective` 之所以四跑都是 32768,不是「記憶體協商剛好重現」,
+而是 server 端環境變數 `OLLAMA_CONTEXT_LENGTH=32768` 把它釘死了。
+決定性證據:三個 declared 完全不同的模型都讀出同一個 32768——
+`qwen3:14b` 宣告 40960、`qwen3.6:27b` 與 `qwen3.6:35b` 各宣告 262144。協商不會這麼巧。
+
+於是這一欄的形狀與本刀修掉的 sampling 同構,只是輕一級:
+**sampling 當初是完全不記,`num_ctx` 記得出數值、記不出它來自一個 repo 看不見的
+server 端環境變數。** 換一台機器、或誰改了那個 env,同一份 config 會產出不同的
+effective ctx,而報表看起來完全合法。**所以 32768 不能當作模型的性質引用**;
+跨機器並列之前要先確認對方的 `OLLAMA_CONTEXT_LENGTH`。
+
+D 那一跑沒測到它想測的條件,照實記:ollama 是把 27b 卸掉才載 35b 的
+(跑完 `ollama ps` 只剩 35b),「兩個大模型同時駐留」從未成立,D 實際上是第二次冷啟動。
+要真的壓需要 `OLLAMA_MAX_LOADED_MODELS>1`——不過在 env 釘死 num_ctx 的前提下,
+壓記憶體大概也壓不動這一欄,除非壓到載不進去。
+
+四份報表留在 session scratch,**未進 `bench-runs/`**:它們量的是儀器不是模型,
+不該被當成讀數引用。四跑都 2/2 pass、2 steps、約 2.9k token——與 0805 的 100% 一致,
+即溫度從 1 降到 0.6 並未讓這支探針對 35b 產生鑑別力(那本來就是探針,不是尺)。
