@@ -104,17 +104,15 @@ impl Provider for Ollama {
         let mut p = ProviderProvenance::default();
 
         if let Some(v) = self.get_json("/api/version").await {
-            p.server_version =
-                v["version"].as_str().map(|ver| format!("ollama {ver}"));
+            p.server_version = v["version"].as_str().map(|ver| format!("ollama {ver}"));
         }
 
         // Digest and quantization come from the local library listing: the tag
         // is what we asked for, the digest is what is actually on disk.
         if let Some(v) = self.get_json("/api/tags").await {
-            if let Some(m) = v["models"]
-                .as_array()
-                .and_then(|ms| ms.iter().find(|m| m["name"].as_str().is_some_and(|n| self.tag_matches(n))))
-            {
+            if let Some(m) = v["models"].as_array().and_then(|ms| {
+                ms.iter().find(|m| m["name"].as_str().is_some_and(|n| self.tag_matches(n)))
+            }) {
                 p.model_digest = m["digest"].as_str().map(str::to_string);
                 p.quantization = m["details"]["quantization_level"].as_str().map(str::to_string);
             }
@@ -123,7 +121,8 @@ impl Provider for Ollama {
         // The model's declared ceiling. The key is family-scoped
         // (`qwen3.context_length`), so it is found by suffix rather than by a
         // family table that would silently miss every future architecture.
-        if let Some(v) = self.post_json("/api/show", serde_json::json!({ "model": self.model })).await
+        if let Some(v) =
+            self.post_json("/api/show", serde_json::json!({ "model": self.model })).await
         {
             if let Some(info) = v["model_info"].as_object() {
                 p.context_length_declared = info
@@ -140,10 +139,9 @@ impl Provider for Ollama {
         // What the runtime actually granted — only knowable while the model is
         // resident, which is why this is read after the runs, not before.
         if let Some(v) = self.get_json("/api/ps").await {
-            if let Some(m) = v["models"]
-                .as_array()
-                .and_then(|ms| ms.iter().find(|m| m["name"].as_str().is_some_and(|n| self.tag_matches(n))))
-            {
+            if let Some(m) = v["models"].as_array().and_then(|ms| {
+                ms.iter().find(|m| m["name"].as_str().is_some_and(|n| self.tag_matches(n)))
+            }) {
                 p.context_length_effective = m["context_length"].as_u64().map(|n| n as u32);
             }
         }

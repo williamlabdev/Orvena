@@ -271,12 +271,7 @@ fn anthropic_refuses_a_seed_it_cannot_honor() {
         model: "claude-sonnet-5".into(),
         base_url: None,
         api_key_env: None,
-        sampling: Some(Sampling {
-            temperature: 0.6,
-            top_p: 0.95,
-            top_k: 20,
-            seed: Some(42),
-        }),
+        sampling: Some(Sampling { temperature: 0.6, top_p: 0.95, top_k: 20, seed: Some(42) }),
     };
     let err = build_chat_provider(&sel)
         .err()
