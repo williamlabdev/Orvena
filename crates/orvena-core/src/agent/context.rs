@@ -251,7 +251,8 @@ fn system_prompt(role: &Role, ungoverned: bool) -> String {
          - To search file contents (read-only), emit a search block; the hits are\n\
          \x20 returned as evidence on your next step:\n\
          \x20 <<<SEARCH <regex pattern>\n\
-         \x20 [optional relative path to limit the search]\n\
+         \x20 [optional path to limit the search: a directory, a file, or a\n\
+         \x20  glob such as svc/*.conf]\n\
          \x20 >>>\n\
          - To run a pre-declared command (e.g. tests), emit a run block; its output\n\
          \x20 is returned as evidence on your next step. You may only reference a\n\

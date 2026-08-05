@@ -19,7 +19,7 @@
 //! >>>
 //!
 //! <<<SEARCH <regex pattern>
-//! [optional relative path to limit the search]
+//! [optional path to limit the search: a directory, a file, or a glob]
 //! >>>
 //!
 //! <<<RUN <command name>
