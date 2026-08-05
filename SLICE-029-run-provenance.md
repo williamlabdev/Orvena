@@ -150,6 +150,35 @@ B2 會讓那個前提永遠不成立。代價(既有跨模型表要加註)是一
 在跑況能被重現之前,一趟十幾小時的校準有可能整個落在「028 那種狀態」,
 而讀報表的人分辨不出來。
 
+### 已裁(0806,william):B1,值取 `temperature 0.6` / `top_p 0.95` / `top_k 20`,無 seed
+
+`top_k` 與 `top_p` 三格本來就一致,真正要選的只有 temperature 的 0.6 對 1。
+取 0.6(即 14b 現值):任何一種 B1 選法都會讓某些格脫離原本的條件,
+這個選法動的是 27b/35b 兩格,而**地板格與 `0.1.0→0.4.0` 那條同模型階梯
+——目前唯一全程同條件的長序列——維持連續**。反過來取 1 會把那條階梯整條變成舊條件。
+
+**落點與上一棒寫的不同,原因是上一棒的前提錯了。** 交接寫的是「裁完寫進 orvena.yaml
+的 `provider.sampling`」,但校準跑與探針跑**不讀 repo 的 `.orvena/orvena.yaml`**
+(那是 gemini,裸跑 404),每一趟都是 `orvena init` 開一個 scratch 專案
+(`scripts/bench-passrate.sh` 用 mktemp + sed;其餘六支用 `init --provider/--model`)。
+寫進 repo config 對校準跑一行都不會生效。實際落點:
+
+- **`scripts/lib/calibration-sampling.sh`**:值的唯一真相源 + `apply_calibration_sampling`。
+  已接進 `bench-{passrate,differential,rust-probe,m1-depth,v2-agents,v2-discriminate}.sh`
+  (`bench-matrix.sh` 走 differential,不用另接);手跑探針照 SLICE-026 的協定指令 source 它。
+- **`orvena init` 的 scaffold 維持 inherited**,只加註解說明欄位存在。那組數字是
+  Qwen 系列的建議值,沒有理由當成所有 provider 的出廠預設。
+- 插值後會 `orvena status` 把設定讀回來(`status` 只載入 config、不需要金鑰),
+  **格式壞掉在第 0 秒就失敗**,不是在校準跑的第四小時。設定裡已經有 sampling 則直接拒跑
+  ——那是這支腳本沒設、也擔保不了的條件。
+
+**漏設不會靜默**:報表檔頭會印 `sampling: inherited from the backend — not repo-controlled,
+not reproducible`。這是這一刀真正買到的東西——**忘了設,看得出來**。
+
+既有數字的處理走「加註、不重算」:`docs/benchmark-results.md` 的跨模型檢查與
+harness matrix 兩張表各加一段 0806 註記,說明它們量的是「各模型在自己出廠設定下」,
+數字一個都沒動。要不要重跑那兩格,等 v2 校準協定一起排。
+
 ## 驗證
 
 `cargo test --workspace` 21 個 target 全綠、clippy 乾淨。新增 `tests/run_provenance.rs`:

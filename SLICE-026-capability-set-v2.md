@@ -121,6 +121,18 @@ slice-025 給了 5 個檔的地圖(掃一遍就夠,問不出問題);把語料變
 3. **校準只能靠「選題」,不能靠「調題」**;分數一旦被引用,set 就凍結——
    之後任何一題的改動都是新版本(v1 的規則,v2 照舊)。
 4. 校準跑本身**不是階梯讀數**:它量的是尺,不是 agent。寫進檔頭,不進結果頁的階梯表。
+5. **兩格必須同取樣**(B1,0806 裁,見 SLICE-029)。scratch 專案 `orvena init` 之後、
+   `bench` 之前多一行,兩格都跑:
+
+   ```sh
+   orvena init --provider ollama --model qwen3:14b     # 或 qwen3.6:35b
+   . "$REPO/scripts/lib/calibration-sampling.sh" && apply_calibration_sampling
+   orvena bench --tasks benchmarks/capability-v2.yaml --governance engineering ...
+   ```
+
+   漏跑那一行,兩格會各自套用自己 Modelfile 的溫度(14b 是 0.6、35b 是 1),
+   於是「除了模型什麼都一樣」不成立——而校準帶的整個意義建立在那句話上。
+   **漏了看得出來**:報表檔頭會印 `sampling: inherited`,不是印一組數字。
 
 ### 校準用哪幾格:找過中間格了,這台機器上沒有
 

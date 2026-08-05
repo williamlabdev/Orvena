@@ -186,6 +186,18 @@ is either a loop defect (fixable by driver feedback) or a model boundary
 | `cap-locate-broken-ref` | 0/3 | **3/3** (exact minimal edit → `docs/install.md`, exits `gates_passed` at 5/2/7 steps) |
 | Raw report | `…-capability-qwen3-14b-native020.json` | [`20260805-capability-qwen3.6-35b.json`](../bench-runs/20260805-capability-qwen3.6-35b.json) |
 
+> **Sampling note, added 2026-08-06 — "only the model axis moves" was not
+> literally true.** Neither run set sampling, so each model used its own
+> Modelfile default, and those differ: `qwen3:14b` ships `temperature 0.6`,
+> `qwen3.6:35b` ships `temperature 1`. Nothing in the reports said so
+> (slice-029). The figures above are not wrong — they measure each model under
+> its own shipped settings — but that is not the same claim as one ruler across
+> two models, and the verdict below leans on the stronger reading. Runs from
+> 0806 onward fix one set of sampling for every model (0.6 / 0.95 / 20, no
+> seed; `scripts/lib/calibration-sampling.sh`), so a re-run is comparable and
+> these numbers are not. They stand as recorded; nothing here has been
+> recomputed.
+
 - **Verdict on the fork: model boundary.** The task `qwen3:14b` failed 0/9
   across three prompt envelopes, `qwen3.6:35b` solves 3/3 with the exact
   one-line fix, first try, under the identical loop. A driver-side
@@ -218,6 +230,10 @@ Orvena's loop design itself carry value?", measured instead of asserted:
 |---|---|---|
 | `qwen3:14b` | 88% (21/24) | **96%** (23/24) |
 | `qwen3.6:35b` | **100%** (24/24) | 96% (23/24) |
+
+(The sampling note above applies to the two rows here as well: the harness
+comparison *within* a row is like-for-like, the comparison *between* rows is
+not — the two models sampled at different temperatures.)
 
 (Steps and tokens are deliberately absent from this table: an aider "step"
 is a whole aider invocation and its token counts are `agent_reported`, not
@@ -256,6 +272,10 @@ in the raw reports: `20260805-capability-{qwen3-14b,qwen3.6-35b}-aider.json`.)
 # needs a local Ollama serving qwen3:14b. Run from a scratch project
 # (`orvena init --provider ollama --model qwen3:14b`) so the repo's own
 # .orvena config — a different provider/model/max_steps — is not inherited:
+#
+# then fix the sampling, or the model's Modelfile decides it and the run is not
+# comparable to the other cells (the report header will say `inherited`):
+. scripts/lib/calibration-sampling.sh && apply_calibration_sampling
 orvena bench --tasks benchmarks/capability.yaml --governance engineering --repeat 3 \
   --out bench-runs/$(date +%Y%m%d)-capability-qwen3-14b.json
 # the cross-model leg swaps the init: --model qwen3.6:35b
