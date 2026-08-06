@@ -8,6 +8,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Evidence accumulation — the loop now remembers the whole run, not the last
+  step** (slice-031, `crates/orvena-core/src/agent/driver.rs`, agent
+  **0.5.0**) — the evidence window used to be overwritten every step, so on a
+  two-hop task step 1's index read was gone by step 3 and the grounding rule
+  sent the model straight back to re-read it: serial multi-hop was structurally
+  non-terminating (the D/E/K reread loop qualified in SLICE-026; E and K died
+  0/6 across both calibration cells with the same serial-READ shape). The
+  driver now keeps one labeled evidence block per step and assembles the next
+  attempt's window newest-first under a 4096-token evidence budget, dropping
+  the oldest blocks and saying so — a silently short history reads as "that is
+  all that happened". The newest block always survives, even alone over
+  budget. Window depth is capability, not obligation: both postures accumulate
+  identically (pinned by tests that walk a two-hop read across three steps in
+  each posture), or the temptation differential would measure the window.
+  Wrapped agents manage their own context and are unchanged. This is the agent
+  version bump to 0.5.0 — numbers never pool with 0.4.x; the frozen-8
+  before/after comparison and its predictions are written ahead of the run in
+  SLICE-031.
+
 - **`frozen:` task selection — the ruler's official reading, machine-readable**
   (`benchmarks/capability-v2.yaml`, `crates/orvena-core/src/benchmark/task.rs`,
   `orvena bench --all-tasks`) — a task set may now declare a top-level

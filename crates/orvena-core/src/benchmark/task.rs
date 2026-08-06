@@ -71,11 +71,8 @@ impl BenchTaskSet {
         if self.frozen.is_empty() {
             return Ok(());
         }
-        let missing: Vec<&String> = self
-            .frozen
-            .iter()
-            .filter(|id| !self.tasks.iter().any(|t| &t.id == *id))
-            .collect();
+        let missing: Vec<&String> =
+            self.frozen.iter().filter(|id| !self.tasks.iter().any(|t| &t.id == *id)).collect();
         if !missing.is_empty() {
             return Err(format!(
                 "frozen selection names unknown task id(s): {}",

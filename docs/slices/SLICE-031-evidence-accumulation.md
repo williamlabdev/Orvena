@@ -1,0 +1,108 @@
+# SLICE-031 — 證據累積:把 loop 的證據視窗從一步加深到整趟
+
+> 狀態:**設計(0806)**——實作即 agent **0.5.0**(可比鍵第四元換號,
+> 數字與 0.4.x 永不 pool)。
+> 依據:SLICE-026「D/E 重讀迴圈定性」節(真跑 transcript,11435 記錄 proxy)
+> 與出廠校準死法表(`capability-v2.yaml` 檔頭,凍結)。
+
+## 要修的不是模型,是 harness 擦掉的記憶
+
+`driver.rs` 的證據流是**覆寫制**:
+
+- 治理腿 `driver.rs`(step 5):`prior_evidence = format!("{tool_evidence}{evidence}")`
+- 基線腿 `driver.rs`(ungoverned 分支):`prior_evidence = tool_evidence`
+
+每一步組 context 時只帶**上一步**的工具輸出。0806 定性(SLICE-026)已證明後果:
+兩跳題(E/K)第 1 步 READ index 拿到指路證據,第 2 步 READ data 檔時
+index 內容已被覆寫出視窗,接地規則(「改動依據的值必須是本 run 看過的證據」)
+於是把模型逼回去重讀 index——**串行多跳結構性不終止**,兩格 0/6,
+死法形狀逐 run 一致(READ 交替、r≈8 s=0)。可解路只有批次讀或 SEARCH 打包,
+過/不過量的是「會不會批次」這張策略籤,不是多跳能力。
+
+這一刀不改 prompt 規則、不改題、不動 `MAX_STEPS`——只把 harness 從
+「每步失憶」改成「整趟記得」,與 slice-020(給眼睛)、slice-023(給紀律)、
+slice-025(給地圖)同族:**給結構,不勸誘**(slice-024 已否證勸誘路線)。
+
+## 設計
+
+### 累積制,帶預算,溢出丟最舊
+
+driver 持有 `evidence_log: Vec<String>`,每步結束 push 一個帶步號標籤的塊:
+
+```
+── evidence from step N ──
+READ 'config/index.txt':
+…
+[gate] check: …
+```
+
+下一步的 `prior_evidence` = 由**最新往回**保留,直到 `EVIDENCE_BUDGET_TOKENS`
+(常數 **4096**,`util::estimate_tokens` 計價)耗盡;被擠掉的最舊塊以一行說明:
+
+```
+(evidence from steps 1–k dropped: evidence budget reached)
+```
+
+丟最舊而不是丟最大/摘要:最新證據與當前嘗試最相關;沉默截斷會讓模型
+把「沒看到」讀成「不存在」(slice-025 的教訓,同一條紀律)。
+
+### 為什麼 4096
+
+- role 預設 context budget 8000 tokens;writable 內容與 inventory 先計價。
+  證據帶 4096 上限後,整包 prompt 最壞情況仍在 12k 量級,離 14b 格的
+  effective ctx 32768 遠。
+- 單筆 READ/RUN 證據本就截頂(100 行 / 8KB ≈ 2k tokens):4096 至少裝下
+  最近兩大筆 + 數筆小筆——兩跳題(index 一小筆 + data 一筆)綽綽有餘,
+  三跳(K 型)也在窗內。
+- 它是 **agent 行為常數**(0.5.0 的一部分),不是尺的常數:`MAX_STEPS`
+  在尺上凍結,這個數字在 agent 上演化,可比鍵靠 agent 版本區分。
+
+### 現存的一個潛在債,順手收掉
+
+`context.rs::build` 目前把 `prior_evidence` **無條件**附加(`used` 有加總
+但從不檢查)——證據相對 budget 是不設限的。覆寫制下單步證據有自然上限,
+這條債沒炸;累積制下必須收:**上游(driver)保證證據 ≤ 4096**,
+context.rs 維持原樣(單一計價點,不做雙重截斷)。
+
+### 兩種姿態一致(量測紀律,破過三次的那條)
+
+證據累積是**能力,不是義務**——與 READ/EDIT、接地規則、inventory 同判:
+治理腿與 ungoverned 基線腿**同時**改,否則差分量到的是視窗深度不是治理。
+兩處覆寫點一起換;不變式測試釘住兩姿態同帶累積證據。
+
+### 範圍外
+
+- **wrapped agent 腿(`adapter/mod.rs` 的 `prior_evidence`)不動**:wrapped
+  agent(aider)自帶 context 管理,那條腿的證據流是另一個量測平台;
+  改它是另一刀,且會動到 differential 的基線。
+- 摘要/壓縮(讓模型自己濃縮舊證據)不做:多一次模型呼叫=多一步,
+  且引入不可重放的有損轉換。先量純累積的讀數。
+
+## 預測讀數(先寫死,跑完對)
+
+出廠校準(0.4.0)已凍在 `capability-v2.yaml` 檔頭;0.5.0 用凍 8 兩格 n=3
+同取樣重跑,逐項對:
+
+1. **E(留下的哨兵)翻紅**:0/6 → 兩格皆出現 pass。它就是為了偵測這件事
+   留在凍 8 裡的;若不翻,累積制沒有解掉定性寫的死鎖,設計錯了。
+2. **D 的 14b 格出現逃出**(0/3 → ≥1/3):14b 不會批次,靠的就是視窗;
+   35b 格**不退步**(它的批次路徑不受影響)。
+3. **v1 尺與 v2 其餘題不退步**:累積證據是現行資訊的嚴格超集;唯一反向
+   風險是 prompt 變長對小模型的干擾——這正是對比跑要量的。
+4. **成本形狀**:單步 input tokens 上升、平均步數應下降;兩者一起報,
+   不許只報一邊。
+
+任何一條不中,先懷疑設計,不改預測。
+
+## 落地清單
+
+1. `driver.rs`:`evidence_log` + 預算保留函式(帶單元測試:保序、
+   丟最舊、說明行、預算=0 退化為只帶最新一塊?——不,預算是常數不可配置,
+   測試直接測常數行為);兩個覆寫點換累積。
+2. 不變式測試:兩姿態同累積;證據總量 ≤ 4096 tokens(estimate)。
+3. workspace `Cargo.toml` 0.4.0 → **0.5.0**(`runner.rs` 的
+   `native {CARGO_PKG_VERSION}` 自動跟上,bundle/report 換號)。
+4. CHANGELOG。
+5. 凍 8 對比跑(兩格 n=3,scratch init + calibration-sampling),
+   對上面四條預測——結果寫回本檔「實測」節,死法表規則照舊:
+   0.5.0 的數字**另立表**,不覆蓋 0.4.0 凍結表。

@@ -50,6 +50,49 @@ fn cap_run_output(raw: &str, hint: &str) -> (String, String) {
     (body.trim_end().to_string(), note)
 }
 
+/// Token budget for the evidence the next attempt carries (slice-031). The loop
+/// ACCUMULATES evidence across steps — a two-hop task needs step 1's index read
+/// still visible while step 2 reads the data file, and the previous
+/// overwrite-per-step window made serial multi-hop structurally non-terminating
+/// (the grounding rule kept sending the model back to re-read what the window
+/// had just dropped; see SLICE-031). This cap keeps the accumulated window from
+/// flooding the context budget: retention is newest-first, the oldest step
+/// blocks are dropped when the cap is hit, and the prompt says so. It is an
+/// agent behaviour constant (part of the agent version in the comparability
+/// key), not a ruler constant like `max_steps`.
+const EVIDENCE_BUDGET_TOKENS: u32 = 4096;
+
+/// Assemble the evidence window from the per-step log: newest blocks first
+/// under [`EVIDENCE_BUDGET_TOKENS`], rendered oldest-to-newest with a step
+/// label each. The newest block is always kept even when it alone exceeds the
+/// cap — an empty window would be a regression to no memory at all. When older
+/// blocks are dropped the window opens by saying so: a silently short history
+/// reads as "that is all that happened", and a model that believes it will
+/// re-read what it has already seen.
+fn retained_evidence(log: &[(u32, String)]) -> String {
+    let mut kept = 0usize;
+    let mut used = 0u32;
+    for (_, block) in log.iter().rev() {
+        let cost = crate::util::estimate_tokens(block);
+        if kept > 0 && used + cost > EVIDENCE_BUDGET_TOKENS {
+            break;
+        }
+        used += cost;
+        kept += 1;
+    }
+    let mut out = String::new();
+    if kept < log.len() {
+        let last_dropped = log[log.len() - kept - 1].0;
+        out.push_str(&format!(
+            "(evidence from steps 1–{last_dropped} dropped: evidence budget reached)\n"
+        ));
+    }
+    for (step, block) in &log[log.len() - kept..] {
+        out.push_str(&format!("── evidence from step {step} ──\n{block}"));
+    }
+    out
+}
+
 /// Bench-only loop options (D2: the ungoverned baseline is a bench flag, not a
 /// product tier). Crate-private — unreachable from the CLI/config surface.
 #[derive(Debug, Clone, Copy, Default)]
@@ -110,12 +153,20 @@ pub(crate) async fn run_loop_with(
     // here rather than on first action: a run that emitted none must read as
     // "attributable, and it did nothing", not as "not attributable".
     report.action_counts = Some(crate::metrics::ActionCounts::default());
-    let mut prior_evidence = String::new();
+    // One labeled block per step that produced evidence; the window the next
+    // attempt sees is assembled by `retained_evidence` (accumulate, not
+    // overwrite — slice-031). Both postures push into the same log: the window
+    // depth is capability, not obligation, and a baseline with a shallower
+    // memory would turn the differential into a measurement of the window.
+    let mut evidence_log: Vec<(u32, String)> = Vec::new();
 
     for step_no in 1..=max_steps {
         report.steps = step_no;
 
-        // 1. prepare context (re-built each attempt; carries prior gate evidence)
+        // 1. prepare context (re-built each attempt; carries the accumulated
+        // evidence window — tool output and failed-gate output from every
+        // prior step that fits the evidence budget)
+        let prior_evidence = retained_evidence(&evidence_log);
         let ctx = context::build(
             agent.root(),
             &scope,
@@ -325,7 +376,9 @@ pub(crate) async fn run_loop_with(
                 report.exit = ExitReason::ClaimedDone;
                 return Ok(report.finished(true));
             }
-            prior_evidence = tool_evidence;
+            if !tool_evidence.is_empty() {
+                evidence_log.push((step_no, tool_evidence));
+            }
             continue;
         }
 
@@ -373,8 +426,12 @@ pub(crate) async fn run_loop_with(
             return Ok(report.finished(false));
         }
 
-        // 5. observe → bounded re-attempt (tool output + failed-gate output)
-        prior_evidence = format!("{tool_evidence}{evidence}");
+        // 5. observe → bounded re-attempt (tool output + failed-gate output
+        // join the accumulated window; retention happens at the loop top)
+        let block = format!("{tool_evidence}{evidence}");
+        if !block.is_empty() {
+            evidence_log.push((step_no, block));
+        }
     }
 
     report.blockers.push(if opts.ungoverned {
@@ -384,4 +441,201 @@ pub(crate) async fn run_loop_with(
     });
     report.exit = ExitReason::BudgetExhausted;
     Ok(report.finished(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── retained_evidence: the window's retention discipline ───────────────
+
+    fn block(step: u32, body: &str) -> (u32, String) {
+        (step, format!("{body}\n"))
+    }
+
+    #[test]
+    fn everything_fits_and_stays_in_step_order() {
+        let log = vec![block(1, "first"), block(2, "second")];
+        let out = retained_evidence(&log);
+        let a = out.find("step 1").unwrap();
+        let b = out.find("step 2").unwrap();
+        assert!(a < b, "blocks render oldest-to-newest: {out}");
+        assert!(out.contains("first") && out.contains("second"));
+        assert!(!out.contains("dropped"), "nothing was dropped, nothing is claimed dropped");
+    }
+
+    #[test]
+    fn the_oldest_blocks_are_dropped_first_and_the_window_says_so() {
+        // Three blocks, each ~2000 tokens (8000 chars): only the newest two fit
+        // the 4096 budget.
+        let big = "x".repeat(8000);
+        let log = vec![block(1, &big), block(2, &big), block(3, &big)];
+        let out = retained_evidence(&log);
+        assert!(!out.contains("step 1 ──"), "the oldest block is dropped");
+        assert!(out.contains("step 2 ──") && out.contains("step 3 ──"));
+        assert!(
+            out.contains("(evidence from steps 1–1 dropped: evidence budget reached)"),
+            "the drop is announced, not silent: {}",
+            &out[..120]
+        );
+    }
+
+    #[test]
+    fn the_newest_block_survives_even_when_it_alone_exceeds_the_budget() {
+        // An empty window would be a regression to no memory at all.
+        let huge = "y".repeat(40_000);
+        let log = vec![block(1, "small"), block(2, &huge)];
+        let out = retained_evidence(&log);
+        assert!(out.contains("step 2 ──"), "the newest evidence is never evicted");
+        assert!(!out.contains("small"), "the older block yields");
+    }
+
+    #[test]
+    fn an_empty_log_is_an_empty_window() {
+        assert_eq!(retained_evidence(&[]), "");
+    }
+
+    // ── the loop accumulates across steps, in both postures ────────────────
+    //
+    // The defect this pins (slice-031): the window used to be overwritten each
+    // step, so on a two-hop task step 1's index read was gone by step 3 and the
+    // grounding rule sent the model back to re-read it — serial multi-hop never
+    // terminated. The scripted provider reads a different file on each step;
+    // by step 3 the prompt must still carry the evidence of BOTH reads.
+
+    use crate::config::agent::{AgentConfig, ProviderSelection, Tier};
+    use crate::config::commands::Commands;
+    use crate::config::context_budget::ContextBudgets;
+    use crate::config::gates::{Gate, Gates};
+    use crate::config::roles::{Role, Roles};
+    use crate::config::Config;
+    use crate::provider::{ChatResponse, Message, Provider};
+    use async_trait::async_trait;
+    use std::sync::{Arc, Mutex};
+
+    fn config(gates: Vec<Gate>) -> Config {
+        Config {
+            agent: AgentConfig {
+                provider: ProviderSelection {
+                    kind: "offline".into(),
+                    model: "stub".into(),
+                    base_url: None,
+                    api_key_env: None,
+                    sampling: None,
+                },
+                tier: Tier::Light,
+                default_role: "developer".into(),
+                max_steps: 3,
+                sandbox: Default::default(),
+            },
+            roles: Roles {
+                roles: vec![Role {
+                    name: "developer".into(),
+                    allowed_tools: vec!["fs.read".into(), "fs.write".into()],
+                    forbidden_tools: vec![],
+                    knowledge_scope: vec![],
+                }],
+            },
+            gates: Gates { gates },
+            budgets: ContextBudgets::default(),
+            commands: Commands::default(),
+        }
+    }
+
+    /// Emits `READ a.txt` on step 1, `READ b.txt` on step 2, then keeps
+    /// emitting a read so the ungoverned run never claims done. Records every
+    /// user message it is sent.
+    struct TwoHopReader {
+        prompts: Arc<Mutex<Vec<String>>>,
+        calls: Mutex<u32>,
+    }
+
+    #[async_trait]
+    impl Provider for TwoHopReader {
+        fn id(&self) -> &str {
+            "two-hop-reader"
+        }
+        async fn chat(
+            &self,
+            req: crate::provider::ChatRequest,
+        ) -> crate::error::Result<ChatResponse> {
+            let user = req
+                .messages
+                .iter()
+                .filter(|m: &&Message| m.role == "user")
+                .map(|m| m.content.clone())
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.prompts.lock().unwrap().push(user);
+            let mut calls = self.calls.lock().unwrap();
+            *calls += 1;
+            let content = match *calls {
+                1 => "<<<READ a.txt\n>>>",
+                _ => "<<<READ b.txt\n>>>",
+            };
+            Ok(ChatResponse { content: content.into(), input_tokens: 0, output_tokens: 0 })
+        }
+    }
+
+    fn prompts_seen(ungoverned: bool) -> Vec<String> {
+        let root = std::env::temp_dir().join(format!(
+            "orvena-evidence-{}-{}",
+            std::process::id(),
+            ungoverned
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), "the index says: see b.txt\n").unwrap();
+        std::fs::write(root.join("b.txt"), "the value is seven\n").unwrap();
+        std::fs::write(root.join("out.txt"), "stale\n").unwrap();
+
+        // A gate that never passes keeps the governed loop re-attempting to
+        // max_steps; the ungoverned loop continues because the provider keeps
+        // emitting actions.
+        let gates = vec![Gate {
+            name: "check".into(),
+            condition: "out.txt is correct".into(),
+            verify: Some("false".into()),
+            gatekeeper: Default::default(),
+            timeout_secs: None,
+        }];
+        let prompts = Arc::new(Mutex::new(Vec::new()));
+        let provider = TwoHopReader { prompts: Arc::clone(&prompts), calls: Mutex::new(0) };
+        let agent = super::super::Agent::with_provider(
+            config(if ungoverned { vec![] } else { gates }),
+            &root,
+            Box::new(provider),
+        );
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let opts = LoopOptions { ungoverned };
+        rt.block_on(async {
+            run_loop_with(&agent, task, opts).await.unwrap();
+        });
+        let _ = std::fs::remove_dir_all(&root);
+        let out = prompts.lock().unwrap().clone();
+        assert_eq!(out.len(), 3, "the loop should run all three steps");
+        out
+    }
+
+    #[test]
+    fn step_three_still_carries_step_ones_evidence_governed() {
+        let prompts = prompts_seen(false);
+        let third = &prompts[2];
+        assert!(
+            third.contains("the index says: see b.txt"),
+            "step 1's READ must survive into step 3's window"
+        );
+        assert!(third.contains("the value is seven"), "step 2's READ is present too");
+    }
+
+    #[test]
+    fn step_three_still_carries_step_ones_evidence_ungoverned() {
+        // Window depth is capability, not obligation: the baseline gets the
+        // same memory, or the differential measures the window.
+        let prompts = prompts_seen(true);
+        let third = &prompts[2];
+        assert!(third.contains("the index says: see b.txt"));
+        assert!(third.contains("the value is seven"));
+    }
 }
