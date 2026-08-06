@@ -112,11 +112,19 @@ I/L 是**地板側**備用(35b 若明顯貼地,換上來);J/K/M 是**天花板�
 | A | READ×4 + EDIT = **5** | 1 | ✅ 且有第二條路(SEARCH×1 + EDIT = 2),兩條都在額度內 |
 | B | EDIT×3 = **3** | 1 | ✅ 最寬鬆。三檔 writable 故內容已在 prompt,不需 READ |
 | C | EDIT×2 = **2** | **2** | ✅ 吃的是回合不是動作;唯一真正需要多回合的題,設計正確 |
-| D | READ×2 + WRITE = **3** | 1 | ✅ |
-| E | READ×2 + WRITE = **3** | 1 | ✅ 防繞過機制已改,見下 |
+| D | READ×2 + WRITE = **3** | 1 | ⚠️ 真跑否證了這行的隱含假設,見「D/E 重讀迴圈定性」 |
+| E | READ×2 + WRITE = **3** | 1 | ⚠️ 同 D;防繞過機制已改,見下 |
 | F | EDIT×3 = **3** | **3** | ✅ 兩次 ambiguous 各要一個回合收 gate 回饋 |
 | G | READ×5 + WRITE = **6** | 1 | ✅(已縮檔;12 檔版是 13 個動作,超額) |
 | H | READ×3 + EDIT×3 = **6** | **3** | ✅ 已降為 3 個缺陷,見下 |
+
+**已量(0806,35b 單趟 envelope 真跑;batch1 = A–G,batch2 = H–M)**:
+13 題全數真跑過一輪(engineering、native 0.4.0、校準取樣、repeat 1;
+報表 `bench-runs/20260806-capv2-envelope-batch{1,2}-qwen3-6-35b.json`)。
+結果:10/13 過;死的三題 D/E/K 全是多跳家族、同一死法(見下節定性)。
+步數注記:M(4 缺陷)**壓線 8 步過**——零餘裕的預測準確,天花板側備用的
+定位成立;H 改 3 缺陷後未在本輪出事。單趟是 envelope 驗證,不是校準值;
+n=3 的死法表仍以出廠校準跑為準。
 
 **H 原本是唯一沒過的,已改**(0806 裁:≥4 → 3 個缺陷)。原版每輪先 READ 再 EDIT
 剛好用滿 8 個動作,任何一次多讀、多搜或一次修錯都直接出局——而那些正是失敗 run
@@ -135,6 +143,54 @@ I/L 是**地板側**備用(35b 若明顯貼地,換上來);J/K/M 是**天花板�
 暴力路徑仍然跑得完,只是跑完仍不知道答案。**這才是「必須多跳」,
 而不是「沒空間繞過」**;預算擋出來的必要性是假的,資訊結構擋出來的才是真的。
 K 同理照改。
+
+### D/E 重讀迴圈定性:視窗一步深 + 接地規則 = 結構性死鎖(0806,真跑 transcript)
+
+35b envelope 真跑(batch1)裡 D/E 同死:8–9 READ、零 write 零 search、燒滿 8 步。
+n=1 未定性,單題重跑取證(同 batch1 條件:engineering、native、校準取樣、repeat 1;
+driver 無逐步紀錄,在 runner 與 ollama 之間掛記錄 proxy 截整包)。兩題都重現原死法,
+transcript 與報表在 `bench-runs/20260806-probe-de-reread-*`。
+
+**死法逐字**:D 是 READ registry → READ site-b → READ registry → …交替到死;
+E 同型(index ↔ amber.dat)。模型第 1–2 步就找對了目標——這不是迷路。
+
+**機制,三件事相加**:
+
+1. native loop 是無狀態重渲染:每步 prompt = system + task + writable 檔現況
+   + **上一步**的工具證據。`prior_evidence` 是覆寫不是累積(driver.rs 步尾
+   `prior_evidence = format!("{tool_evidence}{evidence}")`)——
+   **證據視窗恰好一步深,是建構性質**。
+2. D/E 的 write 需要兩份證據同時在場(哪個目標是 active/current + 該目標的值),
+   分居兩檔。串行單動作策略下,視窗永遠只裝得下一半。
+3. system prompt 的接地規則(「不得寫沒親眼見過的值,先 READ/SEARCH」)對
+   無狀態重渲染的模型而言,「記得」與「捏造」無從分辨——上上步讀過、
+   現在不在眼前,就等於沒讀過。所以它回頭重讀缺的那半,同時把另一半擠出視窗。
+
+**定性:行為發現,不是題目缺陷。** 題目在額度內可解,但解路只有兩條:
+(a) **批次**——一步內連發多個 READ,同一步的 tool_evidence 在視窗內共存,
+下一步兩份證據都在場(動作 5、回合 2);(b) **SEARCH 打包**——一次跨檔
+SEARCH 的 hits 天生同窗(動作 2、回合 2)。35b 兩跑 search=0、每步單動作,
+一條都沒走。
+
+**對上表 D/E 行的修正**:「動作 3、回合 1」是紙上推的,且隱含「證據會累積」
+的假設。真跑下:串行 READ 路徑**任何預算都解不掉**——不是超額,是不終止;
+回合下限是 2,不是 1。設計條件 9 的「no honest path may exceed budget」在
+D/E 上要補一句:誠實的串行路徑不是超額,是**不存在**。
+
+**第二批真跑追認:K 同死同型**(0806,batch2)。K(E 的同維度加難版)
+在 `index.txt` ↔ `east.dat` 之間交替到死:8 READ、零 write 零 search——
+與 D/E 逐字同機制。多跳家族三題全滅於同一根軸,transcript 在
+`bench-runs/20260806-capv2-envelope-batch2-k-transcript-*`。
+
+**選題含意(不裁,留給校準)**:若 D/E/K 的過/不過被單一策略指標
+(批次 or search)線性分開,按 0806 選題判準它們是 swap 候選。這與多跳探針
+量到的「分水嶺是批次」是同一根軸;n=1 已有三個一致樣本,等校準 n=3
+死法表出來對這條軸並看 D/E/K 的分佈再裁。屆時真正的問題是:多跳維度
+在這個 agent 架構下**是否只能量到批次**——若是,這是把尺的讀數,不是尺的失敗。
+
+**儀器缺口另記**:native loop 零逐步可觀測性,evidence bundle 只有計數;
+本次靠 proxy 取證是繞道,不是解法。逐步 transcript 要不要進 evidence
+bundle(以及進了會不會把 bundle 撐爆)是一把獨立的刀,不在本 slice 裁。
 
 ### 第二個污染源:盲猜基礎率(0806 裁:不改題)
 
