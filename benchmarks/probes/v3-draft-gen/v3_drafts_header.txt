@@ -1,0 +1,87 @@
+# Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
+#
+# Status: DRAFT (0807) — pre-probe, pre-freeze. Design: SLICE-032 (ratified
+# 0807, four rulings). These are the N1/N3/N4 shapes from the type table;
+# N2's shape is separately locked by ruling iii (header-signal probe, 6/6)
+# and is not drafted here. Numbers from these tasks never enter any official
+# account; the probe protocol below must pass before any freeze talk.
+#
+# What every task here shares (mechanism dossier, verified in code 0807):
+#
+# * Sequential first-problem-only check (H pattern): reveal k+1 exists only
+#   after fix k — real state dependency, per design condition 11.
+# * ARMOR CHAIN (new in v3, needs review): the slot key for round k+1 is
+#   derived from the CORRECT value of field k via `cksum` — key = crc % 97+1.
+#   Why: condition 11's literal self-test ("batch model reads the whole
+#   corpus incl. tests/check.sh at step 1 — can it close at step 2?") kills
+#   every plaintext-mapping design: reading check.sh reveals the full
+#   field↔slot map, and the step-1 giant block is still the newest block at
+#   step 2 (newest-block exemption), so a one-shot full write closes at
+#   step 2 with zero window pressure. v2-H has exactly this property. With
+#   the armor, the mapping is not mentally recoverable (CRC is not text
+#   reasoning), and no compute channel exists: RUN executes only
+#   pre-declared fixed-argv commands (.orvena/commands.yaml, tools/
+#   shell.rs) — the model cannot hand cksum any input. Keys are unknowable
+#   until each reveal, and reveals only follow real fixes. Honest walkers
+#   never see the armor: each complaint names the key in plaintext at
+#   runtime. N1's round-4 pin key is armored for the same reason (see the
+#   pre-fill walk in its block).
+# * Anti-stash guards: placeholders are the same width (12 chars) as
+#   every answer and the byte cap is the exact solved size + 4B, plus
+#   exact line count + grep -qxF frozen lines — ALL ordered BEFORE the
+#   chain checks, so honest walks are size-constant and any insertion
+#   preempts the next round reveal. Writable contents print into the
+#   prompt each step (context.rs:56-73) outside the 4096 evidence budget,
+#   and the 8000 whole-prompt budget does NOT self-limit a stash
+#   (system+head ≈ 600 tok leaves ~7.4k of print room — the verifier
+#   refuted draft-1's self-blinding claim, incl. a zero-cost pack into a
+#   not-yet-checked field line). What actually closes the hole is gate
+#   ordering: a stashed file trips a guard, and a guard complaint
+#   preempts every round reveal — stash and progress are mutually
+#   exclusive, so stash/unstash cycles cost 2 edits per round against
+#   1 JIT re-read. Strictly dominated; probes still watch for it.
+# * Complaints POINT at the source and never quote the expected literal
+#   (L-forensics 0807: quoted literals in feedback became the wrong answer;
+#   freshness traps are a DIFFERENT axis and must not contaminate these).
+# * Fat refs are 98 lines / ~7.7KB ≈ 1950 tokens — deliberately under the
+#   READ/RUN truncation edge (100 lines / 8KB, cap_run_output), so one READ
+#   returns the whole file untruncated.
+# * Adversarial review trail (0807): round 1 — verifier refuted two
+#   draft-1 claims (print-budget self-blinding: false arithmetic;
+#   "RUN-simulator walk": the channel does not exist, RUN is fixed-argv);
+#   draft-3 added byte-cap guards and armored N1's round-4 key after the
+#   pre-fill walk was found. Round 2 — verifier executed a live stash
+#   walk through draft-3's N1 cap (five pin values in a not-yet-checked
+#   field, 7 actions, zero dropped_reread); draft-4 answers with
+#   answer-width placeholders + solved-size+4 caps, and the exact walk
+#   is now a regression test in the generator. Residue: the 1-in-4
+#   single-candidate pre-fill guess (see N1 block) is irreducible.
+# * All seeds, chains and complaint sequences are generated and MECHANICALLY
+#   verified by benchmarks/probes/v3-draft-gen/gen_v3_drafts.py: honest walk applied fix-by-fix,
+#   complaint order asserted exact, final check asserted `ok`.
+#
+# Probe protocol before any freeze (SLICE-032 calibration section):
+#   (i)  token-shape probe: real run per task; require window_peak_tokens
+#        near 4096 and evictions.first_step > 0 for N1/N3 (pressure real);
+#        if no eviction shows, fatten refs toward the truncation edge.
+#   (ii) behavior probe: small n, both cells; death signatures must land in
+#        the type-table classes (dropped_reread separates ordering-death
+#        from reread-death). Watch items are listed per task below.
+#   Telemetry caveat for (ii): dropped_reread counts repeat READs of
+#   evicted paths — a model that re-fetches via SEARCH/grep instead of READ
+#   may not count; classify from action logs if the counter reads zero.
+#
+# Open flags for ruling (none block probing):
+#   f1. The armor chain is a new mechanism — CTR/fresh-eyes should attack
+#       it before freeze (is a runtime-computed slot key still "information
+#       structure", per condition 10? The values remain read-to-know; the
+#       armor only hides the MAP, never a value).
+#   f2. N1's honest worst case is exactly 8 actions — zero slack; one
+#       exploratory read (ls, check.sh) costs the run. That IS the
+#       read-restraint axis, but the behavior probe must confirm it
+#       doesn't just measure step-arithmetic luck.
+#   f3. N4's necessary-evidence total is 3 x ~1975 ≈ 5930 tok ≈ 1.45x4096,
+#       under the ruled 1.5–2x band: the READ truncation cap (2048/read)
+#       bounds what one fat ref can carry, and a 4th ref pushes the
+#       with-retention honest walk to 9 actions, breaking condition 9.
+#       Either accept 1.45x or rule a shape change.

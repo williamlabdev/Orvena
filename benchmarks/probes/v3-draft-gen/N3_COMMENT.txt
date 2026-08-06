@@ -1,0 +1,43 @@
+  # ══ N3 — convergence + fat state (capv3-converge-fatref) ═════════════════
+  #
+  # Shape: H deepened. One fat reference (refs/matrix.txt) is consulted in
+  # EVERY round, but the gate's own output is fat (complaint line first,
+  # then a static 84-line audit block ≈ 1650 tok, well under the 100-line/
+  # 8KB RUN cap): each new round's feedback evicts the previous round's
+  # matrix read, so every round demands a fresh re-read.
+  #
+  # Pressure arithmetic: round-k block = READ matrix ~1950 + gate ~1700 ≈
+  # 3700; round-k+1 edit block = ~120 + 1700 ≈ 1820. 1820 + 3700 > 4096 →
+  # the previous round's matrix is ALWAYS evicted before it is needed
+  # again. This is the type-table row verbatim: "the reference was squeezed
+  # out in the previous round".
+  #
+  # The audit block is STATIC (identical every run) by design: stale and
+  # fresh copies are indistinguishable AND identical, so no freshness
+  # confusion is possible — L-forensics ruled that freshness traps are a
+  # different axis and must not be mixed into a window-pressure task. The
+  # complaint line comes FIRST so output truncation can never eat it.
+  #
+  # Condition 9: honest walk = (R matrix, E) x 3 = 6 actions, slack 2.
+  #
+  # Condition 11 self-test:
+  #   batch walk: s1 READ matrix+check.sh; gate reveals round-1 complaint.
+  #     Close at s2? NO — slots for s2/s3 are cksum-armored.
+  #   compute-channel walk: none exists — RUN is fixed-argv only
+  #     (tools/shell.rs), so the cksum chain cannot be precomputed; and
+  #     the fat gate output rides along on every step regardless, so the
+  #     matrix is evicted between rounds no matter what the model knows.
+  #   stash walk: a stashed matrix WOULD print free each step (the 8000
+  #     print budget does not self-limit it — draft-1's claim refuted),
+  #     but placeholders are answer-width (12 chars) and the cap is the
+  #     solved size + 4B: honest states are size-constant, any insertion
+  #     trips the guard, and the guard preempts every round reveal. The
+  #     necessary evidence is a ~7.8KB file that no field can carry
+  #     anyway. Behavior probe watch item.
+  #
+  # Expected deaths: the 0.5.0 H-14b family signature — edit streak with
+  # zero re-reads ("still editing" is not "re-reading"), budget_exhausted;
+  # dropped_reread distinguishes ordering-death from reread-death.
+  # Watch item (L contamination): two audit blocks briefly coexist in the
+  # window before eviction; if oscillation on already-fixed fields shows
+  # up, the audit block is polluting and the shape must be rebuilt.

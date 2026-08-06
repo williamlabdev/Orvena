@@ -1,0 +1,62 @@
+  # ══ N1 — ordering / reread decision (capv3-pin-eviction) ═════════════════
+  #
+  # Shape: the pin file (notes/s9.txt, small, five entries k1..k9) is needed
+  # at round 1 (k1) AND round 4 — where WHICH entry (k3/k5/k7/k9) is itself
+  # armored, derived at runtime from fallback's correct value. Rounds 2–3
+  # each force one fat read (inv-a, inv-b). By round 4 the pin block has
+  # been squeezed out — the pass behavior is a second READ of the pin after
+  # the dropped marker (dropped_reread >= 1).
+  #
+  # Why round 4 is armored too (pre-fill walk, found in draft-2 self-test):
+  # with a plaintext `rollback ↔ k9` mapping in check.sh, a check-reading
+  # batch model pre-fills rollback at s2 while the giant is still the
+  # newest block, and passes in 6 steps with ZERO needle re-read — the
+  # construct dissolves. With the key runtime-derived, no walk knows which
+  # pin entry matters until the round-4 complaint, by which time the pin
+  # is out of the window.
+  #
+  # Pressure arithmetic (estimate_tokens = ceil(chars/4)):
+  #   sequential walk blocks: s1 pin+gate ~120 | s2 edit ~120 | s3 inv-a
+  #   ~2000 | s4 edit ~120 | s5 inv-b ~2000 | s6 edit ~120. At s7 the
+  #   window walks back s6+s5+s4+s3 ≈ 4240 > 4096 → s1/s2 (the pin) are
+  #   out, dropped marker shown. Margin is thin (~150 tok) — token-shape
+  #   probe MUST confirm evictions.first_step <= 7; if not, fatten refs.
+  #
+  # Condition 9: honest worst case = R pin, E, R inv-a, E, R inv-b, E,
+  # R pin, E = 8 actions exactly (zero slack — flag f2). Best honest case
+  # 7 (pin survives; probe should NOT see that if pressure is right).
+  #
+  # Condition 11 self-test (all walks written out):
+  #   batch walk: s1 READ pin+inv-a+inv-b+check.sh (gate reveals round-1
+  #     complaint into the same block). Close at s2? NO — mirror/fallback
+  #     slots and the round-4 pin key are cksum-armored; check.sh gives
+  #     the rule, never the keys. s2 can only fix `release`.
+  #   compute-channel walk: RUN executes only pre-declared fixed-argv
+  #     commands (.orvena/commands.yaml via tools/shell.rs — the model
+  #     cannot pass arguments), so cksum cannot be executed on any chosen
+  #     input; CRC is not text reasoning either. The chain cannot be
+  #     precomputed at any step, by any route.
+  #   stash walk (killed twice, now mechanically regression-tested):
+  #     writable contents print into the prompt each step outside the
+  #     evidence budget (context.rs:56-73); the 8000 print budget does
+  #     NOT self-limit a stash (verifier, round 1). Draft-3's 300B cap
+  #     still left ~164B of real headroom — enough for all five pin
+  #     values (~85B) packed into the not-yet-checked rollback field:
+  #     7 actions, zero pin re-read, dropped_reread never fires
+  #     (verifier, round 2, executed against the real check). Draft-4
+  #     closes the WIDTH: placeholders are the same 12 chars as every
+  #     answer, and the cap is the solved size + 4B, so every honest
+  #     state is size-constant and any insertion trips the guard —
+  #     which runs before the chain, so a stashed file never receives
+  #     a round reveal. Because the chain re-verifies from the top on
+  #     every run, already-fixed fields cannot be shrunk to free bytes
+  #     without forfeiting the reveal; the only stash room left at
+  #     round 4 is rollback's own 12 chars = a single-candidate
+  #     pre-fill guess at 1-in-4 odds. That residue is irreducible
+  #     (guessing into the answer slot can never be capped away);
+  #     probe: a no-reread pass is a coin-flip signature, expect ~25%
+  #     of such runs, classify separately.
+  #
+  # Expected deaths: fabricated round-4 value (grounding rule catches →
+  # burned steps); edit-without-reread after the dropped marker; batch
+  # cliff followed by full re-read burn (steps exhaust).

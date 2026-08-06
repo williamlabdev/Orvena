@@ -1,0 +1,1062 @@
+# Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
+#
+# Status: DRAFT (0807) — pre-probe, pre-freeze. Design: SLICE-032 (ratified
+# 0807, four rulings). These are the N1/N3/N4 shapes from the type table;
+# N2's shape is separately locked by ruling iii (header-signal probe, 6/6)
+# and is not drafted here. Numbers from these tasks never enter any official
+# account; the probe protocol below must pass before any freeze talk.
+#
+# What every task here shares (mechanism dossier, verified in code 0807):
+#
+# * Sequential first-problem-only check (H pattern): reveal k+1 exists only
+#   after fix k — real state dependency, per design condition 11.
+# * ARMOR CHAIN (new in v3, needs review): the slot key for round k+1 is
+#   derived from the CORRECT value of field k via `cksum` — key = crc % 97+1.
+#   Why: condition 11's literal self-test ("batch model reads the whole
+#   corpus incl. tests/check.sh at step 1 — can it close at step 2?") kills
+#   every plaintext-mapping design: reading check.sh reveals the full
+#   field↔slot map, and the step-1 giant block is still the newest block at
+#   step 2 (newest-block exemption), so a one-shot full write closes at
+#   step 2 with zero window pressure. v2-H has exactly this property. With
+#   the armor, the mapping is not mentally recoverable (CRC is not text
+#   reasoning), and no compute channel exists: RUN executes only
+#   pre-declared fixed-argv commands (.orvena/commands.yaml, tools/
+#   shell.rs) — the model cannot hand cksum any input. Keys are unknowable
+#   until each reveal, and reveals only follow real fixes. Honest walkers
+#   never see the armor: each complaint names the key in plaintext at
+#   runtime. N1's round-4 pin key is armored for the same reason (see the
+#   pre-fill walk in its block).
+# * Anti-stash guards: placeholders are the same width (12 chars) as
+#   every answer and the byte cap is the exact solved size + 4B, plus
+#   exact line count + grep -qxF frozen lines — ALL ordered BEFORE the
+#   chain checks, so honest walks are size-constant and any insertion
+#   preempts the next round reveal. Writable contents print into the
+#   prompt each step (context.rs:56-73) outside the 4096 evidence budget,
+#   and the 8000 whole-prompt budget does NOT self-limit a stash
+#   (system+head ≈ 600 tok leaves ~7.4k of print room — the verifier
+#   refuted draft-1's self-blinding claim, incl. a zero-cost pack into a
+#   not-yet-checked field line). What actually closes the hole is gate
+#   ordering: a stashed file trips a guard, and a guard complaint
+#   preempts every round reveal — stash and progress are mutually
+#   exclusive, so stash/unstash cycles cost 2 edits per round against
+#   1 JIT re-read. Strictly dominated; probes still watch for it.
+# * Complaints POINT at the source and never quote the expected literal
+#   (L-forensics 0807: quoted literals in feedback became the wrong answer;
+#   freshness traps are a DIFFERENT axis and must not contaminate these).
+# * Fat refs are 98 lines / ~7.7KB ≈ 1950 tokens — deliberately under the
+#   READ/RUN truncation edge (100 lines / 8KB, cap_run_output), so one READ
+#   returns the whole file untruncated.
+# * Adversarial review trail (0807): round 1 — verifier refuted two
+#   draft-1 claims (print-budget self-blinding: false arithmetic;
+#   "RUN-simulator walk": the channel does not exist, RUN is fixed-argv);
+#   draft-3 added byte-cap guards and armored N1's round-4 key after the
+#   pre-fill walk was found. Round 2 — verifier executed a live stash
+#   walk through draft-3's N1 cap (five pin values in a not-yet-checked
+#   field, 7 actions, zero dropped_reread); draft-4 answers with
+#   answer-width placeholders + solved-size+4 caps, and the exact walk
+#   is now a regression test in the generator. Residue: the 1-in-4
+#   single-candidate pre-fill guess (see N1 block) is irreducible.
+# * All seeds, chains and complaint sequences are generated and MECHANICALLY
+#   verified by benchmarks/probes/v3-draft-gen/gen_v3_drafts.py: honest walk applied fix-by-fix,
+#   complaint order asserted exact, final check asserted `ok`.
+#
+# Probe protocol before any freeze (SLICE-032 calibration section):
+#   (i)  token-shape probe: real run per task; require window_peak_tokens
+#        near 4096 and evictions.first_step > 0 for N1/N3 (pressure real);
+#        if no eviction shows, fatten refs toward the truncation edge.
+#   (ii) behavior probe: small n, both cells; death signatures must land in
+#        the type-table classes (dropped_reread separates ordering-death
+#        from reread-death). Watch items are listed per task below.
+#   Telemetry caveat for (ii): dropped_reread counts repeat READs of
+#   evicted paths — a model that re-fetches via SEARCH/grep instead of READ
+#   may not count; classify from action logs if the counter reads zero.
+#
+# Open flags for ruling (none block probing):
+#   f1. The armor chain is a new mechanism — CTR/fresh-eyes should attack
+#       it before freeze (is a runtime-computed slot key still "information
+#       structure", per condition 10? The values remain read-to-know; the
+#       armor only hides the MAP, never a value).
+#   f2. N1's honest worst case is exactly 8 actions — zero slack; one
+#       exploratory read (ls, check.sh) costs the run. That IS the
+#       read-restraint axis, but the behavior probe must confirm it
+#       doesn't just measure step-arithmetic luck.
+#   f3. N4's necessary-evidence total is 3 x ~1975 ≈ 5930 tok ≈ 1.45x4096,
+#       under the ruled 1.5–2x band: the READ truncation cap (2048/read)
+#       bounds what one fat ref can carry, and a 4th ref pushes the
+#       with-retention honest walk to 9 actions, breaking condition 9.
+#       Either accept 1.45x or rule a shape change.
+
+tasks:
+  # ══ N1 — ordering / reread decision (capv3-pin-eviction) ═════════════════
+  #
+  # Shape: the pin file (notes/s9.txt, small, five entries k1..k9) is needed
+  # at round 1 (k1) AND round 4 — where WHICH entry (k3/k5/k7/k9) is itself
+  # armored, derived at runtime from fallback's correct value. Rounds 2–3
+  # each force one fat read (inv-a, inv-b). By round 4 the pin block has
+  # been squeezed out — the pass behavior is a second READ of the pin after
+  # the dropped marker (dropped_reread >= 1).
+  #
+  # Why round 4 is armored too (pre-fill walk, found in draft-2 self-test):
+  # with a plaintext `rollback ↔ k9` mapping in check.sh, a check-reading
+  # batch model pre-fills rollback at s2 while the giant is still the
+  # newest block, and passes in 6 steps with ZERO needle re-read — the
+  # construct dissolves. With the key runtime-derived, no walk knows which
+  # pin entry matters until the round-4 complaint, by which time the pin
+  # is out of the window.
+  #
+  # Pressure arithmetic (estimate_tokens = ceil(chars/4)):
+  #   sequential walk blocks: s1 pin+gate ~120 | s2 edit ~120 | s3 inv-a
+  #   ~2000 | s4 edit ~120 | s5 inv-b ~2000 | s6 edit ~120. At s7 the
+  #   window walks back s6+s5+s4+s3 ≈ 4240 > 4096 → s1/s2 (the pin) are
+  #   out, dropped marker shown. Margin is thin (~150 tok) — token-shape
+  #   probe MUST confirm evictions.first_step <= 7; if not, fatten refs.
+  #
+  # Condition 9: honest worst case = R pin, E, R inv-a, E, R inv-b, E,
+  # R pin, E = 8 actions exactly (zero slack — flag f2). Best honest case
+  # 7 (pin survives; probe should NOT see that if pressure is right).
+  #
+  # Condition 11 self-test (all walks written out):
+  #   batch walk: s1 READ pin+inv-a+inv-b+check.sh (gate reveals round-1
+  #     complaint into the same block). Close at s2? NO — mirror/fallback
+  #     slots and the round-4 pin key are cksum-armored; check.sh gives
+  #     the rule, never the keys. s2 can only fix `release`.
+  #   compute-channel walk: RUN executes only pre-declared fixed-argv
+  #     commands (.orvena/commands.yaml via tools/shell.rs — the model
+  #     cannot pass arguments), so cksum cannot be executed on any chosen
+  #     input; CRC is not text reasoning either. The chain cannot be
+  #     precomputed at any step, by any route.
+  #   stash walk (killed twice, now mechanically regression-tested):
+  #     writable contents print into the prompt each step outside the
+  #     evidence budget (context.rs:56-73); the 8000 print budget does
+  #     NOT self-limit a stash (verifier, round 1). Draft-3's 300B cap
+  #     still left ~164B of real headroom — enough for all five pin
+  #     values (~85B) packed into the not-yet-checked rollback field:
+  #     7 actions, zero pin re-read, dropped_reread never fires
+  #     (verifier, round 2, executed against the real check). Draft-4
+  #     closes the WIDTH: placeholders are the same 12 chars as every
+  #     answer, and the cap is the solved size + 4B, so every honest
+  #     state is size-constant and any insertion trips the guard —
+  #     which runs before the chain, so a stashed file never receives
+  #     a round reveal. Because the chain re-verifies from the top on
+  #     every run, already-fixed fields cannot be shrunk to free bytes
+  #     without forfeiting the reveal; the only stash room left at
+  #     round 4 is rollback's own 12 chars = a single-candidate
+  #     pre-fill guess at 1-in-4 odds. That residue is irreducible
+  #     (guessing into the answer slot can never be capped away);
+  #     probe: a no-reread pass is a coin-flip signature, expect ~25%
+  #     of such runs, classify separately.
+  #
+  # Expected deaths: fabricated round-4 value (grounding rule catches →
+  # burned steps); edit-without-reread after the dropped marker; batch
+  # cliff followed by full re-read burn (steps exhaust).
+
+  - id: capv3-pin-eviction
+    instruction: "tests/check.sh rejects deploy.conf but reports only the FIRST problem each time it runs. Reference data lives under notes/ and refs/ (read-only). Fix deploy.conf until the check passes. Lines it does not complain about must stay unchanged."
+    writes: [deploy.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: deploy.conf
+        contents: |
+          # staging deploy manifest
+          release = ------------
+          mirror = ------------
+          fallback = ------------
+          rollback = ------------
+          owner = platform
+      - path: notes/s9.txt
+        contents: |
+          # staging pins — rotation 2026-08
+          k1 cvx2du14s4xe
+          k3 fd8o8jf617d1
+          k5 989b0hg8k1kv
+          k7 3hnfmiolvake
+          k9 b18afwr8o00q
+      - path: refs/inv-a.txt
+        contents: |
+          # slot inventory A — provisioning source of record
+          a01  jt53xrjmnedo  i3rgemr4666l0jj2nj2do7d3v2jo7ns795fhb7743br989mp5xp1cn30ivsl
+          a02  3lxzjcg3yagu  tfy2y0fncg4q8zkjmpa1gy130dcglz6e69tb5696k13p3z0fklflhwmuw1t3
+          a03  rnga3x5d1rgt  kurk8o7ir0n7ainlj3915o9vdwowt7d068kcrauou0n7zk97wyo8rz4exmex
+          a04  g1z8jgslyzjg  co019wzgc6ent1a9jsea7v9mth81shtkge3rpc6f137e8lsb9cmznv0afrxb
+          a05  14q061ne3u80  05kdmkqim9mn46f04tc05ue7sg1nsqsk9p58yq6op1cfonux2n2tm2y2jho8
+          a06  tf0taxrvqnrb  ivv4f6gypdhwsuvuzm6zb5q4nm96fn0gcfkxlbcm2y1g4ja5uvsf3n4li6u5
+          a07  v19lncbyfm0e  0kcnxf8j4mvrjoi38wwtjezihp48fy6yo1g98km5pq48vmvxap0s0n9tevsc
+          a08  xeelastln4dg  q0i1bfymchndp45zp0ihpl9sx9baok69cvyxrh8rs0jbx1ma7ylxojds5gpu
+          a09  ydphhsm196iu  vzrwzlibp17m0340cl39r976vrulka282htfszn9h522jnvvqt0pgndd5piw
+          a10  jznsykbu71q3  f39u7yot1xzicre0xg4ba4u3ebc6a739p2497ct86atngjjxacb8dx5ax80o
+          a11  e7fmsf5xal19  ws6wqkc7ncei99k5kimov3qcl9t3so24m2whom24yvf1vw0smfko810wonn8
+          a12  tppquztzmo1z  wlhpb4uzqchry57yvbbrkpmetryb77wy7lvg3clnc7ts9t61e1crj5oshgb9
+          a13  7c46blyxuqv3  l44pdqa19wjsxfbdeuf6b574kjj3ztpma3mwvfm0lwflk1a8mj8qes2yc29e
+          a14  yuwwssvfvitq  9t7hpp4aif6uebq435b7mw06c6dntpzhada8e3kbpq4528ex7nnucst8wvvg
+          a15  egox6wfpfie8  jacuggewzznf0qxvo7ye8q3ez2lzjcvwbq0kmqb32s5d3zejbtqruynfuq6a
+          a16  k8cpbu02y840  qjffg60x544ouxp547lig6egrn2f0l924314ukmr1x9jmtuaacjwcnpg3w07
+          a17  z5czbsvzrev5  u705d39mncyx92dt6er2hegs28obzidip51wd1wfkdk403ja0d2c3q8jpnib
+          a18  p7dvghptmns3  yh52dvt25j47x8phhyrytu3pvagufi9qzj9i1pqhjteqc7v2n6txjcmiaho6
+          a19  rtz47gmrgljk  3pfqlual97kyr3c7o4djlvgjiypqhxzfhv32lwzx7cx3jh1jhp714vve01fb
+          a20  me597hblwsym  0rbjl37jgwkwvjqt215oluk0qvj5ngg2x37fs1xcu9o1jyd3w8s27ol7jg3s
+          a21  z5dfso3nbqhg  uyu236yyv38e7k694xa1pzxv3jiscagmp6v70h89i4g2a64rc24sd2tuhs63
+          a22  2zyl0301vc5n  y293qilbncs9ul20z4k5qzcodjsq1cki94hv9rhi8dbgy2rm3vczi5znx0fp
+          a23  1hnka9pduvx9  jqipurc7u5fv2ittj1r8hmg2fvy53ti10dfe2bnc7olqu8o3l8ad2bex5jb7
+          a24  fv8j4z0c54u3  a7yb28hnev7ttgpfm9iiwj5xpg1uusp7tzvakkn7fwu387zgjvlj4d8lsnsx
+          a25  k18eeofsd805  s0jllmym252ploqbe58bbmgeswpb3k9kuxb7fb64h9l1dwe47pe2330t9jg3
+          a26  auftfqxitcav  t07t7170mq7gmvsuxiekm9mjp5c3skobaujkou6yi3co7bbzzo3z94rplk9c
+          a27  qnr1zhcnmsvs  e0s9f1vfrsqjchq7e04a14gzkmjdmoxegm6cystl6xdsk2hlnw36zwy2zbmx
+          a28  yxl1rse5o7lf  epfz8llkx3vd5rfpydkmgi5mi7xquvmu4epftyhqf3dbxccwrx4gou8mvmcz
+          a29  o0cihrxz1d53  odjfnl4edtuwzas0i3p18bxonvkh9zt7mdim9g4bojnv5ff4v1vk3z1usng0
+          a30  h2mp2uhrmmdf  kx7l94gjclcig0mtzsxt0lpr1fj3qw4ee59iarjjjxsyvy8ujf8ud7n04tth
+          a31  e98os8ac0vah  ez8roasjaht1wtw1i8yy8cq2psbzh325p3f2emgi544qvgfypqqrblnsg5ab
+          a32  nrt7kya22coh  vtcv7mja4vz8ye90ba8v3ona4c3n0dzn497p90m0sid39d4tn5xwhpbagl0c
+          a33  pxd5diiycwpd  ikmcbeegqeskls0a4entkdso6p734r9294m80wb1u1uox198bzrhhdw3xvez
+          a34  cc4zeix2dcua  hh1c5kmb2lpv973ryrj75fwbi72kf5t0hcur1nkigynv54qnicgheovc4tq7
+          a35  15be4490h3e1  8ibpvw5fpu4mlqsw67j0v4wp3t68koikr2hnf5v9vrdu2w9x14a2lwc9hsvh
+          a36  bz8mucxxtptw  un7v7ax4zjjkw7frlnfdrn6bhx5k7uxfbpbziskgu27il9eg4tby363hijbg
+          a37  2f17yr0yj9j4  l21h7wb7u02e1qjru8j2q6n23tummsi68u9yd7tc4rn93lq9lus4ju405v3x
+          a38  q9026vl2lluj  vzzuvwhnpfu32mwmcgf8ximcih698y2dcl3lwif97m9jaurfbbpg00ytyv07
+          a39  oh607wmc6p7b  0kpifrqx4ys99inc6kg1ew7qqy7s4fzz927gtgi26fdg2psjg7g85m5ywjtw
+          a40  e5nusu0ormu1  axmytqke61b8ojti4vy7v9rofqbzbsjjd8rjepv0chiqnk8o1tvrlbbd1frr
+          a41  bymp31vi6dgr  0j6ocxffsy6rre8csyrxtdqf6ha4wvg8f3ewelx09bj89hcu7yftc36ke90p
+          a42  r4p7h3cmkb4f  3i2c7sai8hqzdf3k5qtszdo0677wpz74xyzfbdmz6bdzdfdmdrnootv1mf09
+          a43  om58yiwwh8of  h7ne7mkspbspdyyp391rcmpw8pvyz7ytid1vyve0zs3330ul465qyhywc3zi
+          a44  qjztm5gbraif  6b91p7eou2h2p7osrri27821kpf3ikzx6dq2ha454mvw1r247tangkp6arx6
+          a45  z4087myuu4f3  md0d64pkvp7t3ukfyce0exmv83wy3drwq9ljgfbgtdo7ydhqnalrsuqegr2h
+          a46  e93pyfpeot67  pvlpd97k2y7z6m2ir1wqwogk53cbcxjsad7uqjtznhhxyuxp64ersznp1vsk
+          a47  769ids338sx6  43jj2f8i0m2tkom1o33xjezl9fhi6vwsvgb5vfsh7nbggdb5ykuq3rm8rsw0
+          a48  7sl0kxdb2qzg  qcewkrjj5yjnx5w841pr6bhahspmt4jo3gejcsw2linaisb9p0jez87cihxe
+          a49  hrab8w4brqv1  cq50zo3vtbr7ac6vbyer2kmcio5o39mc7srged852o1h3m5gj9ddiya7wd9l
+          a50  egf0zm16p8xe  yzrxuzp5b7bemweg3dlelp09pvxh0z8xl8ydv9mjly0wceyvhisjpn9cxsgm
+          a51  aj5j04s5rzo1  oah3re03h1n1jg99xphwt6jjguo6elsjz3mnqep0j4so1fwsc4ye5x8sqeg8
+          a52  7b2j7ew3n1en  dvkk0ua21gzrwt54kw9f5c03o062v54540xvyp8955vvn9b41ou6d1nwql5f
+          a53  1ozvyuvvll6y  8e3lbgl5dhx1zjrd57678mql2t67fhk7merf43urx6a68wmgincpym6kto8c
+          a54  271rb6224z5l  eol5njenez3onfsxj06m3bkk6d4fbzcy3h5186dvabk9o98fuc05a78wj4mh
+          a55  strkard2dpwa  gvevkwippc2fdvdyrvvndvpfqi1airrtzmbftdbrok3kgc055nsdnl254wxt
+          a56  isd6x5r8ikkz  v1ux1tvwgz88gmeimz1acsy49o56e2uy0nuvqqqh8gjftejfegkfjktryxw8
+          a57  f4ytbwfe759x  v8f4e70pt9s563kta1bgom0knmx3h4f61he9owrjvo1nch6sxfepduer0lqg
+          a58  ue6xls10cfcm  j5dh5i3ojfl2vg5nexlkpxa9rdv3lsft08vcpsoinoi6ltem9s2p58tid3p6
+          a59  2yvz9w34x67e  4mdhnh19z6f4a276vq9ikopcx5xgpkkmoexqh4b8h0hugi9w294qedx1glku
+          a60  0j76j5e9tqkf  usurn95mutzceg6m9z688wgje85arau05xoxitu5hy8l9pbvc3810u62njmh
+          a61  vfc91zecponm  wn7linaqroifudmgoxsuphhuo2ezvi4v3pete47avj2syh86irbiapunbg1o
+          a62  tgmgdr5hjrmu  8fo93yz74twrfzam78pisoa2w8dargqqecdptxufips2qykfjfy5grk67j2r
+          a63  riksxmjxbltp  qtoheg5ula8b0ugg4enz26kbswzrteoiopyijmop1y5c2y64rx12vippsfc2
+          a64  me4jq24apj5l  urn9opne92v0carssit6twzillnipl1h81jm2v8tktbrj2vnv164fy3lypx5
+          a65  5yfvwke09s4d  xr4y21fsyg1css8n94jsleenluukwvkvt1i539tjqhaxyg4ojhjok22f8gz5
+          a66  xhzvw2s5pf83  s85drcir9vzvqod9xc26g4dwtgqhsvmo8jz7do7t8oomzjap2ijqu8wab44m
+          a67  2g23p97lyxer  552e7d27wpj3ugb22pvntgllww67qlkzvzgbrrqcil5temb6oci3t6kojrdl
+          a68  ngyv1o2xfbyx  0oka81g8qutjn7x41yc4sb9t85n6xo58awvrxn3odrzfr9qgb3crs3rc0z06
+          a69  78s4wb3sc05x  jtmf58nohdr4f9t6elwq4fnh8keekixxg26fxjd670ud1023ytbf10t1up0r
+          a70  gfgn98l8aeu5  ovycjpbx2qqc4plxg1glfaw973gj5zlfvoq0chuanbbje11xnvwos4t9rdw8
+          a71  qw5vmcbvvgqk  ot9zzuqg24edsu0btbj2opmso0hyli1b0n1lra7xdxuwrnsxn5nqlnkh55qt
+          a72  w9cxdrstkvk7  uuu34mshjc3i07azgi3z0r9e4g01ros1cm4s9y2xxcaiq68g7a63bx8hhjwe
+          a73  qckxv7u8d9jn  w1izn13zzrh9cmgfwjmzfz6ckpj2lef0nkbfudf2jru47nb2cuvbw7srz7pv
+          a74  9hgbko2juonq  jr7wr1pmxl8jztwlrm29fw9eoyj9ydjpy36hs2gtu9gaus0hxb3zjqiv8c8r
+          a75  up6kbrfo6r9n  6yp6uql2205fl2n4a884akyve31i6l8yywqdivmtrj7gwxt6d2a4hnuubdrm
+          a76  yx7jsgkpehf6  yf32oi6zhy4vaqi546tq790j0nn5xwd9hdyied61925kmu9gc3mf8g1v0zkd
+          a77  76h841qecpk9  h1c0k95ijtu95p7tv6wz4s543z9v2org3qg4u9pd1a5ed1nfrpyv6uchpoe8
+          a78  jc6vd6m34ipb  iplxlq0u40k7qozb0kvz3txgdmy7jye4te4ihtfczvxt2wfbwd2ls9mh78x7
+          a79  2iv4g0isk6y1  e8wi94ig3is22sgwgtpp56pbokmec7p2342kj43mzy7lx0adu0lqtvkxh60g
+          a80  30bar08rlari  5voaqbae9i9pcty58y0287oeipj6k84vlwejcrkdwir1n8glc5ewmqf3hemy
+          a81  ceoxeetc3npl  4bkihfmxeth1greqz5l99q5ml2xfon52qspgaef6elespxxz26f0i3fnaao0
+          a82  m4vy4ziln9jj  0katu2vbfwqfgxts37vygy8kls65o071nx8vzzrvnb0dtq4cttwgk8rtq7ur
+          a83  01jc257p62zp  lmknmaqrr9fwv28xfjefd87whe6uh453jf3wgqwf0pbghuj8mwev2ne1v5ar
+          a84  s3zdzx2fcti3  8nvllfbud57lfxaw9uujcinizoc38hud6u9b1h8k5l5mcp1aq2d1qpshbjbe
+          a85  bbnxvm7wqs99  bszcjritegcpgplfg3vca4jqnbyiyx2iqudrjgi2dwdo5kvu2bl2ol778krb
+          a86  savx6svwf2lc  fv8ctjeb6ahnxyy7c74womdjmu6diby72as0nmop0q0n8ww7ns9nit3fgd6u
+          a87  70gm46bum06l  pue069rrsl8ig4tb5du8omo8dwy9dv1bs3j8gs06mlug0ec4ygvunnb9l1y5
+          a88  7v90yux2m8bb  ca7gezxqil47dkt5tuun3q5w0ubdvkixkfob46wlbhg8wz3ovgoga7ef7216
+          a89  pf8nssacij0q  ka8r7if18yt5zbykwqmhp61azs3sgkeifenot5f3ud1jsdkzy5a8c7fduooc
+          a90  7t391t32vxyj  24p2sm9au60t41no24ghewf8uzjpc6abb0zdafp8exyq0jl5cf54jsie3v8l
+          a91  6dvwjscmy389  m5k84jbqebiycsa4fns26e6u7w1wn4j8rvbajd6j6sbhxyd8g33e4jqd4hsh
+          a92  lbbcpubr9j99  toon69trpmbx6598ifd1tsrqnytg3fqtu6q7ada4z9kyybtjbw3o46a74gmb
+          a93  7ku10s9a87vl  09u0hhtl4klxjlests8banpz2cbrhjh1747rf6hyffojnufymp6p1ypl5gtq
+          a94  ov7ua45v05eg  v3r11efjqfnu9m3grxlf3m1eua3m0y4ackty7ums613hswn4colp4x8wu9og
+          a95  r480kiso4qla  x50i91qdj8xx2dztnnuu6394yvj6dbw9mq4h4y17whqgc181k2tbsthiihls
+          a96  6wq0uay4d3pb  oihdaqzi0ovwr6xxf5zi8p76klzta2kffns49eib3tacfam2xosi72uehnb0
+          a97  pm3eu85x8lsk  6ya585j13ofk5ze5vcm967zwidd4cbyjq0kaknx5y2fql28yaix17jxgk04e
+      - path: refs/inv-b.txt
+        contents: |
+          # slot inventory B — provisioning source of record
+          b01  8qrfxh7moz8k  0vhknqd888u2jgb5ecihos0xosfdtl0rph6fkv1n1neeoax1y2rfuhfjkiik
+          b02  08rwns9470az  4szgifpuc9vdw0zvc1dv2q1atp3ue5uo9275j6b9k3j1knpe7iaj2xb63dhx
+          b03  hg0mvv90os9l  4f2fqt4k6ciwqqdx299e0ynmqi0x4z43mfj8d4xnfx78eehmogf49d8oagui
+          b04  3ow2fbd0e7mn  1dwwo53e05bzkg7do6fp26sfmoi5cwniol7db1hv7dsvlsnmj5aj9ksl0xjr
+          b05  10ezemuwoxnc  9a10um30rplo7wbrntea4xa502oz6q4xf29ouijocn1w6gdyvygry3f321bn
+          b06  ju4t3ggjhyi1  2fgqg42a27cj0ctjmj53sicvtb07lhtrasn1kfrmfbrg49xwil3lp0uf05f0
+          b07  xamxnmn5nlup  0lg4h23qnga5109zjdhvqpaw16unijjfuipql8naber7orz7ack2bvnklqz8
+          b08  g5oj95zdsv23  wag5630wtqnije90280nhfkwsu6dzgtribmwv91k8terufj35mraudppuwii
+          b09  l70boo9m39f1  60tbqzmj85hp5xjsnx5mqshbgs5hk1mvx7wnjq9jdgaafxy9g979x6z0vwal
+          b10  r0idoc2glxrv  dlnpl6qsdobyff6ta2vi0x3ne1xmpbn1nav9xr4ltt7zamqit42mj80yt1iz
+          b11  7p13gw3anjmq  q53ti3eo11nkxbj6zliay5f064tibxc89cuo22wafcwpl3z17g2mm3q4qgve
+          b12  zgfb0kn4un9a  q6pqjkqv94sex91lhru4vf0bb28q2y7aatwf3i05g9ya13u7pmurtyd1zzoz
+          b13  g0gp22sb6uq0  1j4zy5re45jv5o3jv5bwlzvbyo3mtvomusrh3tuu49pjt267mebyjhevdwgh
+          b14  ss7edp0po8g3  wnkz1acpwtb0u5jomxaijaufua24wco1peq554z7fre03ksaj0i7ehzwhrnx
+          b15  9q7mbf1sse18  h1k5n86x9nktrnhk990a8mt5v3uwmg6wkcdkbzz86if2t9jxw0ah700hdy0h
+          b16  4n47lgj1psv5  n9jgcnl2jhff92rd026er57euqhlxrwb771g2n6mg1zymh3dtv9iv2237z8o
+          b17  g4ocuwaz56ig  n6voyhgqhhcogikcuhhr8bc897c5u0je3ey2n2da1kq0jqpf1r02rcfz5hgn
+          b18  hujnsdie5jde  zawctsusjziaofkl3ks6dw0aoqqbtj4srqnoxw2qtp2au8z8ly7fwaaxn8k6
+          b19  fytbicpjfw75  es62mnyf9wzpgiydrtnlm6edoiew8g7viykvwhqwn4znhkfbcngyroetz7vx
+          b20  82qgt8guza83  vl59uf5nnhbfqx14clbww07lw8nyxoskdiyc5uyj1bn181nddsgmmnw8aiv9
+          b21  dp98nfddp388  b0wzt5bbb30p56p3oi2d10q02b2jd996zy8sakrafedaphqchae2dul3by0e
+          b22  rz85uly1dq5l  k89jka2hsybmfyseh4z0k5097kxiueemdly5962ii53vtuefs593lsz7am37
+          b23  58dx0fodp3cm  ryqqbvyjdj4zewy17weh3jz6c8hvd0fcydtb6duynq3kn0vo7cpxt11okebz
+          b24  7cxk10bflgfs  lbido9fott4o1494b3k6436v6h5fgdmcodxipuzlvs363bjaawpxg2qa8kak
+          b25  1xnz3f93d6wj  wt8xhl65j1chwbef0gfwzenye4axxobt5djqng93eeuv6y048cw6lxon39yk
+          b26  5bcdxooc3u4k  g53ujhsbz17gdvmmmphmucrgs4kdtgc59iwanfhdgwx4j74qwlf7kcovhtnq
+          b27  nugg3ob1rh0k  kac2g6i6wra7sp2pkk2yq3zsql6lphs6bt5m5jopzpu5ghndegvvl8ymwq9v
+          b28  3ywabboefiad  lzekytbvtm399gfus8fj4el17npah7kadmludxqt88ux9ddrq7z42fiejztk
+          b29  rp06k7tokns1  y3yiu99tofk6hivhytvyz23yhbp3vgfpiwrp8iihdepx2xrlvdlmid95h0y2
+          b30  l4eo7bu2rysk  m8hg633h917r5lc51xao5c182ppqg5kvuq7bwwo3tv754w91ze52h63nhb8o
+          b31  e7uhlhage03x  mcj5ldxdat9gn2edbxq381lxzdaxkw2jsmm98ix13plisx6z7bwdiac0ohqo
+          b32  54susibfffz6  cjrdrjp5jnj5a7khqs6vbmu7dzr9lc93mk75og1zp2elmgzj0rfvf7ds6ztg
+          b33  3djk5tcrwqub  sh53m6cft7mmun07ptxmj6b5vmcb48q9sifjneajctcx4u12pxykuwe6pzpz
+          b34  sjq98bk2npb2  d96kg4z0geg19y0ziu3qcu6xucvya3ea87oug5ebs34xithysyblc06popbp
+          b35  6w7gsb8xlhab  8qpfgk1poa06k1brwso4o10323y3h9e6cb7guq6of3aju2341hz0zkajhlwy
+          b36  ehnnr0q8vswy  ft4wrw3nk9qfbs6va8rxkg0nkb8qvqvh3qgqzoocspn86u3l5o3syf3uj4x6
+          b37  ffig9uzgyrdo  yar6ks9xe97nfmthm8bfrkr01qrqbfwrfc1gea9dw8mnzr6rfhz4ahf2jcpp
+          b38  sft3vefcaivl  7pk0sjm0pg5welzr1l8oh8c76tk3gh39l8euw9q6pjvu2fsx9qz1hyq4r5d1
+          b39  anu8o5srfjky  rjtq06tf1a50hgbw86x0s4jnrthogqmy3x3lz49l4fmsauwdt1irgir2eb8j
+          b40  hkr5ok1plsoz  972qftapp8rq78ive6790wd7r8h4t5rrn7ni5byj0rgpuaqr14emo5017oni
+          b41  m89z95fv79zi  mdy4901w2ydva5m6k5zw8drqi5tz3cnj0hv3mhm79rtazg27p95lz8bz80l2
+          b42  dbtm8buq5nfz  da1k1495ubpzgdjtaudqnougc5gw7jj1vb5pzr02w4fqm7j1dzrqfhf87yfc
+          b43  yocfn1gmzbwl  h2rjdvl4ounr7ubtb0d0w5i34yab7ygt0l6qwxkcfmcc0rsigt866bo0od2q
+          b44  y5m40odj4xrb  6d1au9rycw76aeobbun4z7h3acud5k6ct7wyzugn3jkzszg6embldbvniufz
+          b45  b09piu6wvs8l  7a8k4zxmlqk9hhla032k4mdvo8w5kprm306pvwv2vdnwbu7mwgmmz6q26pjg
+          b46  e9ueg5q0peqn  vu6gn90oif8ltnuv5qcv0jq4lnnzmvrql47o4dsu238ddpbllpem93rcyr4o
+          b47  m9zbx059zmaz  q3cqcw73eguhxtr949l2o6jp5lcree8rv9pmuplvatvfyz7cwx5n84aapbrl
+          b48  fdtzjjhhbksl  806favwocc8a5veg81kj16yhohrwi07uathx7sw5ppzfki5qq2sa4ldz8zjv
+          b49  cqyr4u1apvu4  92ume5z6hb29lfsehjt1czzkoa5ciko3n1n9b51chfw3hjlm6ykdwdnbm7v3
+          b50  oqf8a1x551mj  scard9n4ita8hf1z9nj3cu77xyrpu9nl6wy7u7o2z0er8n4shq5o637v1mpg
+          b51  pyn5lfv60zlj  llai35mygy3judndmksfrey2slp2tvk9f3jn6k91jjsw1hhuo1w9izkn8do9
+          b52  a7s7qt4518e6  mdsgpazzdjrlxqyb3wj9k67ozc9reuhdh69i20g62709tt2m6rdn7hx4dg9b
+          b53  ziekx3ylzg5b  i5sf1wlimzv9sz3x9bpfy8d93ipo9owzxq1826usj3w8q9ynhm2mtv752st8
+          b54  1qbg5dat01fl  iv9j17innu6l16e1h55gccgod30dj4imuh1n5atki8esmcq6cptl3kf7qts2
+          b55  8awhavt3h85g  1otym3405348zh32etmbcjo0q99m3xwowi88tnfzqa7j9k4yvrk97u9hytl7
+          b56  d3nol0z4otn9  85qne5oqx063lqc25uomz0t78gck0iltkshau7mcqu3gfsjyczq3utwuhyxu
+          b57  jszhqd6thfso  ze32b2on7lfye9sy3z801ilmjelav83uia62ue454kv19qowraeggedng31g
+          b58  n1cs0x7wfw5p  0bn5b994xhefmny7hbb2its4s06joz0nu38lcomdo8h4gmpeh0uv1gzdllzr
+          b59  ojaq9mmfokba  h6hkpw8iut0eealh543n6d43k3kh5eod1kys45w6uayjzzrfc1rqt53k93yn
+          b60  9yf0l7xfocju  ko9pf8oxvzmcz5djg55zjq54w4ngkc35kr2vl3z4opz1ryteu50on61zblbs
+          b61  jzxvp3t478na  8zqsn5ffsnv7u0qr5aas5fv8kn8p267lbekoupuqqhug4inw2up8hp0skv0u
+          b62  h37ez23hn647  qc555xk9osu75xr2snwmqrwpebt9wvafd80l1glexszmed29k8t58e5ibtov
+          b63  h4qpe5n0i3p4  caufvjrc70jqsdnca1sl7unau5adgih1xq4kxj4dlivwk54z4f6jeioy2trc
+          b64  l6tud1kwnj9i  a84nfzxhkve1jv4luujtnrsiy7bo74k3b9oru0ef0pexcido4sxm8fapsei3
+          b65  pghab6sqnr3q  gtthcp8w4ojo6g6qdrmamdmmzxxk1126b5cb4ucs4z25gd4likq6azgm0ls4
+          b66  ixr7u1qp3flw  z5vn2h54qb4pzg4g2zvick0izze9whhsq8w21lwdkpbof8tpek8lv53mvda1
+          b67  cwfexoy83chv  tno2s2xlxu13j0hdcsm88z22i8nxeliwggzduo088aqpsz8tvrtfaw27npyj
+          b68  m4vfy16smhhk  x9foioe90tx0d7jbzzh1r9n44k3o0t2crg5ibzanzsa25k2qa92j5bsd8nwb
+          b69  0s1z27lmcu7f  uhk45jdahwwg0b6ked55f7jazd5atwabaoyybhryf9ptn6e3fb8nfjg2y1ki
+          b70  1pu2jme9z2xw  4f4u91xhwmp8uit3jzp2f9e6zoxpoa29oyol4bs9pk77secwqcm5nc30ra7l
+          b71  lv45kjd2bma6  yfloxsklyr4xhkoh4bev8swd9dor8as5htdbzl0kbmstjr5hd0c4mns3k8l6
+          b72  fbf5f3aeb2nx  7f6gu3alvm7pz9tps8ym7xl4s3akvely90lzcpefiv7s2xedqtdx2f4j899q
+          b73  1ztfiuhqdhco  u2ht3ojd039929ordsi6dmoc6kempmhv8ytwpws7fidbrkhqmyk826qqvj9n
+          b74  rzcp4zcwmg0s  xl1v9cu12wa0d2i32rzu05hjnjduwa3mr7532hydtcwv0gc3dhkej9fukwdc
+          b75  hu6ve7oj5017  7c4k1h8ai2oe4xggsn1k42wvxhm1scw0iexw6hovqyh63jpy65qabyzi82tc
+          b76  3o5a4gv0irjg  cw7la702jenycf8z03khxqj1kvp23a0feyb8h84c59zdjfy13156x2wvtclf
+          b77  93jr3t7bn88u  sena6433pl8cpm60ftnjntfnko179t6uvm44nvx4zx0x8zyb9og7vvaan3ym
+          b78  2jap4zkc4sdn  c9eb1f9baky0vv0lcej4rmuhf703xiu7mcdwyr7qiyy23cwdhng4sdb9px01
+          b79  7wvzeu3c9u4u  ee2n71m61kqbu1hph3ytfxqz8tirm3yerrtx7y8nkdyptndrkcpju23b2gbk
+          b80  6vnjbo2b18sw  u71xbw9jg1dr4g1xp2ut17kzr58majyasqr4bh0ih4vr572bcza74uhwv2hu
+          b81  kpzfdalrolj2  rku7rxjhzo1ky8bj90ev1d71ke1j0k08ef6rr4f4fokjsuq0rx2equbagw2e
+          b82  j791ijej5oy3  wviblpbjey94c5tw8l7kehbhel8xuhxgvd11cv935q2irsyphqaxkn0fxcxj
+          b83  7b36cqxihrei  1j16mbxllpfl31n2po5wfdgl35gi53e3cuixer0zegd2esqs03vkocduzt0x
+          b84  f4xsk9qg2yjd  cd38dwqn2kkl4cd2c3sxfi7gepk6o5i1fzws9c3x12zv8uoglz42jh8e7amq
+          b85  kp9dnmf3d0wv  f9kh62xg0ggqgbuoep54g4fuu96hf607codrkdzph73rc0lxqbzx98q2lbyc
+          b86  1j7sd7ms9bg3  hqoh64nasthbm4b728batu2dul8zf6pjtb7j5yheuq8zg8yis1klei50lyjz
+          b87  yzoc71a17s1u  qz1ndwmxv8csmdcfx4gpc5qxqef32kvjy43bph1xcnyczwzy2h0ktxceh3vy
+          b88  1do7rija564h  hrni8kbttyar0o7tag9pghl99aszudlr16ry9jp0mh5rhq2kuvtavurgusbr
+          b89  k2zbszhffqcm  8lrdft8ywvpt77qwsuw6hvr1anoivs9dcmzdgsizw0467cf36ioxke0rwil7
+          b90  7ln9t23tdgje  wfcxh588vk8j11690o887wp8lsnubhr7hwtgslkpaifftf5392l2zci9enod
+          b91  7p37r32puolo  gdknmv81h2blxseostam2jy74d4ak9zjzfngbnrok8t8nvn58b2hc2fqxqbk
+          b92  sa09a8jyq21w  c1yqqo3n9x4c22tv5y1bxfwyyxditny00yjkh6163wy6n11ql5yhdfeg9ui4
+          b93  idsip15mgy7j  12m94z0c5f9k1n3czuh3daa0jlj4ngix6bqa545n5ocxxc6mq92e8pb09brn
+          b94  dk2w973o8vmd  zn9g2lxianhx7flhtysqzdubunpiadh17pcgr1bvl6gt2mtzfqz298lydaal
+          b95  hn3umr6ov4s0  icv7svg9c95jbro0li4igml0aifzotdmwe1m9avu7p14blkjw66ida3p1cfa
+          b96  y5o3fsz3b0hk  bk2sdiuoe5pgpllkeq1tb1ykkff2feunaslg73tz8o4qxngnmuwu58eo05sw
+          b97  9zul8n2md5dl  0ag5z6qetfndyl0x63zhq53x6smt491vlgs2xd99penfa8a4psnzcftwsisv
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=deploy.conf
+          fail() { echo "deploy problem: $1"; exit 1; }
+          test "$(wc -c < "$f" | tr -d ' ')" -le 140 || fail "deploy.conf must stay under 140 bytes"
+          test "$(wc -l < "$f" | tr -d ' ')" = "6" || fail "deploy.conf must stay exactly 6 lines"
+          grep -qxF '# staging deploy manifest' "$f" || fail "an unrelated line changed: header"
+          grep -qxF 'owner = platform' "$f" || fail "an unrelated line changed: owner"
+          want=$(awk '$1=="k1"{print $2}' notes/s9.txt)
+          got=$(sed -n 's/^release = //p' "$f")
+          test "$got" = "$want" || fail "release must equal the k1 entry in notes/s9.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'a%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/inv-a.txt)
+          got=$(sed -n 's/^mirror = //p' "$f")
+          test "$got" = "$want" || fail "mirror must equal the value of slot $slot in refs/inv-a.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'b%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/inv-b.txt)
+          got=$(sed -n 's/^fallback = //p' "$f")
+          test "$got" = "$want" || fail "fallback must equal the value of slot $slot in refs/inv-b.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 4}')
+          key=k$((2 * n + 3))
+          want=$(awk -v k="$key" '$1==k{print $2}' notes/s9.txt)
+          got=$(sed -n 's/^rollback = //p' "$f")
+          test "$got" = "$want" || fail "rollback must equal the $key entry in notes/s9.txt"
+          echo ok
+
+  # ══ N3 — convergence + fat state (capv3-converge-fatref) ═════════════════
+  #
+  # Shape: H deepened. One fat reference (refs/matrix.txt) is consulted in
+  # EVERY round, but the gate's own output is fat (complaint line first,
+  # then a static 84-line audit block ≈ 1650 tok, well under the 100-line/
+  # 8KB RUN cap): each new round's feedback evicts the previous round's
+  # matrix read, so every round demands a fresh re-read.
+  #
+  # Pressure arithmetic: round-k block = READ matrix ~1950 + gate ~1700 ≈
+  # 3700; round-k+1 edit block = ~120 + 1700 ≈ 1820. 1820 + 3700 > 4096 →
+  # the previous round's matrix is ALWAYS evicted before it is needed
+  # again. This is the type-table row verbatim: "the reference was squeezed
+  # out in the previous round".
+  #
+  # The audit block is STATIC (identical every run) by design: stale and
+  # fresh copies are indistinguishable AND identical, so no freshness
+  # confusion is possible — L-forensics ruled that freshness traps are a
+  # different axis and must not be mixed into a window-pressure task. The
+  # complaint line comes FIRST so output truncation can never eat it.
+  #
+  # Condition 9: honest walk = (R matrix, E) x 3 = 6 actions, slack 2.
+  #
+  # Condition 11 self-test:
+  #   batch walk: s1 READ matrix+check.sh; gate reveals round-1 complaint.
+  #     Close at s2? NO — slots for s2/s3 are cksum-armored.
+  #   compute-channel walk: none exists — RUN is fixed-argv only
+  #     (tools/shell.rs), so the cksum chain cannot be precomputed; and
+  #     the fat gate output rides along on every step regardless, so the
+  #     matrix is evicted between rounds no matter what the model knows.
+  #   stash walk: a stashed matrix WOULD print free each step (the 8000
+  #     print budget does not self-limit it — draft-1's claim refuted),
+  #     but placeholders are answer-width (12 chars) and the cap is the
+  #     solved size + 4B: honest states are size-constant, any insertion
+  #     trips the guard, and the guard preempts every round reveal. The
+  #     necessary evidence is a ~7.8KB file that no field can carry
+  #     anyway. Behavior probe watch item.
+  #
+  # Expected deaths: the 0.5.0 H-14b family signature — edit streak with
+  # zero re-reads ("still editing" is not "re-reading"), budget_exhausted;
+  # dropped_reread distinguishes ordering-death from reread-death.
+  # Watch item (L contamination): two audit blocks briefly coexist in the
+  # window before eviction; if oscillation on already-fixed fields shows
+  # up, the audit block is polluting and the shape must be rebuilt.
+
+  - id: capv3-converge-fatref
+    instruction: "tests/check.sh rejects alloc.conf but reports only the FIRST problem each time it runs. Reference data lives under refs/ (read-only). Fix alloc.conf until the check passes. Lines it does not complain about must stay unchanged."
+    writes: [alloc.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: alloc.conf
+        contents: |
+          # capacity allocations — planner input
+          s1 = ------------
+          s2 = ------------
+          s3 = ------------
+          guard = fixed
+      - path: refs/matrix.txt
+        contents: |
+          # allocation matrix — planner source of record
+          m01  abh1813jz06s  onl6pfp9kwblrd2q2wps2a6wqbh1qssw3koxvg62mru4rn6yw7yw7wmzjoi9
+          m02  jmswnz34ijp6  1vw2q3r5yu2lsb555u2f21avo21c5048we3xngu97ttwjqlytmxutqq4gtep
+          m03  quj1lsl6un41  qkwkxpwx5fdj41x2q9zd8tv45m01z0kb15l9izzlwytkiuilph0d6bxnyz73
+          m04  u7tavrs03m49  tdy81we9rwzdsg20anp0uv640a7lgjvkqdppvbg0tne4lh3zkqsd4ac8gygx
+          m05  89ocrs8q7a17  7vgctgc10c8qnpbdeuq4b5ei4pjb0v01ly7t8eo0t1rhp4soc9x7epg41j3z
+          m06  mlc5m3itxxxp  ml1vezhemde001ge03yz31dw3bdk7v5ji5clrl9gkdv6cxtpsh94wfcochnm
+          m07  920ah4ajxmoz  1rvi081fx3hc1get2lritz60h4us2zo6ymr0ljdvdej4xo092y7kshuxjh2b
+          m08  x444emopn7e7  wojqp82hw7rubqv6qw4n93xg1m5v216i1ix82qvu1lgmiwwa36d7pgtae8pn
+          m09  030k3u0qv293  wx57erlua1b4h27xejttuyh07e0azfftsf7y7fb2qhirrg2mh3bveqd2qi6u
+          m10  qhqxxfv0mb0i  znzn64a97jk4s1zbsldx7lwz5mrjyso3gzuw107zy8wshd14m6fhw22g3x4w
+          m11  zjzxj1twfl15  qlu8ql66jqqt8guvvjbhs4e3218nkrjqnz6z6qf2ckn8u6l172ir8uim8dj3
+          m12  w0f0uzdhw9gg  90tknpuzjehttssmhg0wi1zr5koc5lgpb4dg62yg5rr4vumefn4cxkirvmix
+          m13  iocs9qpff0pr  ve5h6cac2px33aoff6rujs7kw69brah198zfvrkw76tf7f6aev7veedp9eej
+          m14  z2ok096flz86  4sp3v475s7q86wdyk5c27yh0judfm19mj3g5lorrf7y338zpkopicsf6gv5j
+          m15  4gah2ne7wdce  x57wgcmt1sr5ql1q59prl9gaxawzocei5qvslz5n53hjn5yqzwyqrvimf8s9
+          m16  hur6nuubkn2c  39jlyndixstw2bzn5bl31adj1cnybkq5ufq4n99g5lnwwbp7ot6xxexbw7p7
+          m17  jjddr6rcmj6c  ujcn7wqhlolutqab28h1ds1rg0fqnst5uql2ct1im4zfncu87sddu5trsc8f
+          m18  giph28hgumq6  uuw4n5u295ekpupaj5un27yrelpqa36vcw8lbjdm1angb8y18095wm4pre5l
+          m19  7mo8vp0jnzat  7b7xrme6g8698p7umpr19nfn9t411chfwlmkyljysahp51qeuqhvfsvbat0p
+          m20  cykkiya8ixpm  k4uek4rkz3p0vkwfdnh2gf1rptbaqww3828aksewp0ln3fpe04z5yao1f1iy
+          m21  ytpzc1w3scpn  65i9rzpvqh847ndgr6xf3aed95aepx4bh4blyuhhadl3ohjg6tiynapgx4ko
+          m22  akwrxx8tgsax  ut81jq1cue4msydtt1fdoaflnis1vd7cjupmhzqumli1w69fa245fkszpvcv
+          m23  tk1vr7dqav44  l2mnwc3h6qnstjk7eyqwz46m8hpoze74cmunqoganuk9k64otqog63zai8u5
+          m24  pge3mirdfayh  luyl71i40o6msx5x9y5465dt01igo31sc6ruxczeomc8nm3wn7p3fqoy10ao
+          m25  9bffbp7u2tak  8p2pdooquuph6wmjx3nk6h9joj5tldcf7pf8fv684dfw5ithlrbmur7asnz3
+          m26  yc1fdut24rwc  o9f40dc2azs3m6j512n5oni955lt5kpfi2zswh32aaejoxa14q4h64wv7yjw
+          m27  cfewa5l5bqnf  2qxerjvlilmvhlzw14dkszow2o05w112k3gjg9slpbt6z6g951pea16zfgwc
+          m28  rk50zjytyjzh  txiu64i4j9f6d4mfj3mm7xd1ak2568u75dfxv7g1s7zgid25mn6j48wcyqbu
+          m29  qwd7yd37vwgm  3sdr81zg3zi1eil25h8l0bog37ykl25j3lmvlbxkn2owb5dqnd228m90r0uz
+          m30  ry4lwerkvsab  60b0g3trnoe3cb7tj7vv3rhf4u3cjjvcnwg0wpx1jm5kvipa6z6jbq7fb61m
+          m31  luuspgq5hziw  s4yshkjqlpzzy78xaslag2lqhvxr8gf67ttacm9v267ecvfo6qmoayidd8bt
+          m32  npsy1e0y8y8c  htizd0uyy4lmmdg3fnrdpcp108wykzbvrupzveq4jsue28qtj1zc3zmsy7yn
+          m33  7sioqn4aaa44  4cjelo8oggr2s2leeuqge2pwtnagzol4ghpsmga4fvlxnoofzzf77cy0k209
+          m34  55yxl37ouw07  obg24yr8g92kx99uzlcffczueaytsb4qdtp1806r1qt1hwe5f9z7n3ylvekr
+          m35  6uagds365196  xpk6tqjof2m6yb4dgxrgzbkqbhaznddisbgjwku8bxbj2rwyp880obiccbtt
+          m36  5ff7nup1y5w1  qaic0xy26ynm4sgbnh7mjy8463klxcxci16nc5842kbyzv34dzx1syrfehap
+          m37  an67r5tad3m2  ktywdp5zb9aij0u1fktte1x0spbvftbf2odl8bac7ty9j8xkzajnqr3yauv2
+          m38  88glmlxct66r  sahsuqlcx2irtpujbujuw8izi9d7l8qi9yukwq6325q0xae625tzz4fikgjs
+          m39  z9xptwrfsl70  dgrqjaq78lfs4q2r81eh8dv21js7quwbhj8rb8l7kinzz7d8btglvhfxtq7q
+          m40  76sueen9ajcl  g6lr81ix1mbm9cv33cm460psoyy5xgjlyktlbuhv4nf8ghmy3oiemlc1qlck
+          m41  twe33a0n3ws5  ic6il1f4x08kc69oymvq5ikmfj0tznt6ji1n3p4wzvn8pjefma8gp2n39gsq
+          m42  x0kvfz3owfgb  1iv3pucj7lg3pvzhb3t7gorspjfrz9xer78sml9lop6jzd4eyygryne2xfen
+          m43  wlbuvif4bzn3  si08buqcm7wv1w1s54mgfxlnpgv7gwod5829bqby7h2489igl6sfhj8laf6y
+          m44  7tk7z897kowz  3akvhdsokmvmfzic1vc5daygenqw0hzmb8lzxehe6jv3aw62rtfwtoijjekf
+          m45  oqq73b4pyk8y  kix4eiqbzbd55t53492a5b2fu77n4ezvcthkwmr4pyucazlov6g89o9g7uet
+          m46  ytvng1ao6w1e  ve8hvmfdo1t7hhuhwzjbzor7ba4xditdgumocahfr0fkdexw56s98azdw9ka
+          m47  pxfsp0vdtil7  9xtgd8xzs01s3s6x7b5wt5lnm5chssvl6ovan54dfh2xcl05m29pq2x8vjox
+          m48  yqdm0hpsz6h2  kr4lkzj39z1tk812rqo4jcds7vn0w2961hqilrqairc8ky1gucf4fejku4s0
+          m49  g6as7s1xb16z  9jus0d6sip20a1ew30mrj5krj8v930vt8yua7hw94x37nrmqk6jl15d0oyqk
+          m50  xmef2pm00kki  62jukpj0dbjji3l2mwh4ki9cqr0vjx72tr17i5ra5h250qlkal7lkuf9a008
+          m51  pdz44gq43mmt  y8arr9cdw0owjyf3gloco4xc9szv2n2xhh7jgq1xb1qnje3vtml818innasj
+          m52  2279390t5x3n  f2dpwbqor0ro9fwfphudty8j121skhusd748n8lepq5a2x8zyb1clbtwj9ol
+          m53  l19r9zigicjc  mdbpphs0ntmanpgrxeulp5smbhynjl0oc9oz218wyj30japk2md3a0pe10f4
+          m54  sdewb6hsql5v  dnarigtqzvtbkzoim5t6qpjn0majvuhnqa5dijjycgv4ewo1ujttv7el2pe4
+          m55  uhdg71irq1cm  ls2ig80pre69et2tyaza6uglipjtgwo1bnr9rhz0a1gwljzfyrqpcdka5xaq
+          m56  wfglgdh2ac1o  3yxfvpmc478ebiafuf0bvn85efedt1oquk45nlnu01zmrxtqnj6esg4q3vfl
+          m57  yomu69218igm  ll7r23buvlt0689h0tpucsvou5blstmst5q1g5vp2yp36v1i42b3aespzj8g
+          m58  4lcv5pcfkva5  mmqp4nykum3si6nx3mz1umy0ae6y10s0wdk24qegx4bq5xywmfjtwlbw73j8
+          m59  jy36tgecbzrn  oye450zzewrghuq5hmyydoxyh0vnoo9jvzeej94vh5uv09ls8ldsvoc3j0cp
+          m60  iqp88sxotuwc  bduu14n0klrk3m7vcyggm5w5bfi8k29o7bg1b47078p57e2yytneqelrf345
+          m61  hx2ctkuw8tyr  82wzquxy7hc2j9892zrcu6wo1g45x53kwh58e6ejnzugzg5pusn0weeyf4r4
+          m62  2jqi1lrqeyiy  232dxzh04hwc2p9vhst18cdfc2y4zmu8xdgzbj6w8t0m6ti76ff9z51g0u49
+          m63  p2lbmul1qjh5  5949673cpn31v8dfgik14gqcxd6de0jotgi25y187cmkew06omjusi9fj40o
+          m64  ecza5g724gir  i3lex48y5qjudsbj57pe089sza6e9g8y94nnjkuw8n79ixydo6k3nqx186xk
+          m65  myinzke54kca  9jf7es16ddy83rq8uiqaoqgz81zon6a46nrszu67intr909l5f5tdicz1yqa
+          m66  5nujkb4utagb  kaf6kmqlp8nr50dgpijjo2qwyrksvgtuof4hdjdw82j2a2jgtashksbd1ld6
+          m67  ju48c92gvtio  kcsb6hqfotb0ilw6b1zs8iddykireoid1j7i7kkvqhfdnddpw38maglvrjze
+          m68  aegc1lf1enef  ioktzqffouo657nvffgqqciem0bt5gevgfm1glktxhfqds5ii88c0m988of3
+          m69  6z4qnfnh0l1k  kcltzfjh5nx5618n1jkcqibdh28rnik0zx64c22m9t0fui3my3dp6a3dchum
+          m70  2xa3zo0vb05o  a4zb0n8wwqh94v0ykt39rfra69uva71nddxbxcg4u74pa1mfb84tptwggv4d
+          m71  049e3l4teko6  fnlakvvvntz44zrlkehrjihzffv50cu3ia0ic1gy9j9h1vbacmcufds0g1wh
+          m72  evypxxa40w26  4qxyvoekn3bhbsuxci5ssjw6gd1cpjbbj6oau3no2zku2hyqde5di2so0zac
+          m73  a8papivij1yr  pn2g2qq2xk9jibl1mayzmnyox4rxe1d7vonsq99pwrezt6tiec1qrcw9k6q0
+          m74  cz9xt64b8msb  mz5iaze8pm783vhgpi34nzclbuebntcqg1c3bsrbu62xk1r42ljqvknpdtcs
+          m75  e6uk30yfvh1c  dhe63x8vkr704zkfvcmuzh06t47hduumdbhj049kxg1jpbolrs8yganfnmec
+          m76  s5xd72m58m7o  jze791eoguuwrde3s7ayn9svwcpzl7fvumjh041ha4lgiu62hqehelhssffo
+          m77  j7594s2dl272  1juqbv4fcfugibk6btcvos0fmzc7uhwcp8rwbn01sbgcm5utdci69hkcpqma
+          m78  a5hd3tacghja  luaig39i8u65207ogd8mp2hjusk504jpfvakzsba39bwa2ium9i0nd0lw48g
+          m79  0y22qj1n91i4  ghvo39wummluf5sc6bdxydz9slxfg7ehorl4h3u1gvg8aytxkf9eqq33rjtk
+          m80  31l3eca4iakd  x0lje4dodcwp72uesqsu42jbqzvwct0wm8m19yrkrsa43i3g9sj537wf2moy
+          m81  ds1vgtpwcl3u  3htktoo9lt6co1tswr28vgdeugty25csocrchiseornsn2dpaq7axlj46en0
+          m82  fp6wl6rvvnrj  3ou4xp4l49bugz92bezgceaw81p0y40p73x2t1kzkmxoh9c4w13x9mpnps9n
+          m83  ipvdn89n4pkv  ijlvwc1233cgwbzlnq04tdbnagtszeav3r3odfy7334m0gwepaonvw7dyqp3
+          m84  pgsryenxznkw  th7oc66lf0ip0v8q1iqs7x59lttyde64jhqzv7gtimw3lys22qacsjuzuece
+          m85  hsg9wyqu6k5i  s4mf0netpmzeqfun0qyevy19h310nhau5ij2g5d5v15pk22negasw9ezdpp6
+          m86  3lnch5795l1m  5yovofo3q53lcwmd2d4vecxg1kp8mrbki50hg452k055bmnmywv2btz4n1yx
+          m87  vyvhm4p7pewv  pj72wwwhsgyivbggl6bntkm8w7uttgqapwo8qy93ik84nvrgypukygmg8upd
+          m88  hht7uwyxigub  gpw1n8qrhu8805fuv1em5yhytheldma4y7fa8xvav0w1ns1m6yjaeimq9qkj
+          m89  narut7yi07xi  lr2dby3q7ivankyq64mt2pe37dm70ivjjvduydqv0w3wsxw5j2q80z2s646l
+          m90  bmuz0cs7d2nu  3hby7t4vtrn2u1x9zwwf5cmcx9obgwj4hhrlfb05d49ao0zgxzq8wr97ofnd
+          m91  47ojoq58clcl  7antvjc0rvpenbvy4ik9t023ky4fntj6vxm2xcxrbb4kfckk778exdl51olc
+          m92  23nii5i3cpzg  b0mlpihsr2phkh92qtih3ztsv56gh770o5jhhhwujkqejwqk9uffkzu6f7tp
+          m93  hws1pntinrpk  6jnwtxhn3x08vx9dlbpgkvwu78cqoyuzujpzc92kx5dae66nim3lo0apwqcm
+          m94  g9pcgdgkodvh  bs6zx6nml720b6fxczd3tg6fdsnvs9pv546d2mw39h146ol2ga5apsllz3pa
+          m95  i918r1x5ffl6  pcnn0e066lgfu6qhyjvim1udiklauoqj459k9l3e67ltq5mwvon7ep3uba0r
+          m96  cnhmsi58kdio  s8myp5a3447qwsfhs2x6ah306quy2kmq5hqujmtbrein66kzo76f22rv8wzq
+          m97  m48knkqhr1ne  fj4vvli7nccq923tbkgrml3knviqlvglfziutqcfy8axx3sjlph8mezp4u1z
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=alloc.conf
+          audit() { cat <<'EOF'
+          audit 001  bgskl4rj5d3ruxgwbvpye1vsam48xjybjb7j8eaxzdtlktopc63l3jtk  ok
+          audit 002  doz4fg47tx8ft6nxc87mpo7w77lv11edmzdq65i0l7utlyvrhiroe6og  ok
+          audit 003  k46of4s96dkzi6ulzv637hdstiv31efc34p1o46w28tc1tms2o7g4jxb  ok
+          audit 004  5eiqwpi9f8ov91nbidjaf3kp92ctqslk9khjco3ctc325z2lb4sygojl  ok
+          audit 005  g6gtzds0ig3v2xy65h77o5fu7uwusdep8xg2372y3g3tvh6dlctn2ere  ok
+          audit 006  5lqr7v5f52dwyoid3y7kyz6uewfam8zksuso20bwapdwvpmn3pplfdkt  ok
+          audit 007  j76unlayi8ulmxnpif73lf0nloqqmchodsjfsldggtevriy3nm9pklq1  ok
+          audit 008  8zpvosp2f9kckhxinojn6gkfyrvo2jlpujzntn8qb9dod7cte4nx6a3q  ok
+          audit 009  xc39zcoikfdunln0sb3tfjl0y7hyuyzw09vbqcva1aynx1rvlol6st2i  ok
+          audit 010  anzrm0lxo9f1z9yokoq9p3w2wh8ydfmtmzt6qm7f7f0vfc5ukrqqpq6a  ok
+          audit 011  8g6v5hc3tolbb1db2cqyywk5bvd6pwgk3jubyl79izi15w116n9ygivd  ok
+          audit 012  mgarhkt8fcm1wbwn0qo0b1co5c5jtovu5l8fz70o8esmhjzmwyegwbs6  ok
+          audit 013  ve1e4uje5syzb734j315ug3pdputog1600zgt1vyf1joormhsuahg0mx  ok
+          audit 014  j7759k8mmwnh414v9ungbb5dt1caq5y7n6h88abqmtjjeyj97md3z5ie  ok
+          audit 015  221mxwalk25h5irfl9ks8ecchvp2pz8tjuf6ksz7aca8u0whf5q2av0l  ok
+          audit 016  12xoj54hce6iy6r9xtkjiq4ge380lceib7vidanynaf0apwzvl1q3gqd  ok
+          audit 017  ep2iepq1nz9gmz8ezqiejx6ed9rsuskztdd8eoihshjcvt0jekylh3ik  ok
+          audit 018  902dse7sovh0ua9xjivkdtelfbdc7ty9ibmd5bzw3lhjv5p6fibzi0u1  ok
+          audit 019  jbkr5lrzad5u9kbalw0bcu1mlkuk3ctz917j0ylep5wmcbzw0v7gffoz  ok
+          audit 020  rsk470njepkr31jc3yh6ce009vta7r2d98cqffmvezzch636bc6jh4i0  ok
+          audit 021  720jos0pzuly9jv2irwm3858kcaa7nn9etc4jmer7t44wx5wyk7m8g5n  ok
+          audit 022  64x0wsh0w6k3akv0sqfq7im5vyv1jey5n0q752fsf7539wt41gtux3yb  ok
+          audit 023  8jzd58kmtxxjepzp5sm8wq91gf8q7lyk5jfyw9458qd2zyulismy7ioq  ok
+          audit 024  zeegz1z688j5e8pi6kcl21f5vgve545zfia9a31u2f3fah1tlxwk1rkt  ok
+          audit 025  nzj2r4irj66881xuuabma0kblq1zlvngyy25ozmzr1mxebgu59onlww2  ok
+          audit 026  jpyvk2xjvpovq1a03z2400cb42dv9f8rcml1oyg5c1a0p78tkefh5tgr  ok
+          audit 027  h2b8yfhi9pkpe7nb9wqfugj1kchgjjdny07i84iy9azy1haq0lvp1m6p  ok
+          audit 028  agslitbnj4xe1plkmwrow4h9t6croa4svj9ws4o5sluks5koak4avqqy  ok
+          audit 029  pi9ovt9cgwgt51w3ecz0btyks5844s1re019f6q8emvjt8zpujbafgso  ok
+          audit 030  7jw0c0z2df1fi4ktxrmy329k9ql9rv6c40qeep1izz9i0xr5f3c9oqkq  ok
+          audit 031  8agn3nz6pfj3o3ae0zmsz2i89dcxx3vmocgm6iry4niqqcz14d29ukwz  ok
+          audit 032  97l3qrgl7ox85crajccu2mhkmhxq1a74xidc6ho9yygc0p9h7x7wz0ba  ok
+          audit 033  kv95iprjj0fvz4rz7p5lbmpdhon0wz8f5og4kaz8sdcouw4nlrl35en2  ok
+          audit 034  lbt020nczz4nts0tqcw0xp8e6mzwgwiamenf332ux3fjtqtvmb5qxl1d  ok
+          audit 035  l87bu6vuz3optpm82tlvw11qq6rohzscemf9j2qyssapv1a50e3igfua  ok
+          audit 036  p2m8mrvviky9z19zvl3wwqwj15a8v0ilb75si3zqu0uj4wk7dj8u8nzd  ok
+          audit 037  7dkcdx2yxooiwbnalake48bmlxe5yo2xq2yu0s0fs2ff6828idxrycoh  ok
+          audit 038  3wblnpc4jkda4vg0eh8g8quq2ty3ls4gv6a1vlghb2ol7n7daqwv2ecx  ok
+          audit 039  18gbo5qd6hwdpgzvubedslkzinaztbgcra8aie6sthwx1wgufj1der16  ok
+          audit 040  d9fol5ug8tqp38wl8c20mbecsc94v2anvjmdv20l7pi5cu13jf3cfk0x  ok
+          audit 041  4rtr054xm44jlxhg4oq73rmqrd5uwmoty2gxfhw1dtk1b4s3z2w50ef1  ok
+          audit 042  4mieexecyv2dtn9fu2803huynxl0g9ib9xk2w0kgg5fxqij4pqu9oea4  ok
+          audit 043  uvl5mpmky616kh82ypp1yk7n44lfhza3zkjqgzma8p8tqimu2nnjrxk5  ok
+          audit 044  5xparkbsqykw15fwpegs3sj9aebo3qutftrplfut7o73odpxifyzzsyn  ok
+          audit 045  dnvkqydn97neyiiycj3jxxr6bwzxaec3xr8kjwm80vwjcc137uo3vw9g  ok
+          audit 046  l1zja6r5p8qm4yjelzoa9a0bz7caqq0ny639g4rkw4n9kdfykcj23w9n  ok
+          audit 047  rhhqz8tg195fmt9cwybwkcun7gmykon6sc5n1a7a6499n88z3ecj87kc  ok
+          audit 048  qkemmh3hvbwd6cgxv3pvpukspbgslirejeaicu1pt14wlnitco47kxvg  ok
+          audit 049  2qpmlb7yozrpoa2jrra948285omf8x1z2npzhqkcglq6gcbn02f0bpcf  ok
+          audit 050  7z1hrd3k864sghloorvnadt0e4zmdno1j6n0i87mqmajs2mmns64pnah  ok
+          audit 051  n64yfceeg7vz64ny8pizz1e8svw74cs6pqvc00uyylqnx5ysi11voviu  ok
+          audit 052  60dx5tqk7fqmnqqdw8s08gukteiy7fo7rmacc3sxbt8lbm3kzoge9nej  ok
+          audit 053  rf4mqq8vv8wq515sprujjwnd2si9djij5zura00gttd1002rx2dm0qsv  ok
+          audit 054  yro4qlj39npif2d5xz9b6kfi2fintgwgt0zg8mnsrcxygrt1maqqq6i5  ok
+          audit 055  987nn9u575vt6ztel8a4s9qafu1jbfswh9r4m3mf5qil3j0xn8lvrvnq  ok
+          audit 056  ch2gq5mbzxdjj6qh7iw37cgputka4wn4rkgmkkvqr63t7rv99xea7wct  ok
+          audit 057  p0nc4t38eww2km35cj3u3b5jlakakaxsohmz2mpbi4u2b9qom96lgbm1  ok
+          audit 058  fiaiz2pxa0n98hisb9ui8dmfgndnhn83c69t9tkj1orfxb529rzt8bt0  ok
+          audit 059  w55b5eaf173nfm4z7igt8iox3k4u384p3jfsntr356g04go780uwg56m  ok
+          audit 060  abt7bcg4ao4qsx3z5hx8ixsdvmk4f65zj36dwslgx2umd3o5fiudkjp5  ok
+          audit 061  yv5l0kstcyo1fumt3bogbkcixzjg5ah6y1a0vo3hmjfrim5gtfsyi3td  ok
+          audit 062  bun7s17pdg3ipeh6n30wc6ovu4gmlx5z2yr3s7xr5a0gbp7v2dbbke0i  ok
+          audit 063  8zluxs21w4o1mqu3w4vbi5nvzpqbpia1wgr3a96c93eupksfqkxgu2kr  ok
+          audit 064  1p2brbvnjg69v5ho6kkems8mpaasvzsc0j0lpjgc8whodf8otz6ryltk  ok
+          audit 065  s2y2xqiyiepuodgwg0e9z56a2har0jporvuni6kresx72rzbb4ahl6hd  ok
+          audit 066  svyr4qonaavnf3g9jrf8z8f5lescmf7cmjs7e2ex6ijj8cagtckt1bh0  ok
+          audit 067  v7duk151ci6caypp4ar2ywfsgieij9q2mbk119nzghxgi1xn8bbjz5f6  ok
+          audit 068  wbz27lwlsr3usbk35jhqfqylsjgwj4i2hctfrxrkrozsepvizs7sz1tt  ok
+          audit 069  goc0phc8bzzmplby0i51kqkzxxlypsxbbfkn86s7a9g6rgb1ngdbftys  ok
+          audit 070  p4m92mp4pzius4vsw7u5gi50nj5a21fkm4e9zuv6hv69g1n1xqphlily  ok
+          audit 071  jx2bm5b3xu3gc5xgckdy8ta0tgcvvehyagjknxmr69m3rsoaifj70t4o  ok
+          audit 072  rcs0jgagryqvv32rq57hvlbljovxt4ryveure9rbhfnoxl9t7pj7j8jg  ok
+          audit 073  vh63gpl07xbe10cym3hfi2fbd19w79ukpofk06zhz0jmb8udh1w0kg48  ok
+          audit 074  owdefd0oahkv095ueysuqojofxmwwfgcyltrfcmfb57sjttejznct72v  ok
+          audit 075  eyo9033j1w7jhsh3noztatncue1bwpvg7a0w7ipbcpdo3uylus8eru5i  ok
+          audit 076  9tjk30t7inmek4u292417kxbti3zat2uiob6mfj91ypt4ralpnkpd1ty  ok
+          audit 077  bhxhlaw6xcbys11yf3ct7rwj0r8hhh2zgntkmsiwklx4gc4matrey81e  ok
+          audit 078  3p2vxze1o4at74nxujlei6hwg4hz909q135okxlg9uoaoa118vmid227  ok
+          audit 079  8sqmsbgqyjmhrwqboo2cvcbqong1dxi7feduwoh2qshsbqwpl7stl6ge  ok
+          audit 080  ehfe1pp2uuh1rfqt6yvepam1gewos4jrksjgwyvm6ztfxa7bctl1tawg  ok
+          audit 081  3dv6lwwge95yy9adtesos6afcfh6o6akxoo7k18yuqd5s8umd2q2mivk  ok
+          audit 082  ur947jql0qnpbpl5ijk3g6l63rxkafr6le22opo74atxt5lq146o3smt  ok
+          audit 083  kc21yn09yge4itl1rf4ogd83uvnq1tj0o1t1cd35ic15u7dqee7e1047  ok
+          audit 084  hch1m9ju289cxni6o80uxt4zxo5eeyvnov1knpprty1odrnhlptppnmb  ok
+          EOF
+          }
+          fail() { echo "alloc problem: $1"; audit; exit 1; }
+          test "$(wc -c < "$f" | tr -d ' ')" -le 113 || fail "alloc.conf must stay under 113 bytes"
+          test "$(wc -l < "$f" | tr -d ' ')" = "5" || fail "alloc.conf must stay exactly 5 lines"
+          grep -qxF '# capacity allocations — planner input' "$f" || fail "an unrelated line changed: header"
+          grep -qxF 'guard = fixed' "$f" || fail "an unrelated line changed: guard"
+          want=$(awk '$1=="m41"{print $2}' refs/matrix.txt)
+          got=$(sed -n 's/^s1 = //p' "$f")
+          test "$got" = "$want" || fail "s1 must equal the value of slot m41 in refs/matrix.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'm%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/matrix.txt)
+          got=$(sed -n 's/^s2 = //p' "$f")
+          test "$got" = "$want" || fail "s2 must equal the value of slot $slot in refs/matrix.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'm%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/matrix.txt)
+          got=$(sed -n 's/^s3 = //p' "$f")
+          test "$got" = "$want" || fail "s3 must equal the value of slot $slot in refs/matrix.txt"
+          echo ok
+
+  # ══ N4 — sentinel (capv3-sentinel-fullset) ═══════════════════════════════
+  #
+  # Designed to read low/zero in BOTH cells on agent 0.5.0 and to flip red
+  # the moment the agent learns retention/summarization — v3's E, per
+  # ruling iv. The death mechanism is ARITHMETIC, not luck:
+  #
+  #   5 chained rounds over 3 fat refs, reuse pattern a,b,c,a,b with
+  #   armored (unpredictable) keys. Necessary distinct evidence =
+  #   3 x ~1975 ≈ 5930 tok ≈ 1.45 x 4096 (flag f3: under the ruled 1.5–2x
+  #   band; bounded by the READ cap and condition 9 — see header).
+  #
+  #   with-retention honest walk (future agent): R a, R b, R c + E x5 =
+  #     8 actions — a legal <=8 path EXISTS, so condition 9 holds.
+  #   0.5.0 non-batch (JIT re-read): the window cannot hold a ref across
+  #     a round (same arithmetic as N1/N3), so every round pays a read:
+  #     (R, E) x 5 = 10 actions > MAX_STEPS → budget_exhausted around
+  #     round 4. Signature: gradual squeeze-out, re-reads present.
+  #   0.5.0 batch: s1 giant read (all refs, ~5900 tok, newest-exempt),
+  #     s2 fix t1 → giant off the exemption, cliff-evicted whole; rounds
+  #     2–5 each need reveal→read→edit = 2 steps: 1 + 1 + 2x4 = 10 steps
+  #     > 8 → dies. Signature: cliff then re-read burn.
+  #   Both cells die with distinct, telemetry-visible shapes — exactly the
+  #   two shapes the type table predicts for the sentinel.
+  #
+  # Condition 11 self-test:
+  #   batch walk: close at s2? NO — t2..t5 keys are armored.
+  #   compute-channel walk: none exists — RUN is fixed-argv only
+  #     (tools/shell.rs); the t2..t5 keys are unknowable until each
+  #     reveal, and reveals only follow real fixes: >= 2 steps per round
+  #     stands on the reveal mechanics alone.
+  #   stash walk: placeholders are answer-width and the cap is the
+  #     solved size + 4B — honest states are size-constant, any
+  #     insertion trips the guard, and the guard preempts every round
+  #     reveal (the 8000 print budget would NOT have stopped it;
+  #     draft-1's self-blinding claim was refuted by the verifier).
+  #     The needed evidence is three ~7.8KB refs that no field can
+  #     carry: the sentinel arithmetic is untouched.
+  #
+  # Freeze note: reads 0/0 are only meaningful with the probe confirming
+  # window_peak_tokens near/over budget and the two death shapes; a zero
+  # that comes from anything else (parse errors, provider faults) is not
+  # a sentinel reading.
+
+  - id: capv3-sentinel-fullset
+    instruction: "tests/check.sh rejects rollout.conf but reports only the FIRST problem each time it runs. Reference data lives under refs/ (read-only). Fix rollout.conf until the check passes. Lines it does not complain about must stay unchanged."
+    writes: [rollout.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: rollout.conf
+        contents: |
+          # rollout manifest — release train
+          t1 = ------------
+          t2 = ------------
+          t3 = ------------
+          t4 = ------------
+          t5 = ------------
+          owner = release-eng
+      - path: refs/pool-a.txt
+        contents: |
+          # rollout pool A — capacity source of record
+          pa01  4x2k5nvwn457  p327jlwnxaz6w9ec4mkttzk5cloqeovh8x9vfv1e2ob9t3qb6zms1wluorn9
+          pa02  hm1o9flhjxd4  5mdr3uzhch01xps6cdbzqeecmajpj863sdly1h39yf84n050meu2uhpt4oa0
+          pa03  vcl52kwpscr5  ip5fw3aly8goeynj85egtj0adz3r44p86hlcp42qx93ha3dmtim6mlvfe5ws
+          pa04  dti3cbxufkqb  taw2ntfy86qwxy7ue5lob6lvc83u0eo7q5vihqcref27rxt2c3b5wcihbh0k
+          pa05  9fhtor9wv7og  q9o0kceqyt5ozpyrw6z3na5clkfu389xxps20sieaeb0w111x5qiy9l1r24q
+          pa06  4bfci8g8kh79  6n4qzyzlzqqlw83rsud577o8gkc6nwtc0x547395jzsg11gfrhrschjv8nyt
+          pa07  hc8adjoz9whv  qguaeogon5x2j5u1hz7w0kuwtpkc00syq1rxmj7pyaeuwqrofi0mufugrc2q
+          pa08  b4yxesoma8sh  mehzrorzz8zzhtunaepmsl4rh6vnero1ksewaa51y4j9jqrphnp1mb0e0i1o
+          pa09  zqzt0wvo2l5y  hz3whqmsav74g1u3los9gddo3wghpqfywifbhyg9a7jw74vcq4t6xj9xrawj
+          pa10  v4a2lno7j52q  dpevc2kik2sdldpa6fk44mv6surh4nasg4ojddsr8msdh70eyjx048hfq2dn
+          pa11  ownyghvhfoy1  z7blfik0qbbsour3klgnpn9yh3h1zivrfx0cyrr7s8gsgy2v4djaoslwuqn0
+          pa12  x8xx95hnb6uz  yw9l040jb94yosrt6yn7dmsd4bu2togokyo4ebj0dwpkgfy1xsnixkw2neic
+          pa13  c2oo6qsqcfwm  7ou70laq6djcjwclfeb9lu4emuuekhqiabzupusbo51xw64fk0xsy0o763h9
+          pa14  z6s67g7zqgod  11m8bqbveao9e3o8gttj1wlqm54hbyizi1grh77qp0ylpnrko2f73lkc9de3
+          pa15  5hswn1232w0y  dxl3p5u1und5hp9gsq43v3m2ywi7bkjg7e08yig2g8yl2qtx3nz32tw1wqii
+          pa16  4oa9dyss1d2f  ly05osd79l7igi2mo11jwjhvra0psixmt04da2wwi4k5b02qdrswdaji0uuo
+          pa17  jm9xe3t2uqcd  u8z1ihdv7niu4yorjlhn0ef6lmh97dt9xqdt5f7n43k6nmtlreett8gtq470
+          pa18  a78u4757n5gt  wyr6ew0eo0lf93x0zqindt2czxb4qmf0ar5eeqtryzqdlywmc1tius38w8yz
+          pa19  okawdi9pa75x  ykqacmhukb2apftz6hl3ryeq8e63awbxy57sfee3nc6eu9a17nw70zcfjtpk
+          pa20  a4j9ldrecnhj  coiwdkyusd0jf7hp8ryz0vhbmj924w9udhnwdj0ylbwye13f2hpdo9664sri
+          pa21  pcetrhvyg5ir  ce6s16kfersyqlrmh5bt3kgyie4nw0qk5injqro7q8fobuzgbytufh4at5g9
+          pa22  juonfa3edg02  e08cpis4uhxtr16bonvhltm6byo2l1m8koox14a5ma02hso1l8rbrelst4op
+          pa23  w2sz32nz7azh  jjm9ckaf8n4va7c5msrsm4a0wmqujjkcst067jegdsqcnsyf843q45t9dx0c
+          pa24  x8d6ekkiytao  9xjpchzc4k5h9wxf79iyp95wr3ujz0gbgolzyzebugljh77w5cx67u64dma7
+          pa25  kzz6z1p9ph5k  inoa6wvtslhiw7yg1nm628b1dd56inlhaskdjqss9epzy7y02phef0gjqwro
+          pa26  k2k9sf6zdy14  4g3hnkxatpgdndzup8knvk933k4a0g6gj8pvoezu7he1c0syhvm8n1rj9ksf
+          pa27  ca9y0sy9d5d0  wsgv3fadaw3qk43cvtk6af6kz0zr3orogiednp8lt9jz4g5q5ohw9ez6swwv
+          pa28  cab2bcg0028z  083kqku231r1rlzqtonc68o9raug63a98ae652qhklskwx808jroefpjc151
+          pa29  rs1kqe2u2yvv  xjw14zsj5dfmt0df34eylig3918i2b9osd2xxdbeio87dk8ev0c5n8e2df7d
+          pa30  olrlmkw4wzye  n0pzmjisvhccp8t7xgh2p3dbso1vq107ngl4c2d9qefuymrzmy7qtfud7ls6
+          pa31  17u6lh0zm9on  6bfeb11bvh04wdlq4j3yu9rtjysnc65id1qew3w51q7lt22zaldfftpl0mxx
+          pa32  kmgjsq4mtlfa  l9pivlupg8g8d4hsyekehl7u1ap0o2a1prdavcwrm6eiy6yhytz210967mkn
+          pa33  j894xhgycl4t  ec1wu1xs0wjhooz6kwsvcquyxk73vkhsr2zh94qjxzrxw1kqnuxw055on1wk
+          pa34  zovpvtxfm6i9  k7dsdgx3dmmhgh5wug3lu4gzj7htov8tpcr55o422t8uu4o2fqfwbhxjy94r
+          pa35  nquamzzse8od  g51i5towuwgvc98p8arrmykzyfpajnspi8882jmjojwownroidkcccrlixmp
+          pa36  2occj08krych  a29vyotlngur81t7nw19j3iolgjc84w0n7xucwo2ixz205bps2jl9haug12q
+          pa37  8ewvoiaoqheu  0cjyr11ifieqx531ilfsxuh1husc8jt72cvj8fkxvkz9qrg2zlzps7vjmgbo
+          pa38  x2svvuedazlo  0eocw2hsp0g5nsehhbkb8thf799wd8shyb80v4fjfuax7acmv4i1grjjai2n
+          pa39  gscgfqv09rch  l1p0b2u24tapkwll06vj7yo2ow1mpyte1a8vr3jio5os1kkynansngbxsueh
+          pa40  zz4r3un682ph  2w4l7244is5gjz5vxf0kn3npgfqoulo0y66bgzbes82csn1178lkb9fr7uv6
+          pa41  6y7dsbfh4m3x  r05vc8krco0a850rgxkh1ovtno1ch894ow27s5ouxt43as6z7xe98xh16sc6
+          pa42  cmqf9aaov18g  zayjwzxsn2boo044wjiherighfjsv8dx50dbc4ivr9uleon6g71m34rjh1iu
+          pa43  7ue8kvanz5x5  9j1mqplvckeidpcst1wx1gmqne9znkejlkkv6kmkhb6o95brlraoxsxe7ehb
+          pa44  j65uamn1urry  a3uchpplh5soh3lghek748vb1hmumqfzft58lccjzhsr127wotk39e6fronh
+          pa45  tv5f0v0qdprx  bc2wogtmss1bu6stxg5dd3vbh7yrn3qesv9oy9qbf50qu531zpilvshyj62a
+          pa46  cjpd5wf5abyz  vf4o7su5i7h5j1468mprak84c5b26t5kx74ibx7cuvah5uvyfhkb0ehoj45b
+          pa47  xj7q6bcqn1gt  d0nxijwn2koa65m4kdelkozq4e2ee8wv98g79svmgbvp1g5umomujsgzroqb
+          pa48  2o0q0vh8me95  hbky84wzls2o0vvw8yfw57j41ud3tjov3wy32cy21s3gxjbsp0w46c9itmfr
+          pa49  xlrdx104q3ly  6p5ut590dz01c83zomp4lgy5839yszx5buduzylj3x8db9ct4r0k1bvftlo5
+          pa50  bg38e2mfolt0  vaf1x9qk9s2we16g472cvhdanne1kqnrnboi13h5gxj70lpdlbcbb5n1lm83
+          pa51  qv1f7aaxob8j  jzmvkx5342tf1hgh6vztyrbncocn7hko4ma70l9bhehdva8z2ky8fbuldv63
+          pa52  ub6fv6sqc9kf  0e9grsxdufzxiack7vks9ktfur9pop207nqed7u2pbovkim5wh2dokh0wy1w
+          pa53  wpnjzvmjpock  896yu19183quo5l534o51h154aeky3ywguf2omcu1afcg1kebylt9x7jztig
+          pa54  7kew41lgs0yh  izev4x0dvv3jx0fjmem89tthw8kznyw9i72syd9xbaqwwg8m8zk06uhn1yhc
+          pa55  nyp7ruzmgguq  hacl8je8o8dpw1b7yyggmq9xarstyw0fwullr10ra220sdlz0kp8ai2mw06j
+          pa56  omiv3pltuuba  ygdvf9t5pasimiz0rpb3rurcr40bkwiqs03i6c9bgq4aftqigm2nxgfqmice
+          pa57  wajt32fuzblr  91hayvxnmapezrstcolnlrwqcvgt67pas9q6kn6suw9pix360u6xjo5h25g9
+          pa58  9n35jjp8bfoz  leazpjujt0mwly2caqptyd5nzs9wfysu4682xz6yr0y27ed6e6r4d6jtstqr
+          pa59  yfahjm9m6hl8  uaefap0barmadai101owhoxp85c9cm4e7t0etbdgy9as53mlqmhdde5pa3i0
+          pa60  ugfxjghzg79d  sd1moqgj34vtqmdmda7htzkq34ace7qgfv5rkzld1hwcq4pnnrupy4ick3if
+          pa61  86ulu4c1zdb6  aohgwsgko4y9s3dg7zw8bkdfls82b6vtr3nbhan5qjn8v626e2x2r2hjgzsn
+          pa62  rcxoful8orlx  4vyhjxm6sbqghcqivuenfntykhb28iyourk6ig2zo6x1mdun101t1o2zmj2q
+          pa63  kfb9vkt2h7y2  d0krv7i6izwottt0q25hqz3kvcmhpkr4ov9ynjev3e661tip5msjem8ixj2x
+          pa64  dtr0mias6tdb  ptv8xk480anbo210tsdsphw7lrjgfrgpvzds5gryywnp62w9zs8eiuymqt2k
+          pa65  aof7h9d20oho  icf2356krnzse49xpayhqhx2qh16yyqc4i8z9b8oh0pq9kcuy7vcagu61vup
+          pa66  w3k48vrgmkaa  sv4gmwu7kj34gogfb9gbg9c5chedxexbi8ex7p056fk0xgk26re7palyukdp
+          pa67  3qcwnlbxvrw0  6kd9mfagq8vaokspqglwfi301pef63f7qp7i964ceg0d24fsxjoxz9wzqtsc
+          pa68  yrfm7035buux  f1av897aqezlr3t0cwc52kh50b24pdfkz9u1xfw719yis44qgaclyfi7n2p8
+          pa69  7o2f1k5c2lzh  xyds9wptnc0swny21bm0cg1s045vf1qbco2dmrkt3x7ett736oqqny3san3f
+          pa70  4zkzecm3zfer  nw9v1hhkqmrzk6bcjfm8fsketul0ei22bo4f2girnjywnv490wrjvo2s5sbt
+          pa71  0emnd77hjh0w  g9n05uqppl6ngkn86x1zyxtc0oye6iwqaimsu4sdg6grvk6evyyfv9j6sh3q
+          pa72  adqa68ingqi9  a52w9a8h5hwjlrs3qv828cjwb0pa6arzfhdicph9vdbc6vphih62qmmf3mf5
+          pa73  f7rqxrx4zk59  3rj8afvx89n9kkiy44cttv83nftzzwszx8cg90yyibgsngwxmovige8g3gx6
+          pa74  dby18a7fect4  s56txrp7ijd4v0c0ktmjip7zxrm77aldugz3ucn32qebg5aoku6s493rdr4a
+          pa75  0o5a0okp2nzn  3eik91r7ao0xmzsett947mef6zlgtaim7bukbne3sbarn8th184v62fomdhu
+          pa76  o4d5oe4ckne0  4gfqp357qlz46tpnzjsp6ldv855mdwtchopkexxx920uz0hy8rdx3gm22by2
+          pa77  f69etp2h55rm  clw1vljwlt2j9918fgl3s2htv0ki58vzp0xly4270rytcrrzotzef9tdpcsd
+          pa78  229f870cnt54  8l3ghkw5jqxcxpyqts2c6lojvzuytyqou6e7nr9t81d5jsmmcr7thb6dd798
+          pa79  1xn0on43uuve  679f8me7nis5sfuj5lbiai382n8v3u4bcmkw0brvwdn0o4j4a01mi24657c4
+          pa80  h7toce58vgh8  8a9n70ysq96dankpoybhipvzeyl8m8c9k2kgmnxx947rh4nuksmdgsexxd0m
+          pa81  a5wsw4lgojpo  99eo20dbhu4eejofoh7oq21zx9e2a2nhsct5gn5rfpc3wsavquvb4179ylnc
+          pa82  ewjelmo9bhw6  st7r5cjz7zwpchf1r4sqw9k1q5g5il39ib8oxrhf0zdpn0zfk6t2a4agysu2
+          pa83  65mqhu5k8bwh  yotv9usrpn63xbq4a3hpylzoz7lozs6ojailsjvgjbpsib6zlmjana1ba62r
+          pa84  gcr8txlg4imo  p2vl1nng4r8g8i1ivftwln1tswljhbi4e5guu6vvgae7u6yva0igzeh81ypn
+          pa85  mkq910agq98n  kz7ohxsnagrmasi814frhqhibk3qpxsimoa2e2m2r92o4jvlsrt46yzof7xq
+          pa86  8bov40mwnk8x  x7aom4jx3uwf5l4rdbug6k2786lz5p0kg3p2yoq89wvaz48yw76ig1orzp7y
+          pa87  8rb7vnrfm7bx  sr51zz1vlhkn2ck18ggfr979vkg8rqtpk6q0n4lr29ykhmtkyciyfom76skq
+          pa88  i0ups32xfh27  3bf17x6fhd5acemp1jj2ae76mh0b94xmqk8k681y8ptqq2po5jpg2thx1y6c
+          pa89  nl42vg6kt49d  n00p7qmmgsrmyatoenrwf99rjk6cdq2fg6nccwvevuidqzb2nrg72bov0z5m
+          pa90  p3k8pbhcb1fo  uxxbhciop8shhh1webb3e2d2e4ygi4awppd056ed9ba3oy6fujqlo4gcklju
+          pa91  l2d90sn9gspi  tpgqhlmw7msvn7eqhjv8rxn9264fbhj31drqduxsny79hwhp746yvz4473c3
+          pa92  bi1bltyu5psc  8zi5v55olmfv8mwe80nm27ttz9ucv47wq2ymjibo23xwnjruj1p13lraizik
+          pa93  39znpcv200p8  ur1byugtob15wqr2mdjk1idf9569tjo4mne5dgj0dm9jix9wzle1ps977rra
+          pa94  iudncfzoy9xj  phff2mhlmpvqyy813aio5zao009swbgs1tz233tlyy80wmhwpcc8hz0l7qc0
+          pa95  cxzpzceby3iu  dsfzxclv1rkjwvg2nhyo4o0s40jtyjj40kffragbe0av22ubfxcbrisezv26
+          pa96  8cfna0n3btez  7hpstbk48vgp7pwow2vc3506abch5tjwthr64guctm1ayldshle6wezfmcll
+          pa97  hqol2f2v6dz1  c7wbgf4f3tzt5wl95ylmy7r5wpav1zoxmnvmtpvjkn6dnwh164v3wx2w2cmw
+      - path: refs/pool-b.txt
+        contents: |
+          # rollout pool B — capacity source of record
+          pb01  1rr4hg3fcd9b  dx8sy0vmrrh0t67k4dtxs7apb99112li7mga9u75wjoh7oba7sluc8zhpta0
+          pb02  mhmowcgt9ox1  4j2exspjlpmazm69z54pwop5e5tvsqpomcajskv6zfwyf778bxs1kpfyvrgn
+          pb03  ro4pcr560nua  xf71zqrvf5ocp9t107nh5fk0551mwecgy3l759z82so50xurthxepqso7m0d
+          pb04  jsuawvofpoxv  tzlbm6zcvv77d4q2h2a7af29au6iipanuyu2tzmkgagw7e8jns3npoet46cl
+          pb05  ugdk689bl3sf  ngkb2j7p2myyrgsnksskn66pya0mhmm8eqg1eg9tx8993idt8abvoan61ubx
+          pb06  lycf7seggqpn  rqc8h5co46pn04trn53zb941f47af7qmjfwc1os64rv0mkl7tvz1xm8iygbg
+          pb07  nzhhbfdx3zm4  4kqdm03chrc4nbzmbduohc1zqg655q39bivro2v972qt9nr8cgeur6fcngv9
+          pb08  pircp1tlrl19  zkrizj4mihqh1ywwnshtephhjk1d0eursm94cr4de3moj9vq8vpbfxbhuoog
+          pb09  c0maqkuyj79g  zkw2z1oc5ggkkf5wuqismitvwf9ksyr1m5gjg72ea77qyvytb0g6yxmbvc3n
+          pb10  oanvq638t1bo  c3u7amiiilzuegjeug8d442bhcz9rud82ertv6nv7m60q35cig56xa130uc2
+          pb11  1958nevee48a  pj3bjwudgsjq8d2e3cteg6n9dscljqhu59lhndsm9lkhlntd42ts161ht1el
+          pb12  0j2ke0s8st5d  xyghacyix835mq10auak0wcfj3hteikez2onqehhoj2j9i1rm04dmg8pztb9
+          pb13  jik3480ghkpw  2r17y699pcx6w4xisjvls5tmrce6xsf1gzqjl3h6xa6f0m5jqi5r9o2nwkoo
+          pb14  wi88yetxbmjv  l1zxoqaeh1swfdigs3h5hkc9d26yzqk5i4t9e9el9oxa2x2on94hcdgq32kd
+          pb15  ijb1uphb5gnd  nfd3n127vdokgx1zgbhfl1jrmff6lcnm5tcegdafk025iehptbm7olzf3f0l
+          pb16  qkk8rg48ri3s  xpukmt5rm75bqa19pknlmcj61oc6e1ozpbbeuiiv2p82l7sy9uwd2trrndnh
+          pb17  szsx4vb0ywf7  u3g8xbheo1anj94spgvlx970q150u6l9x9s08y2l6zofjcf1t7j0ehzjjdsb
+          pb18  6hazaklx7vv2  7l45y66d5xy5ra1bvme6woafk3xaibdtfwhe5ebb78b6x6c4svup5edi3szy
+          pb19  t9upi4izlu6e  ercp3xgoo1gzkq9tuv3pun00q7cys5yskhgpxjuypiueharad933vkylk0x5
+          pb20  o6ok9amw3kww  4e57pl615mi4ls71onpttrzqiip1fht7gy70wokcgm4lmzqntts2ivr802za
+          pb21  0sqm85hobjvp  8uhsl7hnfw81w8b82gyb8z5e2fagnergap4dh14asty5zlfpvncck5pzcqek
+          pb22  kpn9xkrnkg8c  xx0bjljtmayby3u1g8nojb2rr9dzck9mgmfv13cc6k049d4f7wcby8ob00hm
+          pb23  3j1d20auppew  qoic14ezmy31w6n4wfh5cahu95ei8llla8csctd3622zxw3v49d4hpwh4u00
+          pb24  s24nmjz5jvtz  1bffafr062uvmxefhbgqqqre5uzq5drh0qagz43xejxnk0pnyxmgyee31vy3
+          pb25  wogik178ypcc  8tduee43a7g3pgzfz0r7cxely87nsjhbni4wg6vvpjfajoylwrvjnvjzo6zl
+          pb26  fbd076vge9tt  u4zp8597h5narnjo3hqmk4ml3zo77tdao8o2wiouk6l9m5jt3bd20e9jwru6
+          pb27  sxk9e6vb5cw5  podzezrji07fwbihumgdxag8y6inymbbhu1llhb2zz62lgamc000woa22tt4
+          pb28  7rbtoy22sjgg  87et3snz8btgs0fu5ctl1ygmm97n4tad7iecrbip1om1hvxfz0ccpp97v74f
+          pb29  rmcpzr13szrt  k7eehux08npv77k91d2sxl0uziqxbpn16n43o3ih36924cvu92hsdbt18d2s
+          pb30  v3fjf6sclikk  t19crtskoej33yo7s4zkmrlebp85bcixv3kd27my48c4uugq9bcpbg76gum4
+          pb31  03hg80bpbbh8  2pz7w0aolmu7dxprl4a1ua231ujadlu14bn1i1hkje1c5jg0zjselocz72bq
+          pb32  gt002p0pblta  4qp8ts2bn4n9m27n4ctxv7bz5creug95ly5nhdalnuyday3tsmse63ju6918
+          pb33  qalinvr1z7xc  nbva3zhyosybcbth2d60omd59fr8556lewcotgcwl1nvgqv8rrr7glk5dwvc
+          pb34  x6zwimiqzf1p  81fgq3s57eqjjhrmjbb38mk36foikcrzknys97moenmy0xq6njieetzk5gz6
+          pb35  3zpfssl75qww  7ahxomad1skamli6v3js51r8keak0mlmbsj7myyrn4zf9pdg0zomezixu6kf
+          pb36  3pi8h9az0049  2qsc9w5fm6q26rpzkinov8lnwnr5du8ni68zpupxoqoh47mavbp0ijc289qf
+          pb37  nk8pukgo2ec5  g33yuv3e153ng6vb6ekzzu2h5xlbn8waapkl0d3x6mkb2k3to43x30j2xy5s
+          pb38  08nrvbr8f5xw  pgk6xe6un3s8p7hw94vz2gh2b5a0l922ppavq89c23eh3srmbp02xa9bajtw
+          pb39  37yfr4cdzr28  0osq72hdlch3f7wfhx5h7u3voiib19tyyak4n46lpcax3xkvcw1hj2nl2b44
+          pb40  tyw1lyvsd2sv  6fhnjislf803gorg2fh6j35ftkz4nnsovlfp16kd5mq0xah1dr65b5grwvoc
+          pb41  p05ca6yxryul  cf2sz73qb3gxcrshv12zo5eerhy2hdudu4nkncsuqsq603mblynp7nughda9
+          pb42  ztx68x6pz01b  d3swbc4blz8yiwmtg3lnhvk5hmmd30rlkcq2y1uwpo2uwc8yn3oihfddhq0s
+          pb43  99p9nqzl3gwe  qxd669iab2o5tiohlh2db14aqan6ndf34nbguhhzvzm3xxfo6ggee1syllzr
+          pb44  c8vzf19j5kzn  nkbngr2qbnmnh8rjq0j44c075gqo21fwxbymwtozn73bjg4l2jlnij3z7ngq
+          pb45  lddmnnmxcph4  8nl7uedp9rap60642csfph10zaenu1wby7kjmqfozzdpitcf1lo40lzipm3r
+          pb46  cwu4e38xoeq1  v9mz1i48rf1g0yfvjrud0iikxai1oty47jmwcchf9af6vo4rweqonpcn03z5
+          pb47  w6c5htq8rlex  67pn3h6n1p2egeqzmofnd4cglbmw1tg07xnkbq081d0s74499zbdjjf9l2j2
+          pb48  fbhxcayt4gsr  9opnnxk3agtplrct3yfvzhmqp2vmww5l1sivabso0t7pm2sta24x7t83ynzo
+          pb49  4luvdgrkut0t  7bn8lz9sit66tveynutq7kf7y9uki02xvmblsgkk7j51jmkqn3o41q5riieq
+          pb50  42312lb6cp5y  j8uqu9ht3nemyw268c6mjklac8zpx97tme14f9zxvh8ucudmx6cbtxhx3vpz
+          pb51  aumj5cdng3ln  e1zabgvgufn7iy5mqhuknvktprgjh4rxuqa5f7l8kmz127kv0qrwzogx0f41
+          pb52  y3an5yrks352  u40uhm3uk0td5xobn3qgg4dgnsc2vka30bzwv3gqp0ny033x0ujgircfsqgf
+          pb53  yweuxsplzvoi  oos34pjdhmnz3fmj4ufsjb47r37ipg6bcuaiye38prq50a7ogjiavq7ta65o
+          pb54  p3jch4zxqw53  bjlsczz4jnqrp2jtgm9bbtc9fvy1z1wf8so76hmctbbb4lce0putpes2h94g
+          pb55  vxp8rqn08s6i  j2cgnrjbho4ni27ad1r0h4yc8wgu07c5p0j0v51i27npyd5mmnqo1xnr8fuc
+          pb56  chjh8xhxz8rr  6fsj7biywtm7nv3o40379emjy0z67v7kw3601mjayrc0v3n4v3rc104wiy50
+          pb57  0krs11b3tonn  d5f4cmnaspmop9lfu66pnbbprcfaqs59j1s0pl4pujc8hmw6hlnjgqwo5d1h
+          pb58  yd077ioaq5mw  v4f62e2pxp4huovaxycdndwdr5dzx6ry8xffwspa272b5skjzs8996wwgf1l
+          pb59  tez1zpxiv4rl  irsg8kjb51g197s3wswt3wd9n4wfsyh0h2rte49q2eq88gh98x0i10b2h2vp
+          pb60  1mq3l3kjxelb  wxq0whdltp1gxid9rru5fzyc9s7rtagfz6g8gywc8oyv4q221rwi20ruk48j
+          pb61  fqevztnoq1sz  atgz0fy8ip8e0q33jax5u4w7zb2evs6zuwlzczl1mc4d9ao9nlj32k7rev6o
+          pb62  1c7bu7ywk0bm  uwzkb3y3ke7n7y5ubdu28t0q2sug7a8zwc8wgo64a5zc0xnwnih4h32dp1v7
+          pb63  9qbhvg2f9lko  qp1ecnnlkhkyrp48q3i038wjin11988ls1x246db1w7dn9k9wem97ehwu7ye
+          pb64  kyx7j49bj2l5  rbx9t76u7xgl2gl6r8cdme561356is8gkrehf7ozpt6i40dacq7f8c4dysmc
+          pb65  kiz21lnci350  kz68xekyvko6kfkv9u9o22zj5a0vzdcidaap1rw67sm6xhn0qcqjc45o5t3i
+          pb66  w7h1uourdf5x  51i0a77b1qi6t6gbasw7wwycxfnz3lr0ryzydbi8ma4dqfycr3uag421xjw6
+          pb67  z0neua9fyaly  gb489mwd16fuhdzll0f4etvxu0cv5q9bu5mpwvarf87n9q4oma8zvyq3y14j
+          pb68  yh1fyll21cyg  1z8078wpbn0agrvgdqg1rdphb8bxhocnslkemv88db60q6q169cv88fw9bnh
+          pb69  p3kmh1nlxr4d  qa21eci0282lch442k82n0f47n9cjfuztfqmupc1wxjcek8umwh46cfwhae2
+          pb70  0e87kj8tav9g  rjfkrl2setnewp6itw2sz27d0w4zh8ngw8vk74qe93zaxizdqasowq9atd23
+          pb71  a1ti56l9kgra  7q4ficzujv9pin0e4q7kimy0i7hkqys1q8dlg6wqa2r63mia1dv7oafseduk
+          pb72  hhf6kbiwp4h9  2u4ki7bzvoasb9j4s41206el43ro4qlwzsj77bfzw23svmd701ro3qh10tv3
+          pb73  odb7m4mqqxgn  6iaxpjjgo4wc50ybg4efyppozz7hydg2iiz2kyubyujh3uatwvm1t3cq2ojm
+          pb74  qa268m4eyx40  ogkhoyj76ua96tw1h1c9yyzw01yz5x99ywocpuzskzfvi89wg0o4hirxeq80
+          pb75  6sqs6w5lymvr  9iogv3cu8tincdjp41i9dfo0ude8emjcvoz92v3d0xdstevl066vlvw98chq
+          pb76  n36uzzcolwv7  dce54ciarng1u4npti59xscfayyp5e7i5sou705a3s3qfxk9s6fb9t09145j
+          pb77  yyiqvrocktnn  jlsjwmed6bnmsko3d32gfxk3pd6dzhppcuuyprwq96051xfcbyov9e4qdon4
+          pb78  xlymhnsu3imj  iafq56oqj6jatmzyld1nfn9g3p3e88kjwkkldivp9ponqmclub9kj1jd7bld
+          pb79  6rkdkdqmcwqz  k5c8fa0l2l4kieqw4o8joa5hk2hstiii1xc5srl64c8pvhynj1l9gklcylap
+          pb80  tzpg92cdv63r  9vjl82fo7kf25c7a9klzcii3mufi2rs53qp0k0m17ak1ijwsi6hs2kta83uu
+          pb81  h0f7ci09czr6  a2525slbp9sjwbdhdpuhga4zd5spucx7kuuu3mfykk9ptot4xvfkx5za903e
+          pb82  icr73563lvur  08lrv1wj3c75gztpkk828j3t05yvzx2ph8kof7hppuqyipzg9trlqmbr4tou
+          pb83  uvp5lr3errod  2ma9iusspqdi67q0trb0n9q3pxyf53d78xoph65rdiz6jvbq7dorvr8kjxht
+          pb84  gfavmg3eu46g  v12jeu6dm1tms6f50uc88jk097i9fu1xo1v0sj909ga13qpktjieiyt6knt8
+          pb85  2zbg4rx41zw2  qviv8eul41gr59zd2a6dah95b5ycu77nhmgdre6cla4a8qsuwfmnoqujv82k
+          pb86  dyesrs8qi56n  hbq8oq8d6a2uowd6m2v0x7jo2ro5xiw10ioab3ya6ybegk2vlx22jc2obg98
+          pb87  5wtx8hv4npkw  p7pk0hk21gfmbmf6h19e93e1nx4mugf7k6gokyvp81l4d2sg6h6l74aggh3i
+          pb88  fedjo9st21b1  vitrwbaht4903t4v8iqrjcn3orkj9kl87633ptj5g3vvqyp8ejk0igjfto6i
+          pb89  usbkur7gfxok  govfgbb7eslympwlhfxotev1ozpdgo596b2ehjyershywnb90201niut9jwj
+          pb90  pu63bsvokv8t  e9lirgejgju83vk7n06a4e9r19kf4lgbd20ds48bpgz9uzlu8ibkqzfku2kt
+          pb91  the6rvqtln8o  fv4w4l3870jz33sq5ymorgncfj3txtq6jcgvy7aupshw2tellkmd0o0o4dml
+          pb92  j7nrp0oavl06  3rpr3zo0jgeug9ahgezezs887ntm9wyx0nw0q121zabvyl2z9z8qwqax94u8
+          pb93  tuec3c341pju  buab08vksxd30jvt0ald8nvzisy70eyeuo06d1dddllvtf1ioigir0pw5o2r
+          pb94  f97m1misn9n0  tmtbn74jafu9dcucz779pyi8k6c7b9fi2qqls1pfyfg2us7hw0erc1k90sn6
+          pb95  bmfqh84epetl  hynlsqf11211zt9edca13clxlsf5jhgsesxr52de0ensczx69rct0ez53tgu
+          pb96  ijz8pcs583px  askxatt1i7om0y26xie0tckpxxb2ybqeb5mupp8oqqkyx3nnvt63zkje20di
+          pb97  qn0khmed46w3  qy6at5bhp6e6y3hai6llx159l7c1ri99yb9ngrxakxep8d0uf3regt9mktw0
+      - path: refs/pool-c.txt
+        contents: |
+          # rollout pool C — capacity source of record
+          pc01  fgxexf32uz4b  feg05ov63hd7f4h0cfioak9mn4rm5zocutstpmlsjhmq176xjejha8mwri68
+          pc02  2h88bl7gxxg9  zt4w4muq4kpjol839f9ig0vd66ae4nejl2wm726l40uypcdf7d20n1qnjred
+          pc03  jy9etynjofxi  diwpb6mgfan4ijk5yl93q1c9naswn1jn9jiz2mou5stvq5doa4o2ljv4xqln
+          pc04  dimwcsm0q252  w33q76dskqp9mbarb991n2kepbknp5kco5dq1oh6f536rpoh9mq2e9889kbp
+          pc05  k2xf1mxxwygc  eaq7qwj6sm3c7wahcob0b0b6tm36ub6en4ixv6ic2foqd8epfdjgkq91c4c7
+          pc06  538op146shbl  zay4d2d8555tbtxto5bbl43ra1d0leak1ejoytn17orddni7em885xvtyl8r
+          pc07  romeque67kl7  tiuh9wtsqhv9h5hiq5c5t2pl5enl9kual4ghisc88lollydp6gpr5qj5pl1i
+          pc08  tdmvbyvnlzlo  3s76xxcdxt75h8ponf30ddsfopsa8zchlu83r7p8z4tq9zz1s8u8510kndpl
+          pc09  tu6790ced5ul  e54wz0854mj06y20qck08o78jr61llg6kychzogm9b0pmnlzb0b5o2gw6b3e
+          pc10  82vv9uztuqhm  qe5mq4nbm8y7mprhyx8aih8hy7k0f3j8qah8w6qn8ny6dsk55zelvrit9ouy
+          pc11  zd7fqpbds1s3  rmo0bswtyg5v70kigx93cqykrn94rwid87p5cuxkc1hndsr7l3n6vrjw99t0
+          pc12  ihpavjg83gze  h2jl8cmoqr1cpvkzey6jqens6qredhkad7rrhs8yf55d3pmt9xqz2vtkezfe
+          pc13  pt14u80o0ltz  tqjzg9br7o6zvd5azvt758s2cqwr3ly8f5fb4ct6e0xc77136zw4cskxb68j
+          pc14  nn6hz6istsqj  vkz2q3hksw9ct7trham74aimc5s3ljs0eh1yv0ec1gh40gelwqxslmk03op8
+          pc15  k1ksqn2otuwj  5f9ezhxsuywz7qb0tm5z8wn8tmb2uu8hzqzf0akq9c0yk9htx3ee5ayojwho
+          pc16  a38n6lp0vohu  243a2yxry2dlb6gzt2cozbe9b97iqyni4cyp8kk2vgbug6me7nza6jrix457
+          pc17  1r08i91i9wii  vdzonxk67krprb4anadqiqme4cla4buw6snrgq0tdn98lvfquwvwb0kq67x0
+          pc18  jugzjwt15yve  v9nifj50o7f115cwproxmre4fw5jf7befuw81en19w7e5sd5oo1w20lqmpsb
+          pc19  fi30ps9er17r  ybhacgm0xpdkhvew15zd8ez3lbin67ccpumveetmhkwhy0b3mtsf73el8l82
+          pc20  udc1txv658as  iclza5rkum286e6gjwewcot0jki7ok29kf5ic3uovkhlpjm6j2jxqyf6aynf
+          pc21  yq1di53fgov3  puziap5eks18vlyyh5x95j85md4a8yypgdbndh01pz1x8uu5pmb56a1vdlon
+          pc22  xuzko7mi13ny  u5qkov6hmr2ftv6h9tg6bqvv2x2hygx9umgnsqjkijrj6q88sjbouffz3aje
+          pc23  msu8ifxvwnck  5lgkwsg64w66jxulbvf12h5yowba0hhatdsiiiy21p5im7sf22rx90gmvxpk
+          pc24  55bxld7knhkn  w56j30xwgs74kba9lma3745irow4nv4ieqhaoqs4izlgz7m44ow91awkjvxz
+          pc25  borbqy5no6ey  g4pwfm66s7k9qeh4oejnawolj0eue38qjgazjagwgfj0uwwmzu5ajahxqtwf
+          pc26  xrj3r4dpnzw7  41h2e4cozp3x2i1beq4zzxjood6ixnnkwohkogbdd8ypk24lt5ryv374siox
+          pc27  yaqq25t3911a  739330ejkylhgjd62b6pdhb7i2j8449yxxgz1j96ldqvlq39dgct0bmhyazc
+          pc28  u28tsz3b0azi  il7m2sxvir5ejun9rklv2sxpgb5d10nky8tqwqou4uc6avfh8h0ud7dpgv3n
+          pc29  doe031itr9yw  304n18i355ig57zfriesxwrw6oi170ad3snw3y9mw0mucjjic3hs8datjowr
+          pc30  dkbvyfnw3vn6  80tewn6qinolljz3927hym01im44tz0zm9n7stcde47nw6p7c7bnzq5xmj7k
+          pc31  2zi1cdstar4f  pcu1m0mby40bpzs8jy9yu6d5rmvdc3gct2tu9xkaph8tglb1vuegsa9sabzm
+          pc32  hvfgqhp7kg8y  jzygxgc5op44fjmjmyv7uxw52918rwfsb6v2bu9whc6yb7mo7flosviybwce
+          pc33  njkfhfdutuql  0z1ighm4hmq5qrvmr8tm1r1wq6zws9bq756ajnocq7ulal1q4335h45tzjye
+          pc34  igvru82k925m  ha3nsif9nkpf5imrntegmk59cffsj5gofoj7sgfbnffdfmktneqmq04ws6yk
+          pc35  f780ivkjlz88  z8emvlx78oelom2sqttoem2hu4vghpvv5gjsgokyrft6vy238jhfjb0q5roo
+          pc36  rsr9bejd4ej8  srq8vd8nwgm06gmfcsoi3k4dcrpr8teddia24tqtgezgfwuptuy4sj4z6coo
+          pc37  zdvlaci6f4p3  hny14ds7u3xby2pdahzvgv3il58egm06mkfjjdjqh5p8yg48r8iw2bmzngw9
+          pc38  xao4sidbevle  4to2vln459cm7qz4lhybq09wltiunl15oycw932nvtavr6c4bf7inn90sc4s
+          pc39  a4rg70k722wg  bdcp79thuqf77ogc798k6k4lm6mczl53heihjclggg9mm10a5539qeselcev
+          pc40  435amxumq42z  0bu25id3chs5o1la9h9nokwl2og8fjw3z8oojviy2isdoin8fwtdfte4yfzy
+          pc41  onbd4meo34t2  0q0be5blat78bfdo1ddpzfra60fbrjll3u70gts5v0a0vtk5j4tf6a0ixzhy
+          pc42  w9q7xi9f9gep  5md9ylq1u2ziwso8h6bmbnfhyd2dyxlb2kobnu9730g88vhrskcjgsu87ko1
+          pc43  vem6guwvszv6  9n42ondamurypdite9181cjaekhr0o0s2itrodylgt1u9sh3mpfvy9fmgr00
+          pc44  59h2kqnim7ix  6gv4tlscchs9cv3puddqfermmthhaux1i21cjly4uxb29p5xs94kitqc0qel
+          pc45  f6oj2y4hrvc9  hchwlfg0rs8reo7w38rzjje1t2bqm1jdigwes5a0q31e2qurfgt3dmytlso7
+          pc46  a88icohy27gx  vzvo8bgc75p8nm1xxg6w3bmm35qxdu0tn8omam5d6bwze6in885vtsuoqvcs
+          pc47  mhtvxphz0zbi  tvmbee32o01papyyu370gw4nn5utgebzzcvat28gqfnm2btryycpvo1bd28u
+          pc48  w2psak39biyr  sxhd4t61ikzqm96bqu316qhku65o99425j01angui4p35gjs9tf2x1d2vqte
+          pc49  o8lbtb9xkmsz  hgle5cl45rd3eoqxm40gih485qb3xkq3zo06ljeioi8r40o8e0fbpfnc3ayv
+          pc50  bsqnt67gclpv  pmsffz3nypjyy7hnfe5t0cq0sus7lhdksy8hkuliw9jwptwek2z253rqz0sv
+          pc51  g6vjvevrpz7j  fv519ay8mcootlpydry7osewlcdhhuxqqq3o3tfvswpowapcqj3ul4ztfya9
+          pc52  ymv2cgnpdk8e  gzu6yy6e69yoqryu720ubkbzpzsqiq49d65y9qqiako0swwt66j9484c3c5x
+          pc53  wp4h31mapq4i  oao98frxzyxtupbuy6sibjhkr9wmbhflusqxeqd8qsgpbp0t84m8tsrtlm60
+          pc54  uv8qltzo8shl  26i7vg8s50jqwholsqfm37neut6rnao4p6q5u1o8sz6z3fmwlht0k2zxg143
+          pc55  o5jzunagc4ck  frl23wpj0fsd9i69hfvk9p5zlcvse64z28tgyo620hxbzpis3mq190sbi1e7
+          pc56  nyumdlbnoyjg  1sslnv1txm0cajbl95sxgwn2mg708et1vmquyj0ehghh5hfkj2hoqubrsaxm
+          pc57  ubdu3ww0xung  a8ntnnlri3y8ta06gs3cj81cg53vakt2ao0pkphqhfmajznwc7eerwpl6nw4
+          pc58  l45ygqiriw3y  c45m58r2kiq8k3ihpy6vdp8dhf5ac5e0r53a02ow8n32rj380xjx8mddbbcb
+          pc59  8ml84wizuk1l  cwcys0oxxt9urz8jpj4kn6qtyqowkri4wmoar2bm3ll2r440qj1kih4frl0k
+          pc60  b19xn7iwy1n4  0kx96iy29p4loiwoa2x036bxs895ch0saymp0ju4b5jwl35j7ddd7k3fcdy9
+          pc61  o4lfwu59yjkl  hzcgy820g7zyueqsln6gjk2udmd5e5dn3yx7jgr34kvrh158ffz4y4q3xmng
+          pc62  vy98a2bp29c3  syqq2n4lu71vhwz66urd2fy6qzexfyv34sjcrs9aun5ceq54a0vgn0ntpiis
+          pc63  7djo3ic6u3bf  ghcstc89q1pk1khdcuk3kmocg4o6j5k20pgtnc7tk4lf1q6y827dq4o0fzhs
+          pc64  x11ou7bwn9fj  1coror6ftpfzsbf5ixwoenhme3lktwbr2ur8tr3kynm14qp4ctxum39x19iy
+          pc65  xn5s2m05oynb  l4vfpi3nmdijith4322pnww2g93xjsekieu8lozkfkb90d39hfslytazcz5c
+          pc66  ygi0klfevecd  mvpw90upi219d2slrp8u95lvy97i0eypqz19weffv6qsorvazb8cpaxlvl90
+          pc67  s9g6jdsjxwdg  sctctwgqn4z48v3unlyy2l862cnkbia1fm0mvd6esay0lcusbiz3hyf5hctz
+          pc68  no361udtv3cd  bjf14omuxzb6sb7g5ss5imq15a18ad9b8cyjdopurzvqyzmm65ypvvgtw9rp
+          pc69  5354w0qkm7oy  v799jyalqx3kr13jfsc9hnwbz2gauxcbju72w9i67tsrb3s9mt33csz7l81f
+          pc70  w5uaf61kdmi0  c8stacpfym4i4kgxy974vq218rwch5l1l3q4s9srkra9phkjxoamzv269lri
+          pc71  zq2l2exhepcr  6ym5hnr8tr8ol1psfq01oj04kwgzhjx1zvb9kb4314ka61cx0ygo5vs7yoym
+          pc72  lrxg31rqfq0k  4345oupiy5xn12e90kn8o65i438muj80nnq5et3mgcfyxi7erzhr05u3wrak
+          pc73  i0sicg2l9h9s  18wzihj1sx73crpj9tlngg7h9k6x8ta6tbiqspwls1ir8pue5ezaunc700zu
+          pc74  a1teqblug0ox  igo89y8q3pv6zoguxrp6jkb4s0tidj5mi5dqo3ahm8pb8uv5944kfaisq0o0
+          pc75  kcegry9epx8k  xaytuq2h4c325cy5p6z831h4k3vyhum9njy2o1vuqgp8tlwlbvgkid0oltt7
+          pc76  5s7kgxonky8d  7vwrx44omylejcd9l1dkmhp3tgz9mkhe9wde2wzfa8v9me3gfcymsgv2racn
+          pc77  ptpgi83ax5lh  0eyg6ekmvcemyh2mzoqc0as8gbm0fzrlawdmkewvjjrp809tj110ylpb2o6z
+          pc78  s8iwkzlf3lzm  o2mj6uxlgqi4ntce3vklfigeqkvf7cwgoftsui7pcp0l4la1c50i0ozfd3a0
+          pc79  tg1yy4gnvkxh  d2jp848z1u1cr34malk57by6w2adc51h2p4ok2q7i2n5g17rkzeyuqf8sr35
+          pc80  8k9ur19ahkw8  6ilg13m3zarjsf83m8ofjbn8z62pn2kgqxcp45rp1j8dwcdcvypgd7271g23
+          pc81  ejoq3ilwtz5m  974p1vsywlvk96jt87cbdiwyr7v3jy2kdmrzgpqp7rin3q3l79yvjvnu0fkw
+          pc82  f3v2qqbbvymw  4lnsgehnxey0b9ympm8w43f9ab82tk9zvyy7uxveptxk1jctpbqdtask1qua
+          pc83  9itrmru0zd32  kai4mwav7742ikrwxhjsrb1ig0wwozk68aoqp12q38mjy4s30sk3zgs6qrg0
+          pc84  yj692psunphs  uowp1lc2o3jmek1sv5vcb2ur4ct5kxujebxcgf5ezk96msp9rgz76xj8p1v5
+          pc85  dcpp3aihxmv6  76us5c28pnd4qh6agj9ms793wgsuwhw6da7jzn4a90x65w8fuazr8z9psego
+          pc86  7nd4blm6mupp  gstbq3p4h3bn9x2s214265rkdgvdr68z28e4x6jvlere76c6ukcvot4wvk0e
+          pc87  t4d6jwft5r7e  00nl734hiuv6g9d7iew8tpp48km9qybf61ca0t8b3azp5idswd21lhygp2i4
+          pc88  t9zmr3cnpyj5  cdo9jy522n5wrc8te96k7p62q32wsrpyvxtuaspnnlu4cscoivvemy0nga7g
+          pc89  9p5anp4121wf  uhppdlomhsy2d7v7mkszk29wfja7j6gpx3fm561eo9bog4c8j3tpt27k3muj
+          pc90  4wtreu53lhjr  q5anxp5i4ril3ff0b1sx8wmpw3icb05f4wezcet850jdv5i3tqzglo0evw3x
+          pc91  x8u0uaxcn3qf  t6ini1q5xqx4ibbi0pu0fma2it1ai9l1xd5x5i8gjgc5gw5j8ivyqfl01m7w
+          pc92  brw21ngb9y49  i1sa6j309ghxnaipcpbhkemy9xegqp24pg44criikpz63curn1ldu6vf07z5
+          pc93  u34ot92z0ofp  q9njjmoygf4b3pppi0dv7ln5q0sa6bsopj4gyjtptv1edqnxtqx5a2fho74h
+          pc94  iczo1bssevhn  i0lnco6ormjxr6lmpzg5z8ut2owlmu53k4lj9nhczd1c0hskmwsdo3hagrt9
+          pc95  iyuc01qfju0p  q4tlq3gh20it3l5xj6mu79myxiiwag9z41ntn0xtdlyhz7bae3myqajgsqa2
+          pc96  e0f4i17ff6gr  lykzsk8ul9tg56i6rkvdtz0ee2ktcy3ub9kyapzeb8eduvg0fdjbg6hbymgs
+          pc97  khv9ev1bsy2m  d8ssac6m8f147rqfk0xibvvd9zmmxaikt6qxf0k3a5yuwsfotvkxcurybydu
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=rollout.conf
+          fail() { echo "rollout problem: $1"; exit 1; }
+          test "$(wc -c < "$f" | tr -d ' ')" -le 151 || fail "rollout.conf must stay under 151 bytes"
+          test "$(wc -l < "$f" | tr -d ' ')" = "7" || fail "rollout.conf must stay exactly 7 lines"
+          grep -qxF '# rollout manifest — release train' "$f" || fail "an unrelated line changed: header"
+          grep -qxF 'owner = release-eng' "$f" || fail "an unrelated line changed: owner"
+          want=$(awk '$1=="pa19"{print $2}' refs/pool-a.txt)
+          got=$(sed -n 's/^t1 = //p' "$f")
+          test "$got" = "$want" || fail "t1 must equal the value of slot pa19 in refs/pool-a.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'pb%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/pool-b.txt)
+          got=$(sed -n 's/^t2 = //p' "$f")
+          test "$got" = "$want" || fail "t2 must equal the value of slot $slot in refs/pool-b.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'pc%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/pool-c.txt)
+          got=$(sed -n 's/^t3 = //p' "$f")
+          test "$got" = "$want" || fail "t3 must equal the value of slot $slot in refs/pool-c.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'pa%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/pool-a.txt)
+          got=$(sed -n 's/^t4 = //p' "$f")
+          test "$got" = "$want" || fail "t4 must equal the value of slot $slot in refs/pool-a.txt"
+          n=$(printf %s "$got" | cksum | awk '{print $1 % 97 + 1}')
+          slot=$(printf 'pb%02d' "$n")
+          want=$(awk -v s="$slot" '$1==s{print $2}' refs/pool-b.txt)
+          got=$(sed -n 's/^t5 = //p' "$f")
+          test "$got" = "$want" || fail "t5 must equal the value of slot $slot in refs/pool-b.txt"
+          echo ok

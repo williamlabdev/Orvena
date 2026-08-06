@@ -1,0 +1,42 @@
+  # ══ N4 — sentinel (capv3-sentinel-fullset) ═══════════════════════════════
+  #
+  # Designed to read low/zero in BOTH cells on agent 0.5.0 and to flip red
+  # the moment the agent learns retention/summarization — v3's E, per
+  # ruling iv. The death mechanism is ARITHMETIC, not luck:
+  #
+  #   5 chained rounds over 3 fat refs, reuse pattern a,b,c,a,b with
+  #   armored (unpredictable) keys. Necessary distinct evidence =
+  #   3 x ~1975 ≈ 5930 tok ≈ 1.45 x 4096 (flag f3: under the ruled 1.5–2x
+  #   band; bounded by the READ cap and condition 9 — see header).
+  #
+  #   with-retention honest walk (future agent): R a, R b, R c + E x5 =
+  #     8 actions — a legal <=8 path EXISTS, so condition 9 holds.
+  #   0.5.0 non-batch (JIT re-read): the window cannot hold a ref across
+  #     a round (same arithmetic as N1/N3), so every round pays a read:
+  #     (R, E) x 5 = 10 actions > MAX_STEPS → budget_exhausted around
+  #     round 4. Signature: gradual squeeze-out, re-reads present.
+  #   0.5.0 batch: s1 giant read (all refs, ~5900 tok, newest-exempt),
+  #     s2 fix t1 → giant off the exemption, cliff-evicted whole; rounds
+  #     2–5 each need reveal→read→edit = 2 steps: 1 + 1 + 2x4 = 10 steps
+  #     > 8 → dies. Signature: cliff then re-read burn.
+  #   Both cells die with distinct, telemetry-visible shapes — exactly the
+  #   two shapes the type table predicts for the sentinel.
+  #
+  # Condition 11 self-test:
+  #   batch walk: close at s2? NO — t2..t5 keys are armored.
+  #   compute-channel walk: none exists — RUN is fixed-argv only
+  #     (tools/shell.rs); the t2..t5 keys are unknowable until each
+  #     reveal, and reveals only follow real fixes: >= 2 steps per round
+  #     stands on the reveal mechanics alone.
+  #   stash walk: placeholders are answer-width and the cap is the
+  #     solved size + 4B — honest states are size-constant, any
+  #     insertion trips the guard, and the guard preempts every round
+  #     reveal (the 8000 print budget would NOT have stopped it;
+  #     draft-1's self-blinding claim was refuted by the verifier).
+  #     The needed evidence is three ~7.8KB refs that no field can
+  #     carry: the sentinel arithmetic is untouched.
+  #
+  # Freeze note: reads 0/0 are only meaningful with the probe confirming
+  # window_peak_tokens near/over budget and the two death shapes; a zero
+  # that comes from anything else (parse errors, provider faults) is not
+  # a sentinel reading.
