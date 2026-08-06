@@ -61,6 +61,11 @@
 # by default). `--all-tasks` runs all 13 including alternates, for
 # recalibration only; those numbers are not the set's official reading.
 #
+# Agent 0.5.0 (evidence accumulation, SLICE-031) re-ran the frozen 8 same-
+# conditions 0806: 35b 24/24, 14b 23/24 — E 0/6 → 6/6 (the sentinel fired),
+# D's cell gradient gone. Readings and per-task table live in SLICE-031;
+# the 0.4.0 table below stays frozen and the two are never pooled.
+#
 # Factory calibration (MEASURED 0806, frozen): death tables, not scores
 # (SLICE-026 ruling 3 / SLICE-030). Two cells, n=3 each, identical conditions:
 # governance engineering, native 0.4.0, max_steps 8, sampling t0.6/p0.95/k20

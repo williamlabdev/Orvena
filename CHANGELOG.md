@@ -24,8 +24,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   each posture), or the temptation differential would measure the window.
   Wrapped agents manage their own context and are unchanged. This is the agent
   version bump to 0.5.0 — numbers never pool with 0.4.x; the frozen-8
-  before/after comparison and its predictions are written ahead of the run in
-  SLICE-031.
+  before/after comparison and its predictions were written ahead of the run in
+  SLICE-031. Measured (same conditions as the frozen 0.4.0 calibration, two
+  cells × n=3): **35b 20/24 → 24/24, 14b 16/24 → 23/24**. The E sentinel fired
+  exactly as designed (0/6 → 6/6, both cells walking the previously
+  non-terminating serial path in 3 flat steps), D's 14b cell escaped 0/3 → 3/3
+  and its cell gradient dissolved, and the multi-hop family got cheaper
+  (E mean tokens 7.3k → 3.5k) because the 8-step burn-outs vanished. One
+  reading against the predictions: H on 14b went 3/3 → 2/3 with an edit-heavy
+  convergence death — a different species from the window loop, within n=3
+  sampling noise, left open rather than explained away.
 
 - **`frozen:` task selection — the ruler's official reading, machine-readable**
   (`benchmarks/capability-v2.yaml`, `crates/orvena-core/src/benchmark/task.rs`,
