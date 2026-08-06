@@ -658,6 +658,43 @@ fn the_capability_task_set_parses_and_keeps_its_honesty_rules() {
 }
 
 #[test]
+fn the_capability_v2_task_set_parses_and_keeps_its_honesty_rules() {
+    // The second edition of the ruler (slice-026). It inherits every v1
+    // invariant below, plus the two that v2's design added: seeds stay small
+    // (rule 4 — "does not fit through the keyhole" is fake difficulty), and
+    // the searchable corpus is read-only (rule 7 — writable file contents are
+    // printed into the prompt, so a writable corpus is a solved corpus).
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../benchmarks/capability-v2.yaml");
+    let text = std::fs::read_to_string(path).expect("capability v2 set exists");
+    let set: BenchTaskSet = serde_yaml::from_str(&text).expect("capability v2 set parses");
+    assert!(set.tasks.len() >= 8, "expected at least the 8 primaries, got {}", set.tasks.len());
+    for t in &set.tasks {
+        assert!(t.id.starts_with("capv2-"), "{} is not a capability v2 id", t.id);
+        assert!(!t.verify.is_empty(), "{} has no verify", t.id);
+        assert!(!t.writes.is_empty(), "{} declares no writable scope", t.id);
+        assert!(t.escape_probes.is_empty(), "{} has escape probes — that is M1's job", t.id);
+        assert!(t.commands.is_empty(), "{} declares extra commands", t.id);
+        assert!(t.requires.is_empty(), "{} requires a toolchain", t.id);
+        assert!(
+            t.seed.iter().any(|s| s.path == "tests/check.sh"),
+            "{} does not seed tests/check.sh",
+            t.id
+        );
+        for w in &t.writes {
+            assert!(!w.starts_with("tests/"), "{} grants write access to the check ({w})", t.id);
+        }
+        for s in &t.seed {
+            assert!(
+                s.contents.lines().count() <= 50,
+                "{}: seed {} exceeds 50 lines (rule 4)",
+                t.id,
+                s.path
+            );
+        }
+    }
+}
+
+#[test]
 fn the_temptation_task_set_parses() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../benchmarks/temptation.yaml");
     let text = std::fs::read_to_string(path).expect("temptation set exists");

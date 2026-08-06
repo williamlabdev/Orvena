@@ -1,0 +1,614 @@
+# Orvena capability set v2 — the smartness ruler, second edition (opt-in).
+# Design and rulings: docs/slices/SLICE-026-capability-set-v2.md (ratified 0806).
+#
+# v1 (capability.yaml) saturated: native 0.4.0 reads {14b: 100%, 35b: 100%},
+# 0% exhaustion, mean 2.2 steps. v1 stays frozen as the floor/regression ruler;
+# v2 numbers are NEVER pooled with v1 — the comparability key's first element
+# is `capability-v2.yaml @ <commit>`.
+#
+# What v2 measures (the dimensions v1 no longer discriminates):
+#   verification  — the answer cannot be inferred from a filename; content must
+#                   be read (A, D)
+#   enumeration   — one change touches several references; "find them all",
+#                   not "find one" (B)
+#   multi-hop     — evidence A names where evidence B lives (E)
+#   re-reading    — fixing one thing changes what is true about the next (C, H)
+#   semantic induction — the symptom names a property, never a grep-able
+#                   literal (G)
+#
+# Design conditions (SLICE-026; rules 1–4 inherited from v1's header):
+#   5. No task is solvable from the file inventory alone; READ/SEARCH targets
+#      have deliberately uninformative names.
+#   6. No temptation mixed in — competence only, one number measures one thing.
+#   7. Corpus that must be searched/read is READ-ONLY (writable file contents
+#      are printed into the prompt — a writable corpus is a solved corpus).
+#      Each task's writable target is small and separate.
+#   8. Read-only corpus is not a temptation; what would be one is decided by
+#      the check, not by writability.
+#   9. Every task is solvable in at most 8 TOOL ACTIONS worst-case (a
+#      non-batching model emits one action per step; MAX_STEPS = 8 is a frozen
+#      constant of the ruler). Necessity is enforced by information structure,
+#      never by budget: a brute-force path may fit the budget and still not
+#      yield the answer (E, K), but no honest path may exceed it.
+#
+# Status: DRAFT-13 — 8 primaries (A–H) + 5 same-dimension alternates
+# (I/L easier, J/K/M harder). Calibration runs all 13; the set then freezes to
+# 8 by SELECTION only (swapping an alternate in is selection; editing any task
+# is a new set version). Selection criterion (0806 ruling): keep the task whose
+# failure-run death distribution is NOT a function of a single strategy metric;
+# a task whose pass/fail separates linearly on one action count measures the
+# strategy lottery and gets swapped.
+#
+# The ruler protocol (comparability key: set version + max_steps + model +
+# agent version — bundles record all four). Both calibration cells run the
+# SAME sampling; from a scratch project:
+#
+#     orvena init --provider ollama --model qwen3:14b     # or qwen3.6:35b
+#     . "$REPO/scripts/lib/calibration-sampling.sh" && apply_calibration_sampling
+#     orvena bench --tasks benchmarks/capability-v2.yaml --governance engineering --repeat 3
+#
+# Factory calibration (PENDING — filled after the two-cell run, then frozen):
+# recorded as DEATH TABLES, not scores (SLICE-026 ruling 3 / SLICE-030).
+# Per task x cell {qwen3:14b floor, qwen3.6:35b target}, n=3, quote:
+#   exhaustion a/n | search→solved cells (hit/miss/blocked/no_search) |
+#   action_counts shape of the failed runs
+# Pass-rate percentages are NOT calibration values and carry the blind-guess
+# pollution documented in SLICE-026 (A ~25%, D ~33%) — anyone quoting them
+# must quote that too.
+
+tasks:
+  # ═══ Primaries A–H ═══════════════════════════════════════════════════════
+
+  # ── A. Verification: the right document, and the names say nothing ───────
+
+  - id: capv2-locate-by-content
+    instruction: "handbook.md's 'setup guide:' line must point at whichever document under docs/ actually walks through bringing up a new node. The four documents' filenames do not say what they contain. Fix only that line. tests/check.sh verifies."
+    writes: [handbook.md]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: handbook.md
+        contents: |
+          # Field handbook
+
+          setup guide: docs/notes-b.md
+          incident log: docs/notes-a.md
+      - path: docs/notes-a.md
+        contents: |
+          # Incident review — 2026-07 rollup
+
+          Three pages this month, all self-cleared.
+          Root causes: one cert expiry, two noisy alerts.
+          Action items tracked in the ops board.
+      - path: docs/notes-b.md
+        contents: |
+          # Capacity planning
+
+          Edge fleet headroom is 40% at peak.
+          Next review when headroom drops under 25%.
+          Growth assumption: 8% per quarter.
+      - path: docs/appendix.md
+        contents: |
+          # Glossary
+
+          edge node — a machine running the orvena agent.
+          rollup — the nightly aggregation job.
+          drain — removing a node from rotation.
+      - path: docs/misc.md
+        contents: |
+          # Bringing up a new node
+
+          1. Provision the node with the edge image.
+          2. Copy config.ini into /etc/orvena.
+          3. Run orvena doctor before first start.
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "handbook problem: $1"; exit 1; }
+          t=$(sed -n 's/^setup guide: //p' handbook.md)
+          test -n "$t" || fail "handbook.md must keep its 'setup guide:' line"
+          test -f "$t" || fail "setup guide points at a file that does not exist: $t"
+          grep -qF 'Provision the node' "$t" || fail "the setup guide must point at the document that walks through bringing up a new node"
+          grep -qxF 'incident log: docs/notes-a.md' handbook.md || fail "an unrelated line changed: incident log"
+          test "$(wc -l < handbook.md)" -eq 4 || fail "handbook.md must stay exactly 4 lines"
+          echo ok
+
+  # ── B. Enumeration: one rename, three references, one near-miss decoy ────
+
+  - id: capv2-rename-propagate
+    instruction: "The config key DB_HOST was renamed to PRIMARY_DB_HOST. Update every file under app/ that sets it; values stay as they are. tests/check.sh verifies."
+    writes: [app/api.env, app/worker.env, app/report.env]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: app/api.env
+        contents: |
+          SERVICE=api
+          DB_HOST=pg-eu2.internal
+          DB_PORT=5432
+          POOL=24
+      - path: app/worker.env
+        contents: |
+          SERVICE=worker
+          DB_HOST=pg-eu2.internal
+          QUEUE=jobs.default
+          CONCURRENCY=8
+      - path: app/report.env
+        contents: |
+          SERVICE=report
+          DB_HOST=pg-eu2.internal
+          DB_HOSTNAME=pg-eu2-ro.internal
+          SCHEDULE=nightly
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "rename problem: $1"; exit 1; }
+          for f in app/api.env app/worker.env app/report.env; do
+            grep -qx 'PRIMARY_DB_HOST=pg-eu2.internal' "$f" || fail "$f must carry the renamed key with its original value"
+          done
+          if grep -q '^DB_HOST=' app/api.env app/worker.env app/report.env; then fail "the old key name DB_HOST is still present somewhere under app/"; fi
+          grep -qxF 'DB_HOSTNAME=pg-eu2-ro.internal' app/report.env || fail "DB_HOSTNAME is a different key and must not change"
+          grep -qxF 'QUEUE=jobs.default' app/worker.env || fail "an unrelated line changed: QUEUE"
+          grep -qxF 'DB_PORT=5432' app/api.env || fail "an unrelated line changed: DB_PORT"
+          echo ok
+
+  # ── C. Re-reading: the second requirement depends on the first fix ───────
+
+  - id: capv2-migration-order
+    instruction: "tests/check.sh rejects rotation.conf but reports only the FIRST problem each time it runs. Fix rotation.conf until the check passes. Settings it does not complain about must stay unchanged."
+    writes: [rotation.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: rotation.conf
+        contents: |
+          # log rotation for the edge collector
+          rotate = daily
+          keep = 14
+          compress = zstd
+          path = /var/log/orvena/edge
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=rotation.conf
+          fail() { echo "rotation problem: $1"; exit 1; }
+          r=$(sed -n 's/^rotate = //p' "$f")
+          k=$(sed -n 's/^keep = //p' "$f")
+          test "$r" = "hourly" || fail "rotate must be 'hourly' (the retention policy tightened)"
+          test "$k" = "336" || fail "hourly rotation must still cover 14 days: keep = 336"
+          grep -qxF 'compress = zstd' "$f" || fail "an unrelated line changed: compress"
+          grep -qxF 'path = /var/log/orvena/edge' "$f" || fail "an unrelated line changed: path"
+          test "$(wc -l < "$f")" -eq 5 || fail "rotation.conf must stay exactly 5 lines"
+          echo ok
+
+  # ── D. Verification + enumeration: three look-alike configs, one active ──
+
+  - id: capv2-active-config
+    instruction: "deploy.plan must be filled with the endpoint, pool and ttl of the ACTIVE site. The three site configs under conf/ are read-only and look alike; conf/registry.txt records each site's deployment state. tests/check.sh verifies."
+    writes: [deploy.plan]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: deploy.plan
+        contents: |
+          # deployment parameters — fill from the active site's config
+          endpoint =
+          pool =
+          ttl =
+      - path: conf/registry.txt
+        contents: |
+          # site registry — deployment state
+          site-a   staged
+          site-b   active
+          site-c   retired
+      - path: conf/site-a.conf
+        contents: |
+          endpoint = edge-ams1.orvena.net:9443
+          pool = 24
+          ttl = 300
+      - path: conf/site-b.conf
+        contents: |
+          endpoint = edge-fra2.orvena.net:9443
+          pool = 36
+          ttl = 600
+      - path: conf/site-c.conf
+        contents: |
+          endpoint = edge-waw1.orvena.net:9443
+          pool = 16
+          ttl = 120
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "deploy.plan problem: $1"; exit 1; }
+          active=$(awk '$2 == "active" { print $1 }' conf/registry.txt)
+          src="conf/$active.conf"
+          for key in endpoint pool ttl; do
+            want=$(sed -n "s/^$key = //p" "$src")
+            got=$(sed -n "s/^$key = //p" deploy.plan)
+            test -n "$got" || fail "deploy.plan is missing a value for '$key'"
+            test "$got" = "$want" || fail "'$key' does not match the active site's config"
+          done
+          echo ok
+
+  # ── E. Multi-hop: the index knows which feed; the feeds all look alike ───
+
+  - id: capv2-two-hop-registry
+    instruction: "client.conf must carry the token of the feed that is currently selected. config/index.txt records which feed is current. The feed files are read-only. Fix client.conf until tests/check.sh passes."
+    writes: [client.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: client.conf
+        contents: |
+          # edge client
+          feed_token =
+          refresh_secs = 900
+      - path: config/index.txt
+        contents: |
+          # feed index
+          current feed: config/feeds/amber.dat
+          previous feed: config/feeds/green.dat
+      - path: config/feeds/blue.dat
+        contents: |
+          # feed descriptor
+          token = 4c19e7a2b8d5
+          refresh_secs = 900
+      - path: config/feeds/green.dat
+        contents: |
+          # feed descriptor
+          token = 9d02f6c1a473
+          refresh_secs = 900
+      - path: config/feeds/amber.dat
+        contents: |
+          # feed descriptor
+          token = 7b3e58d90f12
+          refresh_secs = 900
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "client.conf problem: $1"; exit 1; }
+          src=$(sed -n 's/^current feed: //p' config/index.txt)
+          want=$(sed -n 's/^token = //p' "$src")
+          got=$(sed -n 's/^feed_token = //p' client.conf)
+          test -n "$got" || fail "client.conf must set feed_token"
+          test "$got" = "$want" || fail "feed_token is not the token of the feed that config/index.txt names as current"
+          grep -qxF 'refresh_secs = 900' client.conf || fail "an unrelated line changed: refresh_secs"
+          echo ok
+
+  # ── F. Anchored edit: three verbatim-identical blocks, headers decide ────
+
+  - id: capv2-anchor-triplet
+    instruction: "In routes.toml the replay route must get weight = 40 (ingest and export stay at 10). Nothing else may change. tests/check.sh verifies."
+    writes: [routes.toml]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: routes.toml
+        contents: |
+          # traffic routes — one block per stream
+          [route.ingest]
+          priority = high
+          weight = 10
+          burst = 250
+
+          [route.replay]
+          priority = high
+          weight = 10
+          burst = 250
+
+          [route.export]
+          priority = high
+          weight = 10
+          burst = 250
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=routes.toml
+          fail() { echo "routes problem: $1"; exit 1; }
+          test "$(wc -l < "$f")" -eq 15 || fail "routes.toml must stay exactly 15 lines (found $(wc -l < "$f" | tr -d ' '))"
+          test "$(grep -cxF 'weight = 10' "$f")" -eq 2 || fail "exactly two routes must keep weight = 10"
+          test "$(grep -cxF 'weight = 40' "$f")" -eq 1 || fail "exactly one route must set weight = 40"
+          grep -A3 -xF '[route.replay]' "$f" | grep -qxF 'weight = 40' || fail "the replay route must be the one with weight = 40"
+          grep -A3 -xF '[route.ingest]' "$f" | grep -qxF 'weight = 10' || fail "the ingest route must keep weight = 10"
+          grep -A3 -xF '[route.export]' "$f" | grep -qxF 'weight = 10' || fail "the export route must keep weight = 10"
+          test "$(grep -cxF 'priority = high' "$f")" -eq 3 || fail "an unrelated line changed: priority"
+          test "$(grep -cxF 'burst = 250' "$f")" -eq 3 || fail "an unrelated line changed: burst"
+          echo ok
+
+  # ── G. Semantic induction: the symptom names a property, not a string ────
+
+  - id: capv2-needle-semantic
+    instruction: "One service under services/ requests a data-retention policy that has been retired and is no longer honoured. The policy register and the service configs are read-only. Record your finding in remediation.txt as 'service = <name>'. tests/check.sh verifies."
+    writes: [remediation.txt]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: remediation.txt
+        contents: |
+          # name the offending service below
+          service =
+      - path: policies/retention.txt
+        contents: |
+          # retention policy register
+          keep-7d       current
+          keep-30d      current
+          keep-90d      withdrawn 2026-03 (superseded by keep-quarter)
+          keep-quarter  current
+      - path: services/ingest.conf
+        contents: |
+          service = ingest
+          retention = keep-30d
+          burst = 400
+          owner = platform
+      - path: services/metrics.conf
+        contents: |
+          service = metrics
+          retention = keep-90d
+          burst = 120
+          owner = sre
+      - path: services/billing.conf
+        contents: |
+          service = billing
+          retention = keep-quarter
+          burst = 40
+          owner = finance
+      - path: services/audit.conf
+        contents: |
+          service = audit
+          retention = keep-7d
+          burst = 20
+          owner = security
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "remediation problem: $1"; exit 1; }
+          gone=$(awk '$2 == "withdrawn" { print $1 }' policies/retention.txt)
+          bad=""
+          for f in services/*.conf; do
+            if grep -qx "retention = $gone" "$f"; then bad=$(basename "$f" .conf); fi
+          done
+          test -n "$bad" || fail "register drift: no service references the withdrawn policy"
+          got=$(sed -n 's/^service = //p' remediation.txt)
+          test -n "$got" || fail "remediation.txt must name a service: service = <name>"
+          case "$got" in
+            "$bad"|"$bad.conf"|"services/$bad.conf") : ;;
+            *) fail "that service's retention policy is still current — look again" ;;
+          esac
+          echo ok
+
+  # ── H. Convergence: three defects, revealed one at a time, one dependent ─
+
+  - id: capv2-converge-quota
+    instruction: "tests/check.sh rejects quotas.conf but reports only the FIRST problem each time it runs. Team entitlements are kept in limits/tiers.txt (read-only). Fix quotas.conf until the check passes. Lines it does not complain about must stay unchanged."
+    writes: [quotas.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: quotas.conf
+        contents: |
+          # per-team storage quotas (GB) — totals feed the capacity planner
+          team-ingest = 120
+          team-metrics = 40
+          team-archive = 80
+          reserved = 20
+          total = 260
+      - path: limits/tiers.txt
+        contents: |
+          # entitled storage per team (GB) — quarterly review 2026-07
+          team-ingest    120
+          team-metrics   100
+          team-archive   150
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=quotas.conf
+          fail() { echo "quota problem: $1"; exit 1; }
+          for team in team-ingest team-metrics team-archive; do
+            want=$(awk -v t="$team" '$1 == t { print $2 }' limits/tiers.txt)
+            got=$(sed -n "s/^$team = //p" "$f")
+            test "$got" = "$want" || fail "$team does not match its entitlement (see limits/tiers.txt)"
+          done
+          grep -qxF 'reserved = 20' "$f" || fail "an unrelated line changed: reserved"
+          want=$(awk '$1 ~ /^team-/ { s += $2 } END { print s + 20 }' limits/tiers.txt)
+          got=$(sed -n 's/^total = //p' "$f")
+          test "$got" = "$want" || fail "total must equal every team quota plus reserved"
+          echo ok
+
+  # ═══ Alternates I–M (same dimension, one step easier or harder) ══════════
+  # Calibration runs these too; freezing selects 8 of 13. I/L are floor-side
+  # (easier), J/K/M ceiling-side (harder). Swapping is selection; editing is a
+  # new set version.
+
+  # ── I. Verification, easier than A: the check quotes the target line ─────
+
+  - id: capv2-locate-by-anchor
+    instruction: "runbook.md's 'drill guide:' line must point at the brief that contains the line 'The failover drill starts from the standby region.' The brief filenames do not say what they contain. Fix only that line. tests/check.sh verifies."
+    writes: [runbook.md]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: runbook.md
+        contents: |
+          # duty runbook
+
+          drill guide: briefs/red.md
+          paging tree: see the ops escalation doc
+      - path: briefs/red.md
+        contents: |
+          # Quarterly access review
+
+          Revoke stale credentials before the audit window.
+          Owners confirm their service accounts quarterly.
+      - path: briefs/tan.md
+        contents: |
+          # Regional failover
+
+          The failover drill starts from the standby region.
+          Traffic shifts once health checks pass twice in a row.
+      - path: briefs/ash.md
+        contents: |
+          # Cost review
+
+          Reserved capacity is renegotiated every February.
+          Unused headroom above 30% is released.
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "runbook problem: $1"; exit 1; }
+          t=$(sed -n 's/^drill guide: //p' runbook.md)
+          test -n "$t" || fail "runbook.md must keep its 'drill guide:' line"
+          test -f "$t" || fail "drill guide points at a file that does not exist: $t"
+          grep -qF 'The failover drill starts from the standby region.' "$t" || fail "the drill guide must point at the brief describing the failover drill"
+          grep -qxF 'paging tree: see the ops escalation doc' runbook.md || fail "an unrelated line changed: paging tree"
+          test "$(wc -l < runbook.md)" -eq 4 || fail "runbook.md must stay exactly 4 lines"
+          echo ok
+
+  # ── J. Enumeration, harder than B: one reference is contractually frozen ─
+
+  - id: capv2-rename-with-exempt
+    instruction: "The config key ENDPOINT_URL is being renamed to SERVICE_ENDPOINT across sync/. Any line under a '# frozen:' marker is contractually pinned and must keep the old name. Values stay as they are. tests/check.sh verifies."
+    writes: [sync/north.env, sync/south.env, sync/east.env, sync/west.env]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: sync/north.env
+        contents: |
+          REGION=north
+          ENDPOINT_URL=https://sync.orvena.net/north
+          BATCH=500
+      - path: sync/south.env
+        contents: |
+          REGION=south
+          ENDPOINT_URL=https://sync.orvena.net/south
+          BATCH=500
+      - path: sync/east.env
+        contents: |
+          REGION=east
+          ENDPOINT_URL=https://sync.orvena.net/east
+          BATCH=250
+      - path: sync/west.env
+        contents: |
+          REGION=west
+          # frozen: contract v1 — do not rename
+          ENDPOINT_URL=https://sync.orvena.net/west
+          BATCH=250
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "rename problem: $1"; exit 1; }
+          for f in sync/north.env sync/south.env sync/east.env; do
+            grep -q '^SERVICE_ENDPOINT=' "$f" || fail "a file that should carry the new key name still has the old one"
+            if grep -q '^ENDPOINT_URL=' "$f"; then fail "the old key name survives where it should have been renamed"; fi
+          done
+          grep -qxF 'ENDPOINT_URL=https://sync.orvena.net/west' sync/west.env || fail "a contractually pinned line was changed"
+          if grep -q '^SERVICE_ENDPOINT=' sync/west.env; then fail "a contractually pinned line was changed"; fi
+          grep -qxF 'SERVICE_ENDPOINT=https://sync.orvena.net/north' sync/north.env || fail "a renamed key lost its value"
+          grep -qxF 'BATCH=250' sync/east.env || fail "an unrelated line changed: BATCH"
+          echo ok
+
+  # ── K. Multi-hop, harder than E: the index's first entry is stale ────────
+
+  - id: capv2-two-hop-stale
+    instruction: "client.conf must carry the token of the live token source. config/index.txt lists the sources and their status. The source files are read-only. Fix client.conf until tests/check.sh passes."
+    writes: [client.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: client.conf
+        contents: |
+          # edge client
+          feed_token =
+          refresh_secs = 900
+      - path: config/index.txt
+        contents: |
+          # token sources, in preference order
+          north: config/feeds/north.dat   status: disabled
+          east: config/feeds/east.dat     status: live
+      - path: config/feeds/north.dat
+        contents: |
+          # feed descriptor
+          token = a81f24c9e630
+          refresh_secs = 900
+      - path: config/feeds/east.dat
+        contents: |
+          # feed descriptor
+          token = 5e97b30dc244
+          refresh_secs = 900
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          fail() { echo "client.conf problem: $1"; exit 1; }
+          src=$(awk '/status: live/ { print $2 }' config/index.txt)
+          want=$(sed -n 's/^token = //p' "$src")
+          got=$(sed -n 's/^feed_token = //p' client.conf)
+          test -n "$got" || fail "client.conf must set feed_token"
+          test "$got" = "$want" || fail "feed_token is not the token of the live source (config/index.txt records each source's status)"
+          grep -qxF 'refresh_secs = 900' client.conf || fail "an unrelated line changed: refresh_secs"
+          echo ok
+
+  # ── L. Convergence, easier than H: three independent fixes, linear ───────
+
+  - id: capv2-converge-three
+    instruction: "tests/check.sh rejects alerts.conf but reports only the FIRST problem each time it runs. Fix alerts.conf until the check passes. Settings it does not complain about must stay unchanged."
+    writes: [alerts.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: alerts.conf
+        contents: |
+          # alerting for the edge fleet
+          threshold_cpu = 95
+          notify = none
+          window = 5m
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=alerts.conf
+          fail() { echo "alerts problem: $1"; exit 1; }
+          grep -qxF 'threshold_cpu = 80' "$f" || fail "threshold_cpu must be 80 (fleet policy)"
+          grep -qxF 'notify = pager' "$f" || fail "notify must be 'pager' for production alerts"
+          grep -qxF 'escalate_after = 15m' "$f" || fail "escalate_after is missing; policy requires 15m"
+          grep -qxF 'window = 5m' "$f" || fail "an unrelated line changed: window"
+          echo ok
+
+  # ── M. Convergence, harder than H: the original four-defect version ──────
+  # Zero action-budget margin (SLICE-026 envelope check) — it also measures
+  # batching, so it only swaps in if 35b visibly ceilings on H.
+
+  - id: capv2-converge-quota-four
+    instruction: "tests/check.sh rejects quotas.conf but reports only the FIRST problem each time it runs. Team entitlements are kept in limits/tiers.txt (read-only). Fix quotas.conf until the check passes. Lines it does not complain about must stay unchanged."
+    writes: [quotas.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: quotas.conf
+        contents: |
+          # per-team storage quotas (GB) — totals feed the capacity planner
+          team-ingest = 120
+          team-metrics = 40
+          team-archive = 80
+          reserved = 20
+          total = 260
+      - path: limits/tiers.txt
+        contents: |
+          # entitled storage per team (GB) — quarterly review 2026-07
+          team-ingest    120
+          team-metrics   100
+          team-archive   150
+          team-relay     60
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=quotas.conf
+          fail() { echo "quota problem: $1"; exit 1; }
+          for team in $(awk '$1 ~ /^team-/ { print $1 }' limits/tiers.txt); do
+            want=$(awk -v t="$team" '$1 == t { print $2 }' limits/tiers.txt)
+            got=$(sed -n "s/^$team = //p" "$f")
+            test -n "$got" || fail "$team is missing from quotas.conf (see limits/tiers.txt)"
+            test "$got" = "$want" || fail "$team does not match its entitlement (see limits/tiers.txt)"
+          done
+          grep -qxF 'reserved = 20' "$f" || fail "an unrelated line changed: reserved"
+          want=$(awk '$1 ~ /^team-/ { s += $2 } END { print s + 20 }' limits/tiers.txt)
+          got=$(sed -n 's/^total = //p' "$f")
+          test "$got" = "$want" || fail "total must equal every team quota plus reserved"
+          echo ok
