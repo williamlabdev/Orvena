@@ -31,13 +31,23 @@
 #      never by budget: a brute-force path may fit the budget and still not
 #      yield the answer (E, K), but no honest path may exceed it.
 #
-# Status: DRAFT-13 — 8 primaries (A–H) + 5 same-dimension alternates
-# (I/L easier, J/K/M harder). Calibration runs all 13; the set then freezes to
-# 8 by SELECTION only (swapping an alternate in is selection; editing any task
-# is a new set version). Selection criterion (0806 ruling): keep the task whose
-# failure-run death distribution is NOT a function of a single strategy metric;
-# a task whose pass/fail separates linearly on one action count measures the
-# strategy lottery and gets swapped.
+# Status: FROZEN-8 (ruled 0806) — the set is the 8 primaries A–H:
+#   capv2-locate-by-content, capv2-rename-propagate, capv2-migration-order,
+#   capv2-active-config, capv2-two-hop-registry, capv2-anchor-triplet,
+#   capv2-needle-semantic, capv2-converge-quota.
+# Alternates I–M stay on file as non-selected alternates. Selection rationale
+# (against the death table below; full material in SLICE-026): one task per
+# dimension; D kept as the table's only cross-cell gradient (35b escapes 2/3,
+# 14b 0/3); E kept as the single architecture sentinel (0/6 both cells, zero
+# noise — flips red the moment native grows an evidence-accumulation loop; K
+# is redundant with it, its extra difficulty unmeasurable at a zero floor);
+# M rejected because its inverted ladder measures budget-allocation habit
+# (re-read vs edit), not convergence — off the ruler's axis (condition 6).
+# Freezing was SELECTION only (no task edited; editing any task is a new set
+# version). Draft history: DRAFT-13 ran calibration on all 13; selection
+# criterion (0806 ruling): keep the task whose failure-run death distribution
+# is NOT a function of a single strategy metric; a task whose pass/fail
+# separates linearly on one action count measures the strategy lottery.
 #
 # The ruler protocol (comparability key: set version + max_steps + model +
 # agent version — bundles record all four). Both calibration cells run the
@@ -452,10 +462,10 @@ tasks:
           test "$got" = "$want" || fail "total must equal every team quota plus reserved"
           echo ok
 
-  # ═══ Alternates I–M (same dimension, one step easier or harder) ══════════
-  # Calibration runs these too; freezing selects 8 of 13. I/L are floor-side
-  # (easier), J/K/M ceiling-side (harder). Swapping is selection; editing is a
-  # new set version.
+  # ═══ Alternates I–M — NOT SELECTED (0806 freeze), kept on file ═══════════
+  # None of these count toward the frozen-8 reading. I/L are floor-side
+  # (easier), J/K/M ceiling-side (harder). Swapping one in later is selection
+  # (allowed, bumps nothing); editing any task is a new set version.
 
   # ── I. Verification, easier than A: the check quotes the target line ─────
 
