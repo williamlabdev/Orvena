@@ -147,6 +147,48 @@ pub struct RunReport {
     /// written before it existed read back as `unrecorded`.
     #[serde(default)]
     pub exit: ExitReason,
+    /// Evidence-window eviction telemetry (SLICE-032 instrument). 0.5.0's
+    /// death classification had to be reverse-read from action counts, which
+    /// cannot answer "was the needle evicted before the re-read?" — the v3
+    /// window-management axis is unjudgeable without this record. Same `None`
+    /// contract as `action_counts`: `None` means **not attributable** (a
+    /// wrapped agent's window is its own, and bundles predate the field),
+    /// never "no evictions". Observation only — must never feed back into
+    /// loop behavior (measurement/policy separation). Additive — stays v1.
+    #[serde(default)]
+    pub evictions: Option<Evictions>,
+    /// READ actions issued for a path whose most recent successful READ sits
+    /// in an evicted evidence block — the model going back for what the
+    /// window dropped. This number is the divide between an ordering death
+    /// (never went back) and a re-read death (went back and burned the budget,
+    /// the SLICE-031 spiral). `None` = not attributable, `Some(0)` = observed
+    /// and it never happened. Additive — stays v1.
+    #[serde(default)]
+    pub dropped_reread: Option<u32>,
+    /// Peak token occupancy of the assembled evidence window across all steps
+    /// (same estimator as the budget it is measured against). Verifies a
+    /// task's pressure coefficient actually reached the budget — a task that
+    /// never fills the window measures recall, not window management. `None`
+    /// = not attributable. Additive — stays v1.
+    #[serde(default)]
+    pub window_peak_tokens: Option<u32>,
+}
+
+/// Eviction telemetry for the native evidence window — see
+/// [`RunReport::evictions`]. A count alone cannot answer the death-table
+/// question "was the block that got evicted the one the task needed?", so the
+/// evicted step numbers travel with it.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Evictions {
+    /// How many window assemblies dropped at least one block (one assembly
+    /// per step — this counts steps-with-eviction, not evicted blocks).
+    pub count: u32,
+    /// The loop step whose window assembly first dropped a block. `None`
+    /// while `count` is 0.
+    pub first_step: Option<u32>,
+    /// Step numbers of every evidence block ever evicted, ascending. Retention
+    /// is a newest-first suffix, so once out a block stays out.
+    pub evicted_steps: Vec<u32>,
 }
 
 /// Why a run's loop stopped — see [`RunReport::exit`]. An observation field:
@@ -228,6 +270,11 @@ impl RunReport {
             token_accounting: TokenAccounting::default(),
             max_steps: 0,
             exit: ExitReason::default(),
+            // `None` until the native loop claims them on entry — same
+            // attribution contract as `action_counts`.
+            evictions: None,
+            dropped_reread: None,
+            window_peak_tokens: None,
         }
     }
 

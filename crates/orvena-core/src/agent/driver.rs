@@ -62,6 +62,19 @@ fn cap_run_output(raw: &str, hint: &str) -> (String, String) {
 /// key), not a ruler constant like `max_steps`.
 const EVIDENCE_BUDGET_TOKENS: u32 = 4096;
 
+/// One step's assembled evidence window plus what the assembly observed —
+/// the SLICE-032 instrument. The telemetry is observation only: nothing in it
+/// may alter what the window contains (measurement/policy separation), which
+/// is why it rides alongside `text` instead of shaping it.
+struct RetainedWindow {
+    /// The window exactly as the prompt carries it.
+    text: String,
+    /// Token cost of the kept blocks, by the same estimator the budget uses.
+    used_tokens: u32,
+    /// Step numbers of the blocks this assembly dropped, ascending.
+    evicted_steps: Vec<u32>,
+}
+
 /// Assemble the evidence window from the per-step log: newest blocks first
 /// under [`EVIDENCE_BUDGET_TOKENS`], rendered oldest-to-newest with a step
 /// label each. The newest block is always kept even when it alone exceeds the
@@ -69,7 +82,7 @@ const EVIDENCE_BUDGET_TOKENS: u32 = 4096;
 /// blocks are dropped the window opens by saying so: a silently short history
 /// reads as "that is all that happened", and a model that believes it will
 /// re-read what it has already seen.
-fn retained_evidence(log: &[(u32, String)]) -> String {
+fn retained_evidence(log: &[(u32, String)]) -> RetainedWindow {
     let mut kept = 0usize;
     let mut used = 0u32;
     for (_, block) in log.iter().rev() {
@@ -90,7 +103,11 @@ fn retained_evidence(log: &[(u32, String)]) -> String {
     for (step, block) in &log[log.len() - kept..] {
         out.push_str(&format!("── evidence from step {step} ──\n{block}"));
     }
-    out
+    RetainedWindow {
+        text: out,
+        used_tokens: used,
+        evicted_steps: log[..log.len() - kept].iter().map(|(s, _)| *s).collect(),
+    }
 }
 
 /// Bench-only loop options (D2: the ungoverned baseline is a bench flag, not a
@@ -153,12 +170,22 @@ pub(crate) async fn run_loop_with(
     // here rather than on first action: a run that emitted none must read as
     // "attributable, and it did nothing", not as "not attributable".
     report.action_counts = Some(crate::metrics::ActionCounts::default());
+    // Window telemetry (SLICE-032 instrument), claimed on entry under the same
+    // contract: a run whose window never evicted must read as "observed, and
+    // nothing was evicted", not as "not attributable".
+    report.evictions = Some(crate::metrics::Evictions::default());
+    report.dropped_reread = Some(0);
+    report.window_peak_tokens = Some(0);
     // One labeled block per step that produced evidence; the window the next
     // attempt sees is assembled by `retained_evidence` (accumulate, not
     // overwrite — slice-031). Both postures push into the same log: the window
     // depth is capability, not obligation, and a baseline with a shallower
     // memory would turn the differential into a measurement of the window.
     let mut evidence_log: Vec<(u32, String)> = Vec::new();
+    // Step of the most recent successful READ per path — the reference the
+    // dropped-reread instrument compares against the evicted set. Observation
+    // only; never consulted by the loop's own decisions.
+    let mut last_read: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
 
     for step_no in 1..=max_steps {
         report.steps = step_no;
@@ -166,14 +193,27 @@ pub(crate) async fn run_loop_with(
         // 1. prepare context (re-built each attempt; carries the accumulated
         // evidence window — tool output and failed-gate output from every
         // prior step that fits the evidence budget)
-        let prior_evidence = retained_evidence(&evidence_log);
+        let window = retained_evidence(&evidence_log);
+        // Record what the assembly observed. Retention is a monotone suffix
+        // (once out, a block stays out), so this assembly's evicted list IS
+        // the run's full evicted set so far — assignment, not union.
+        if let Some(peak) = report.window_peak_tokens.as_mut() {
+            *peak = (*peak).max(window.used_tokens);
+        }
+        if !window.evicted_steps.is_empty() {
+            if let Some(ev) = report.evictions.as_mut() {
+                ev.count += 1;
+                ev.first_step.get_or_insert(step_no);
+                ev.evicted_steps = window.evicted_steps.clone();
+            }
+        }
         let ctx = context::build(
             agent.root(),
             &scope,
             &role,
             budget,
             &task.instruction,
-            &prior_evidence,
+            &window.text,
             &cfg.commands,
         );
 
@@ -260,8 +300,18 @@ pub(crate) async fn run_loop_with(
                     }
                 }
                 step::Action::Read { path } => {
+                    // The dropped-reread instrument: this READ targets a path
+                    // whose last successful read now sits in an evicted block —
+                    // the model going back for what the window dropped. Counted
+                    // on the attempt (the behavior), not on the read succeeding.
+                    if last_read.get(&path).is_some_and(|s| window.evicted_steps.contains(s)) {
+                        if let Some(n) = report.dropped_reread.as_mut() {
+                            *n += 1;
+                        }
+                    }
                     match fs.read(&path) {
                         Ok(content) => {
+                            last_read.insert(path.clone(), step_no);
                             let (body, capped) = cap_run_output(
                                 &content,
                                 "READ shows the head; SEARCH for the rest",
@@ -456,12 +506,15 @@ mod tests {
     #[test]
     fn everything_fits_and_stays_in_step_order() {
         let log = vec![block(1, "first"), block(2, "second")];
-        let out = retained_evidence(&log);
+        let win = retained_evidence(&log);
+        let out = &win.text;
         let a = out.find("step 1").unwrap();
         let b = out.find("step 2").unwrap();
         assert!(a < b, "blocks render oldest-to-newest: {out}");
         assert!(out.contains("first") && out.contains("second"));
         assert!(!out.contains("dropped"), "nothing was dropped, nothing is claimed dropped");
+        assert!(win.evicted_steps.is_empty(), "telemetry agrees: nothing evicted");
+        assert!(win.used_tokens > 0, "kept blocks have a measured cost");
     }
 
     #[test]
@@ -470,13 +523,20 @@ mod tests {
         // the 4096 budget.
         let big = "x".repeat(8000);
         let log = vec![block(1, &big), block(2, &big), block(3, &big)];
-        let out = retained_evidence(&log);
+        let win = retained_evidence(&log);
+        let out = &win.text;
         assert!(!out.contains("step 1 ──"), "the oldest block is dropped");
         assert!(out.contains("step 2 ──") && out.contains("step 3 ──"));
         assert!(
             out.contains("(evidence from steps 1–1 dropped: evidence budget reached)"),
             "the drop is announced, not silent: {}",
             &out[..120]
+        );
+        assert_eq!(win.evicted_steps, vec![1], "telemetry names the evicted block");
+        assert!(
+            win.used_tokens <= EVIDENCE_BUDGET_TOKENS && win.used_tokens > 4000,
+            "the kept cost sits just under the budget: {}",
+            win.used_tokens
         );
     }
 
@@ -485,14 +545,22 @@ mod tests {
         // An empty window would be a regression to no memory at all.
         let huge = "y".repeat(40_000);
         let log = vec![block(1, "small"), block(2, &huge)];
-        let out = retained_evidence(&log);
-        assert!(out.contains("step 2 ──"), "the newest evidence is never evicted");
-        assert!(!out.contains("small"), "the older block yields");
+        let win = retained_evidence(&log);
+        assert!(win.text.contains("step 2 ──"), "the newest evidence is never evicted");
+        assert!(!win.text.contains("small"), "the older block yields");
+        assert_eq!(win.evicted_steps, vec![1]);
+        assert!(
+            win.used_tokens > EVIDENCE_BUDGET_TOKENS,
+            "the peak records the over-budget block at its real cost"
+        );
     }
 
     #[test]
     fn an_empty_log_is_an_empty_window() {
-        assert_eq!(retained_evidence(&[]), "");
+        let win = retained_evidence(&[]);
+        assert_eq!(win.text, "");
+        assert_eq!(win.used_tokens, 0);
+        assert!(win.evicted_steps.is_empty());
     }
 
     // ── the loop accumulates across steps, in both postures ────────────────
@@ -616,6 +684,93 @@ mod tests {
         let out = prompts.lock().unwrap().clone();
         assert_eq!(out.len(), 3, "the loop should run all three steps");
         out
+    }
+
+    /// Emits a fixed script of one action per step, never claiming done.
+    struct ScriptedReader {
+        script: Vec<&'static str>,
+        calls: Mutex<usize>,
+    }
+
+    #[async_trait]
+    impl Provider for ScriptedReader {
+        fn id(&self) -> &str {
+            "scripted-reader"
+        }
+        async fn chat(
+            &self,
+            _req: crate::provider::ChatRequest,
+        ) -> crate::error::Result<ChatResponse> {
+            let mut calls = self.calls.lock().unwrap();
+            let content = self.script[(*calls).min(self.script.len() - 1)];
+            *calls += 1;
+            Ok(ChatResponse { content: content.into(), input_tokens: 0, output_tokens: 0 })
+        }
+    }
+
+    #[test]
+    fn eviction_telemetry_records_the_drop_and_the_reread() {
+        // Two ~2050-token reads fill the 4096 budget; assembling step 3's
+        // window must evict step 1's block — and step 3 re-reading that same
+        // path is exactly the dropped-reread the instrument exists to count.
+        let root =
+            std::env::temp_dir().join(format!("orvena-window-telemetry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let big = format!("{}\n", "x".repeat(80)).repeat(110);
+        std::fs::write(root.join("big1.txt"), &big).unwrap();
+        std::fs::write(root.join("big2.txt"), &big).unwrap();
+
+        let provider = ScriptedReader {
+            script: vec!["<<<READ big1.txt\n>>>", "<<<READ big2.txt\n>>>", "<<<READ big1.txt\n>>>"],
+            calls: Mutex::new(0),
+        };
+        let agent = super::super::Agent::with_provider(config(vec![]), &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report =
+            rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let ev = report.evictions.expect("the native loop claims the instrument on entry");
+        assert_eq!(ev.count, 1, "only step 3's assembly evicted");
+        assert_eq!(ev.first_step, Some(3));
+        assert_eq!(ev.evicted_steps, vec![1], "the evicted block is named, not just counted");
+        assert_eq!(
+            report.dropped_reread,
+            Some(1),
+            "step 3 re-read the path whose evidence step 3's window dropped"
+        );
+        let peak = report.window_peak_tokens.expect("claimed on entry");
+        assert!(
+            peak > 2000 && peak <= EVIDENCE_BUDGET_TOKENS,
+            "the peak is one big block's cost, under the budget: {peak}"
+        );
+    }
+
+    #[test]
+    fn a_run_without_pressure_reads_observed_and_quiet_not_unattributable() {
+        // `Some(0)`/empty vs `None` is the same contract as `action_counts`:
+        // a wrapped agent has no readable window, a quiet native run does.
+        let root = std::env::temp_dir().join(format!("orvena-window-quiet-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), "tiny\n").unwrap();
+
+        let provider = ScriptedReader { script: vec!["<<<READ a.txt\n>>>"], calls: Mutex::new(0) };
+        let agent = super::super::Agent::with_provider(config(vec![]), &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report =
+            rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let ev = report.evictions.expect("observed, and nothing was evicted");
+        assert_eq!(ev.count, 0);
+        assert_eq!(ev.first_step, None);
+        assert!(ev.evicted_steps.is_empty());
+        assert_eq!(report.dropped_reread, Some(0), "re-reads without eviction do not count");
+        assert!(report.window_peak_tokens.unwrap() > 0, "the window was occupied, just small");
     }
 
     #[test]

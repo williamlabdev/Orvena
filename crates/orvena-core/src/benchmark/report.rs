@@ -84,6 +84,22 @@ pub struct TaskResult {
     /// `steps` is a budget artifact, not a convergence measurement.
     #[serde(default)]
     pub exit: ExitReason,
+    /// Evidence-window eviction telemetry, carried verbatim from the bundle
+    /// (see [`crate::metrics::RunReport::evictions`]). `None` = unattributable
+    /// (wrapped agent, or a pre-field report), never "no evictions".
+    #[serde(default)]
+    pub evictions: Option<crate::metrics::Evictions>,
+    /// READs of already-evicted paths (see
+    /// [`crate::metrics::RunReport::dropped_reread`]) — the ordering-death vs
+    /// re-read-death divide. Same `None` contract as `evictions`.
+    #[serde(default)]
+    pub dropped_reread: Option<u32>,
+    /// Peak window occupancy in tokens (see
+    /// [`crate::metrics::RunReport::window_peak_tokens`]) — whether the task's
+    /// pressure coefficient actually reached the evidence budget. Same `None`
+    /// contract as `evictions`.
+    #[serde(default)]
+    pub window_peak_tokens: Option<u32>,
 }
 
 /// The identity of a run, as opposed to its configuration.
@@ -261,6 +277,16 @@ pub struct DeathRow {
     /// Hits per SEARCH in order, verbatim from the run (`None` = errored).
     pub search_hits: Vec<Option<u32>>,
     pub search: SearchOutcome,
+    /// Window telemetry (SLICE-032 instrument), verbatim from the run — the
+    /// v3 death classification reads these, not `action_counts`, to separate
+    /// an ordering death from a re-read death. `None` = unattributable, same
+    /// contract as `action_counts`.
+    #[serde(default)]
+    pub evictions: Option<crate::metrics::Evictions>,
+    #[serde(default)]
+    pub dropped_reread: Option<u32>,
+    #[serde(default)]
+    pub window_peak_tokens: Option<u32>,
 }
 
 impl DeathRow {
@@ -277,6 +303,9 @@ impl DeathRow {
             action_counts: r.action_counts,
             search_hits: r.search_hits.clone(),
             search: SearchOutcome::classify(r.action_counts.as_ref(), &r.search_hits),
+            evictions: r.evictions.clone(),
+            dropped_reread: r.dropped_reread,
+            window_peak_tokens: r.window_peak_tokens,
         }
     }
 }
@@ -614,6 +643,9 @@ mod tests {
             action_counts: Some(counts(1)),
             search_hits: Vec::new(),
             search,
+            evictions: None,
+            dropped_reread: None,
+            window_peak_tokens: None,
         };
         let table = SearchSolveTable::tally(&[
             row(true, SearchOutcome::Hit),

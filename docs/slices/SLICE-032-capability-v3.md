@@ -2,6 +2,11 @@
 
 > 狀態:**已裁可(0807,william,四項全裁)**——軸向與題型空間立案,
 > 題目未草擬、未探針、未校準;下一刀=遙測儀器(先儀器、再探針、再題)。
+> 進度:**遙測儀器已落地(0807)**——bundle/report per-run 三欄位
+> `evictions`(count/first_step/evicted_steps)、`dropped_reread`、
+> `window_peak_tokens`,`None`=不可歸因(沿 `action_counts` 契約),
+> 加欄位不動 v1 驗證(validator 是必要欄位檢查,非封閉 schema);
+> agent 版號未動,視窗行為零改變(僅觀測)。
 > 審查:已過 CTR + fresh-eyes(0806)。
 > 依據:SLICE-031「這對尺意味著什麼」節(v2 兩格在 0.5.0 幾乎重飽和:
 > 35b 24/24、14b 23/24)+ 0.5.0 實作事實(本檔「機制基礎」節,逐條查過碼)。

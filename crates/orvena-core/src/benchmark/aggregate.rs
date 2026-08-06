@@ -224,6 +224,9 @@ mod tests {
             provider_error: None,
             token_accounting: TokenAccounting::Observed,
             exit: crate::metrics::ExitReason::GatesPassed,
+            evictions: None,
+            dropped_reread: None,
+            window_peak_tokens: None,
         }
     }
 

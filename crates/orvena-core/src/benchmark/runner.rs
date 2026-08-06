@@ -105,6 +105,9 @@ pub async fn run_benchmark(
                 provider_error: None,
                 token_accounting: TokenAccounting::default(),
                 exit: ExitReason::Unrecorded,
+                evictions: None,
+                dropped_reread: None,
+                window_peak_tokens: None,
             });
             continue;
         }
@@ -204,6 +207,9 @@ pub async fn run_benchmark(
                     provider_error: report.provider_error,
                     token_accounting: report.token_accounting,
                     exit: report.exit,
+                    evictions: report.evictions,
+                    dropped_reread: report.dropped_reread,
+                    window_peak_tokens: report.window_peak_tokens,
                 }
             }
             Err(e) => TaskResult {
@@ -235,6 +241,9 @@ pub async fn run_benchmark(
                 token_accounting: TokenAccounting::default(),
                 // No bundle was written, so there is no recorded exit either.
                 exit: ExitReason::Unrecorded,
+                evictions: None,
+                dropped_reread: None,
+                window_peak_tokens: None,
             },
         });
     }
@@ -781,6 +790,9 @@ mod tests {
             provider_error: None,
             token_accounting: TokenAccounting::default(),
             exit: ExitReason::GatesPassed,
+            evictions: None,
+            dropped_reread: None,
+            window_peak_tokens: None,
         }
     }
 
