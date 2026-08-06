@@ -27,6 +27,7 @@ pub async fn run(
     repeat: u32,
     governance: Option<String>,
     agent: String,
+    all_tasks: bool,
 ) -> Result<()> {
     load_dotenv();
 
@@ -40,7 +41,7 @@ pub async fn run(
     }
     preflight_provider(&config.agent.provider)?;
 
-    let set: BenchTaskSet = match &tasks {
+    let mut set: BenchTaskSet = match &tasks {
         Some(path) => {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("reading task set {}", path.display()))?;
@@ -51,6 +52,25 @@ pub async fn run(
     };
     if set.tasks.is_empty() {
         bail!("the task set is empty — nothing to benchmark");
+    }
+    if all_tasks {
+        if !set.frozen.is_empty() {
+            println!(
+                "--all-tasks: ignoring the frozen selection ({} of {} tasks) — this run is \
+                 calibration, not the set's official reading\n",
+                set.frozen.len(),
+                set.tasks.len()
+            );
+        }
+    } else if !set.frozen.is_empty() {
+        let on_file = set.tasks.len();
+        set.apply_frozen_selection().map_err(anyhow::Error::msg)?;
+        println!(
+            "frozen selection: running {} of {} task(s) on file (alternates excluded; \
+             `--all-tasks` runs everything)\n",
+            set.tasks.len(),
+            on_file
+        );
     }
 
     // Governance postures: default = light (the previous behavior). More than

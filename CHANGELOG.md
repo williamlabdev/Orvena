@@ -8,6 +8,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`frozen:` task selection — the ruler's official reading, machine-readable**
+  (`benchmarks/capability-v2.yaml`, `crates/orvena-core/src/benchmark/task.rs`,
+  `orvena bench --all-tasks`) — a task set may now declare a top-level
+  `frozen:` id list; `bench` runs exactly those tasks by default (in file
+  order) and says so, keeping on-file alternates out of official runs by
+  construction instead of by header discipline. An id that names no task fails
+  loudly — a typo must not silently shrink the ruler. `--all-tasks` overrides
+  for recalibration and the output labels such runs as not the set's official
+  reading. capability-v2's list carries the frozen-8 ruling (0806): editing
+  the list is selection, editing a task is a new set version.
+
 - **File inventory in context — the map the loop never had** (slice-025,
   `crates/orvena-core/src/agent/context.rs`) — the prompt now lists every file
   in the workspace by name under `PROJECT FILES`, contents excluded. Until now

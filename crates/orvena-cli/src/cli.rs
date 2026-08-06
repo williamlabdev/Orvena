@@ -81,6 +81,11 @@ enum Command {
         /// the loop.
         #[arg(long = "agent", default_value = "native")]
         agent: String,
+        /// Ignore the task set's `frozen:` selection and run every task on
+        /// file, alternates included (calibration / recalibration runs).
+        /// Numbers from such a run are NOT the set's official reading.
+        #[arg(long = "all-tasks", default_value_t = false)]
+        all_tasks: bool,
     },
     /// Preflight: provider readiness, config validity.
     Doctor,
@@ -99,8 +104,8 @@ pub async fn run() -> i32 {
             )
         }
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
-        Command::Bench { provider, tasks, out, repeat, governance, agent } => {
-            commands::bench::run(provider, tasks, out, repeat, governance, agent).await
+        Command::Bench { provider, tasks, out, repeat, governance, agent, all_tasks } => {
+            commands::bench::run(provider, tasks, out, repeat, governance, agent, all_tasks).await
         }
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),

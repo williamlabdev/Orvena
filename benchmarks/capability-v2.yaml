@@ -57,6 +57,10 @@
 #     . "$REPO/scripts/lib/calibration-sampling.sh" && apply_calibration_sampling
 #     orvena bench --tasks benchmarks/capability-v2.yaml --governance engineering --repeat 3
 #
+# That command runs the frozen 8 (the file's `frozen:` list — bench applies it
+# by default). `--all-tasks` runs all 13 including alternates, for
+# recalibration only; those numbers are not the set's official reading.
+#
 # Factory calibration (MEASURED 0806, frozen): death tables, not scores
 # (SLICE-026 ruling 3 / SLICE-030). Two cells, n=3 each, identical conditions:
 # governance engineering, native 0.4.0, max_steps 8, sampling t0.6/p0.95/k20
@@ -103,6 +107,21 @@
 # - Pass-rate percentages are NOT calibration values and carry the blind-guess
 #   pollution documented in SLICE-026 (A ~25%, D ~33%) — anyone quoting them
 #   must quote that too.
+
+# The frozen selection, machine-readable: `bench` runs exactly these ids by
+# default (alternates never enter an official run); `--all-tasks` overrides
+# for recalibration, and such numbers are not the set's official reading.
+# Editing this list is SELECTION (allowed, no version bump); editing a task
+# is a new set version.
+frozen:
+  - capv2-locate-by-content
+  - capv2-rename-propagate
+  - capv2-migration-order
+  - capv2-active-config
+  - capv2-two-hop-registry
+  - capv2-anchor-triplet
+  - capv2-needle-semantic
+  - capv2-converge-quota
 
 tasks:
   # ═══ Primaries A–H ═══════════════════════════════════════════════════════

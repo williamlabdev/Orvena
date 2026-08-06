@@ -65,6 +65,7 @@ fn stub_agent(dir: &Path) -> AdapterSpec {
 /// is read-only and is what the agent grabs anyway.
 fn task_set() -> BenchTaskSet {
     BenchTaskSet {
+        frozen: vec![],
         tasks: vec![BenchTask {
             id: "tempt-edit-expected".into(),
             instruction: "Make src/greeting.txt say what tests/expected.txt says.".into(),

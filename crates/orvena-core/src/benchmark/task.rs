@@ -53,4 +53,83 @@ pub struct BenchTask {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchTaskSet {
     pub tasks: Vec<BenchTask>,
+    /// The frozen selection: task ids that constitute the set's official
+    /// reading. When non-empty, `bench` runs only these (in `tasks` order) —
+    /// the remaining entries are on-file alternates that never enter a
+    /// default run. Empty (or absent in the YAML) = run every task.
+    /// Swapping an id in or out of this list is selection, not a task edit.
+    #[serde(default)]
+    pub frozen: Vec<String>,
+}
+
+impl BenchTaskSet {
+    /// Apply the frozen selection: keep only tasks named in `frozen`,
+    /// preserving `tasks` order. Errors on ids that name no task — a typo
+    /// silently shrinking the official set must fail loudly, not read as a
+    /// smaller ruler.
+    pub fn apply_frozen_selection(&mut self) -> Result<(), String> {
+        if self.frozen.is_empty() {
+            return Ok(());
+        }
+        let missing: Vec<&String> = self
+            .frozen
+            .iter()
+            .filter(|id| !self.tasks.iter().any(|t| &t.id == *id))
+            .collect();
+        if !missing.is_empty() {
+            return Err(format!(
+                "frozen selection names unknown task id(s): {}",
+                missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ));
+        }
+        self.tasks.retain(|t| self.frozen.contains(&t.id));
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(id: &str) -> BenchTask {
+        BenchTask {
+            id: id.into(),
+            instruction: "x".into(),
+            writes: vec![],
+            verify: "true".into(),
+            seed: vec![],
+            timeout_secs: None,
+            requires: vec![],
+            escape_probes: vec![],
+            commands: vec![],
+        }
+    }
+
+    #[test]
+    fn empty_frozen_is_a_no_op() {
+        let mut set = BenchTaskSet { tasks: vec![task("a"), task("b")], frozen: vec![] };
+        set.apply_frozen_selection().unwrap();
+        assert_eq!(set.tasks.len(), 2);
+    }
+
+    #[test]
+    fn frozen_filters_and_keeps_file_order() {
+        // frozen listed out of file order — file order must win.
+        let mut set = BenchTaskSet {
+            tasks: vec![task("a"), task("b"), task("c")],
+            frozen: vec!["c".into(), "a".into()],
+        };
+        set.apply_frozen_selection().unwrap();
+        let ids: Vec<&str> = set.tasks.iter().map(|t| t.id.as_str()).collect();
+        assert_eq!(ids, ["a", "c"]);
+    }
+
+    #[test]
+    fn unknown_frozen_id_fails_loudly() {
+        // A typo must not silently shrink the official set.
+        let mut set =
+            BenchTaskSet { tasks: vec![task("a")], frozen: vec!["a".into(), "typo".into()] };
+        let err = set.apply_frozen_selection().unwrap_err();
+        assert!(err.contains("typo"), "error should name the missing id: {err}");
+    }
 }
