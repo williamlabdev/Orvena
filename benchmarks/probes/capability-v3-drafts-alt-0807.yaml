@@ -1,0 +1,1093 @@
+# Orvena capability set v3 — the window-management ruler. DRAFT, NOT A READING.
+# Design and rulings: docs/slices/SLICE-032-capability-v3.md (ratified 0807).
+#
+# STATUS: DRAFT (0807). Three tasks drafted (N1, N3, N4); N2 still to be recast.
+# Nothing here has been probed or calibrated, there is no `frozen:` list, and no
+# number taken from this file is a reading. The calibration protocol order is
+# instrument -> probe -> task -> calibration -> freeze; this file is the third
+# step's output and the probes have NOT been run.
+#
+# What v3 measures (the axis v2 no longer discriminates — v2 re-saturated on
+# 0.5.0 at 35b 24/24, 14b 23/24): not evidence ACQUISITION but evidence
+# MANAGEMENT. The accumulated evidence window is a bounded resource
+# (EVIDENCE_BUDGET_TOKENS = 4096, oldest whole blocks dropped first); the
+# question is whether a model orders its reads so what it needs last is still
+# there, goes back for what the window dropped, and does not spend the budget
+# on reads it does not need.
+#
+# v3 numbers are NEVER pooled with v1 or v2 — the comparability key's first
+# element is `capability-v3.yaml @ <commit>`.
+#
+# PRESSURE COEFFICIENT (condition 12): every size in this file is calibrated
+# against agent 0.5.0, EVIDENCE_BUDGET_TOKENS = 4096, estimate_tokens =
+# ceil(chars/4), and cap_run_output = 100 lines / 8192 bytes per READ block.
+# Those are AGENT constants, not ruler constants. If the agent changes its
+# budget, its retention policy, or learns to summarise, v3's readings move —
+# that is v3 doing what E did in v2 (detecting an agent change), not the ruler
+# breaking. MAX_STEPS = 8 remains a frozen constant OF THE RULER.
+#
+# Design conditions: v1's 1-4 and v2's 5-9 are inherited whole; SLICE-032 adds
+# 10-12; drafting these three tasks forced 13-14 (see the slice for the code
+# citations — both were found by reading driver.rs/context.rs, not by design):
+#
+#  13. The writable target must be a CLOSED, PER-ROUND GROWING key set with a
+#      strict per-key value format. Reason: the writable file's contents are
+#      re-printed into the prompt EVERY step and are priced against the ROLE
+#      budget, not against the evidence budget (context.rs:56-74) — so it is a
+#      free, never-evicted scratchpad. Without condition 13 every v3 task is
+#      passable by copying the needle into the writable file and never managing
+#      the window at all, and the telemetry cannot tell that apart from good
+#      ordering (both show dropped_reread = 0).
+#      The construction that closes it: a key may not appear before the check
+#      has asked for it, and the check will not ask for the next key until the
+#      previous one holds its CORRECT value — so there is never a legal resting
+#      place for a value the model wants to stash. As a by-product this is also
+#      what enforces condition 11 against a batching model: it cannot write all
+#      the keys in one step even when it has read everything.
+#  14. Necessary evidence must not be cheaply extractable by a TARGETED SEARCH.
+#      Reason: SEARCH returns only matching lines (driver.rs:340-356) and READ's
+#      truncation note literally tells the model "SEARCH for the rest" — so a
+#      value sitting on a distinguishable line costs ~1 line, not a whole block,
+#      and the pressure coefficient evaporates. The construction used here: the
+#      records are UNIFORM and the operative value is POSITIONAL (the last line).
+#      No pattern formable without having read the file singles it out, and a
+#      catch-all SEARCH returns every line WITH a `path:line:` prefix — dearer
+#      than the READ it replaced.
+#
+# Each task's condition-11 self-test (the batching walkthrough that must NOT
+# finish at step 2) is written out in SLICE-032 next to the task it belongs to.
+#
+# The ruler protocol is v2's, unchanged (same two cells, same sampling, n=3,
+# governance engineering, death table not pass rate):
+#
+#     orvena init --provider ollama --model qwen3:14b     # or qwen3.6:35b
+#     . "$REPO/scripts/lib/calibration-sampling.sh" && apply_calibration_sampling
+#     orvena bench --tasks benchmarks/capability-v3.yaml --governance engineering --repeat 3
+#
+# Death classification uses the SLICE-032 instrument (evictions /
+# dropped_reread / window_peak_tokens). KNOWN INSTRUMENT GAP, must be closed
+# before these tasks are calibrated: `dropped_reread` counts a re-READ only
+# (driver.rs:302-310) and is blind to re-acquisition by SEARCH — which is the
+# recovery the READ truncation note actively recommends. A run that goes back
+# for dropped evidence with SEARCH is scored identically to one that invented
+# the value from memory, and those are the two sides v3 exists to separate.
+
+tasks:
+  # ── N1. Ordering / re-read decision ──────────────────────────────────────
+  # The needle is cheap to fetch and needed LAST; the two limits are full-block
+  # reads. Read the needle first and two full reads evict it — pass by ordering
+  # it last, or by going back for it after the drop; die by writing a token from
+  # memory (the grounding rule turns that into burnt steps, not a wrong answer).
+
+  - id: capv3-order-the-needle
+    instruction: "tests/check.sh rejects rollout/plan.conf and reports only the FIRST problem each time it runs. It asks for one setting at a time and names the read-only file under rollout/refs/ that settles the setting it is asking about. Fix rollout/plan.conf until the check passes. The plan may hold only the settings the check has already asked for — nothing else may be written into it."
+    writes: [rollout/plan.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: rollout/plan.conf
+        contents: |
+          window_sec = 0
+      - path: rollout/refs/ta.txt
+        contents: |
+          slot-0001  us-east-2   seal   armed   005ccd  seal acknowledged by relay    1111
+          slot-0002  ap-south-1  warm   ready   01f5e6  warm pool refreshed nightly   1124
+          slot-0003  sa-east-1   hold   paused  038eff  carried from prior quarter    1137
+          slot-0004  eu-west-1   drain  sealed  052818  drain scheduled, no action    1150
+          slot-0005  eu-west-2   seal   armed   06c131  no exception recorded         1163
+          slot-0006  us-east-1   warm   ready   085a4a  capacity review pending       1176
+          slot-0007  us-east-2   hold   paused  09f363  held for entitlement audit    1189
+          slot-0008  ap-south-1  drain  sealed  0b8c7c  rotation window verified      1202
+          slot-0009  sa-east-1   seal   armed   0d2595  seal acknowledged by relay    1215
+          slot-0010  eu-west-1   warm   ready   0ebeae  warm pool refreshed nightly   1228
+          slot-0011  eu-west-2   hold   paused  1057c7  carried from prior quarter    1241
+          slot-0012  us-east-1   drain  sealed  11f0e0  drain scheduled, no action    1254
+          slot-0013  us-east-2   seal   armed   1389f9  no exception recorded         1267
+          slot-0014  ap-south-1  warm   ready   152312  capacity review pending       1280
+          slot-0015  sa-east-1   hold   paused  16bc2b  held for entitlement audit    1293
+          slot-0016  eu-west-1   drain  sealed  185544  rotation window verified      1306
+          slot-0017  eu-west-2   seal   armed   19ee5d  seal acknowledged by relay    1319
+          slot-0018  us-east-1   warm   ready   1b8776  warm pool refreshed nightly   1332
+          slot-0019  us-east-2   hold   paused  1d208f  carried from prior quarter    1345
+          slot-0020  ap-south-1  drain  sealed  1eb9a8  drain scheduled, no action    1358
+          slot-0021  sa-east-1   seal   armed   2052c1  no exception recorded         1371
+          slot-0022  eu-west-1   warm   ready   21ebda  capacity review pending       1384
+          slot-0023  eu-west-2   hold   paused  2384f3  held for entitlement audit    1397
+          slot-0024  us-east-1   drain  sealed  251e0c  rotation window verified      1410
+          slot-0025  us-east-2   seal   armed   26b725  seal acknowledged by relay    1423
+          slot-0026  ap-south-1  warm   ready   28503e  warm pool refreshed nightly   1436
+          slot-0027  sa-east-1   hold   paused  29e957  carried from prior quarter    1449
+          slot-0028  eu-west-1   drain  sealed  2b8270  drain scheduled, no action    1462
+          slot-0029  eu-west-2   seal   armed   2d1b89  no exception recorded         1475
+          slot-0030  us-east-1   warm   ready   2eb4a2  capacity review pending       1488
+          slot-0031  us-east-2   hold   paused  304dbb  held for entitlement audit    1501
+          slot-0032  ap-south-1  drain  sealed  31e6d4  rotation window verified      1514
+          slot-0033  sa-east-1   seal   armed   337fed  seal acknowledged by relay    1527
+          slot-0034  eu-west-1   warm   ready   351906  warm pool refreshed nightly   1540
+          slot-0035  eu-west-2   hold   paused  36b21f  carried from prior quarter    1553
+          slot-0036  us-east-1   drain  sealed  384b38  drain scheduled, no action    1566
+          slot-0037  us-east-2   seal   armed   39e451  no exception recorded         1579
+          slot-0038  ap-south-1  warm   ready   3b7d6a  capacity review pending       1592
+          slot-0039  sa-east-1   hold   paused  3d1683  held for entitlement audit    1605
+          slot-0040  eu-west-1   drain  sealed  3eaf9c  rotation window verified      1618
+          slot-0041  eu-west-2   seal   armed   4048b5  seal acknowledged by relay    1631
+          slot-0042  us-east-1   warm   ready   41e1ce  warm pool refreshed nightly   1644
+          slot-0043  us-east-2   hold   paused  437ae7  carried from prior quarter    1657
+          slot-0044  ap-south-1  drain  sealed  451400  drain scheduled, no action    1670
+          slot-0045  sa-east-1   seal   armed   46ad19  no exception recorded         1683
+          slot-0046  eu-west-1   warm   ready   484632  capacity review pending       1696
+          slot-0047  eu-west-2   hold   paused  49df4b  held for entitlement audit    1709
+          slot-0048  us-east-1   drain  sealed  4b7864  rotation window verified      1722
+          slot-0049  us-east-2   seal   armed   4d117d  seal acknowledged by relay    1735
+          slot-0050  ap-south-1  warm   ready   4eaa96  warm pool refreshed nightly   1748
+          slot-0051  sa-east-1   hold   paused  5043af  carried from prior quarter    1761
+          slot-0052  eu-west-1   drain  sealed  51dcc8  drain scheduled, no action    1774
+          slot-0053  eu-west-2   seal   armed   5375e1  no exception recorded         1787
+          slot-0054  us-east-1   warm   ready   550efa  capacity review pending       1800
+          slot-0055  us-east-2   hold   paused  56a813  held for entitlement audit    1813
+          slot-0056  ap-south-1  drain  sealed  58412c  rotation window verified      1826
+          slot-0057  sa-east-1   seal   armed   59da45  seal acknowledged by relay    1839
+          slot-0058  eu-west-1   warm   ready   5b735e  warm pool refreshed nightly   1852
+          slot-0059  eu-west-2   hold   paused  5d0c77  carried from prior quarter    1865
+          slot-0060  us-east-1   drain  sealed  5ea590  drain scheduled, no action    1878
+          slot-0061  us-east-2   seal   armed   603ea9  no exception recorded         1891
+          slot-0062  ap-south-1  warm   ready   61d7c2  capacity review pending       1904
+          slot-0063  sa-east-1   hold   paused  6370db  held for entitlement audit    1917
+          slot-0064  eu-west-1   drain  sealed  6509f4  rotation window verified      1930
+          slot-0065  eu-west-2   seal   armed   66a30d  seal acknowledged by relay    1943
+          slot-0066  us-east-1   warm   ready   683c26  warm pool refreshed nightly   1956
+          slot-0067  us-east-2   hold   paused  69d53f  carried from prior quarter    1969
+          slot-0068  ap-south-1  drain  sealed  6b6e58  drain scheduled, no action    1982
+          slot-0069  sa-east-1   seal   armed   6d0771  no exception recorded         1995
+          slot-0070  eu-west-1   warm   ready   6ea08a  capacity review pending       2008
+          slot-0071  eu-west-2   hold   paused  7039a3  held for entitlement audit    2021
+          slot-0072  us-east-1   drain  sealed  71d2bc  rotation window verified      2034
+          slot-0073  us-east-2   seal   armed   736bd5  seal acknowledged by relay    2047
+          slot-0074  ap-south-1  warm   ready   7504ee  warm pool refreshed nightly   2060
+          slot-0075  sa-east-1   hold   paused  769e07  carried from prior quarter    2073
+          slot-0076  eu-west-1   drain  sealed  783720  drain scheduled, no action    2086
+          slot-0077  eu-west-2   seal   armed   79d039  no exception recorded         2099
+          slot-0078  us-east-1   warm   ready   7b6952  capacity review pending       2112
+          slot-0079  us-east-2   hold   paused  7d026b  held for entitlement audit    2125
+          slot-0080  ap-south-1  drain  sealed  7e9b84  rotation window verified      2138
+          slot-0081  sa-east-1   seal   armed   80349d  seal acknowledged by relay    2151
+          slot-0082  eu-west-1   warm   ready   81cdb6  warm pool refreshed nightly   2164
+          slot-0083  eu-west-2   hold   paused  8366cf  carried from prior quarter    2177
+          slot-0084  us-east-1   drain  sealed  84ffe8  drain scheduled, no action    2190
+          slot-0085  us-east-2   seal   armed   869901  no exception recorded         2203
+          slot-0086  ap-south-1  warm   ready   88321a  capacity review pending       2216
+          slot-0087  sa-east-1   hold   paused  89cb33  held for entitlement audit    2229
+          slot-0088  eu-west-1   drain  sealed  8b644c  rotation window verified      2242
+          slot-0089  eu-west-2   seal   armed   8cfd65  seal acknowledged by relay    2255
+          slot-0090  us-east-1   warm   ready   8e967e  warm pool refreshed nightly   2268
+          slot-0091  us-east-2   hold   paused  902f97  carried from prior quarter    2281
+          slot-0092  ap-south-1  drain  sealed  91c8b0  drain scheduled, no action    2294
+          slot-0093  sa-east-1   seal   armed   9361c9  no exception recorded         2307
+          slot-0094  eu-west-1   warm   ready   94fae2  capacity review pending       2320
+          slot-0095  eu-west-2   hold   paused  9693fb  held for entitlement audit    2333
+          slot-0096  us-east-1   drain  sealed  982d14  rotation window verified      2346
+          slot-0097  us-east-2   seal   armed   99c62d  seal acknowledged by relay    2359
+          slot-0098  ap-south-1  warm   ready   9b5f46  warm pool refreshed nightly   4170
+      - path: rollout/refs/tb.txt
+        contents: |
+          slot-0001  sa-east-1   seal   armed   015445  seal acknowledged by relay    1407
+          slot-0002  eu-west-1   warm   ready   02ed5e  warm pool refreshed nightly   1420
+          slot-0003  eu-west-2   hold   paused  048677  carried from prior quarter    1433
+          slot-0004  us-east-1   drain  sealed  061f90  drain scheduled, no action    1446
+          slot-0005  us-east-2   seal   armed   07b8a9  no exception recorded         1459
+          slot-0006  ap-south-1  warm   ready   0951c2  capacity review pending       1472
+          slot-0007  sa-east-1   hold   paused  0aeadb  held for entitlement audit    1485
+          slot-0008  eu-west-1   drain  sealed  0c83f4  rotation window verified      1498
+          slot-0009  eu-west-2   seal   armed   0e1d0d  seal acknowledged by relay    1511
+          slot-0010  us-east-1   warm   ready   0fb626  warm pool refreshed nightly   1524
+          slot-0011  us-east-2   hold   paused  114f3f  carried from prior quarter    1537
+          slot-0012  ap-south-1  drain  sealed  12e858  drain scheduled, no action    1550
+          slot-0013  sa-east-1   seal   armed   148171  no exception recorded         1563
+          slot-0014  eu-west-1   warm   ready   161a8a  capacity review pending       1576
+          slot-0015  eu-west-2   hold   paused  17b3a3  held for entitlement audit    1589
+          slot-0016  us-east-1   drain  sealed  194cbc  rotation window verified      1602
+          slot-0017  us-east-2   seal   armed   1ae5d5  seal acknowledged by relay    1615
+          slot-0018  ap-south-1  warm   ready   1c7eee  warm pool refreshed nightly   1628
+          slot-0019  sa-east-1   hold   paused  1e1807  carried from prior quarter    1641
+          slot-0020  eu-west-1   drain  sealed  1fb120  drain scheduled, no action    1654
+          slot-0021  eu-west-2   seal   armed   214a39  no exception recorded         1667
+          slot-0022  us-east-1   warm   ready   22e352  capacity review pending       1680
+          slot-0023  us-east-2   hold   paused  247c6b  held for entitlement audit    1693
+          slot-0024  ap-south-1  drain  sealed  261584  rotation window verified      1706
+          slot-0025  sa-east-1   seal   armed   27ae9d  seal acknowledged by relay    1719
+          slot-0026  eu-west-1   warm   ready   2947b6  warm pool refreshed nightly   1732
+          slot-0027  eu-west-2   hold   paused  2ae0cf  carried from prior quarter    1745
+          slot-0028  us-east-1   drain  sealed  2c79e8  drain scheduled, no action    1758
+          slot-0029  us-east-2   seal   armed   2e1301  no exception recorded         1771
+          slot-0030  ap-south-1  warm   ready   2fac1a  capacity review pending       1784
+          slot-0031  sa-east-1   hold   paused  314533  held for entitlement audit    1797
+          slot-0032  eu-west-1   drain  sealed  32de4c  rotation window verified      1810
+          slot-0033  eu-west-2   seal   armed   347765  seal acknowledged by relay    1823
+          slot-0034  us-east-1   warm   ready   36107e  warm pool refreshed nightly   1836
+          slot-0035  us-east-2   hold   paused  37a997  carried from prior quarter    1849
+          slot-0036  ap-south-1  drain  sealed  3942b0  drain scheduled, no action    1862
+          slot-0037  sa-east-1   seal   armed   3adbc9  no exception recorded         1875
+          slot-0038  eu-west-1   warm   ready   3c74e2  capacity review pending       1888
+          slot-0039  eu-west-2   hold   paused  3e0dfb  held for entitlement audit    1901
+          slot-0040  us-east-1   drain  sealed  3fa714  rotation window verified      1914
+          slot-0041  us-east-2   seal   armed   41402d  seal acknowledged by relay    1927
+          slot-0042  ap-south-1  warm   ready   42d946  warm pool refreshed nightly   1940
+          slot-0043  sa-east-1   hold   paused  44725f  carried from prior quarter    1953
+          slot-0044  eu-west-1   drain  sealed  460b78  drain scheduled, no action    1966
+          slot-0045  eu-west-2   seal   armed   47a491  no exception recorded         1979
+          slot-0046  us-east-1   warm   ready   493daa  capacity review pending       1992
+          slot-0047  us-east-2   hold   paused  4ad6c3  held for entitlement audit    2005
+          slot-0048  ap-south-1  drain  sealed  4c6fdc  rotation window verified      2018
+          slot-0049  sa-east-1   seal   armed   4e08f5  seal acknowledged by relay    2031
+          slot-0050  eu-west-1   warm   ready   4fa20e  warm pool refreshed nightly   2044
+          slot-0051  eu-west-2   hold   paused  513b27  carried from prior quarter    2057
+          slot-0052  us-east-1   drain  sealed  52d440  drain scheduled, no action    2070
+          slot-0053  us-east-2   seal   armed   546d59  no exception recorded         2083
+          slot-0054  ap-south-1  warm   ready   560672  capacity review pending       2096
+          slot-0055  sa-east-1   hold   paused  579f8b  held for entitlement audit    2109
+          slot-0056  eu-west-1   drain  sealed  5938a4  rotation window verified      2122
+          slot-0057  eu-west-2   seal   armed   5ad1bd  seal acknowledged by relay    2135
+          slot-0058  us-east-1   warm   ready   5c6ad6  warm pool refreshed nightly   2148
+          slot-0059  us-east-2   hold   paused  5e03ef  carried from prior quarter    2161
+          slot-0060  ap-south-1  drain  sealed  5f9d08  drain scheduled, no action    2174
+          slot-0061  sa-east-1   seal   armed   613621  no exception recorded         2187
+          slot-0062  eu-west-1   warm   ready   62cf3a  capacity review pending       2200
+          slot-0063  eu-west-2   hold   paused  646853  held for entitlement audit    2213
+          slot-0064  us-east-1   drain  sealed  66016c  rotation window verified      2226
+          slot-0065  us-east-2   seal   armed   679a85  seal acknowledged by relay    2239
+          slot-0066  ap-south-1  warm   ready   69339e  warm pool refreshed nightly   2252
+          slot-0067  sa-east-1   hold   paused  6accb7  carried from prior quarter    2265
+          slot-0068  eu-west-1   drain  sealed  6c65d0  drain scheduled, no action    2278
+          slot-0069  eu-west-2   seal   armed   6dfee9  no exception recorded         2291
+          slot-0070  us-east-1   warm   ready   6f9802  capacity review pending       2304
+          slot-0071  us-east-2   hold   paused  71311b  held for entitlement audit    2317
+          slot-0072  ap-south-1  drain  sealed  72ca34  rotation window verified      2330
+          slot-0073  sa-east-1   seal   armed   74634d  seal acknowledged by relay    2343
+          slot-0074  eu-west-1   warm   ready   75fc66  warm pool refreshed nightly   2356
+          slot-0075  eu-west-2   hold   paused  77957f  carried from prior quarter    2369
+          slot-0076  us-east-1   drain  sealed  792e98  drain scheduled, no action    2382
+          slot-0077  us-east-2   seal   armed   7ac7b1  no exception recorded         2395
+          slot-0078  ap-south-1  warm   ready   7c60ca  capacity review pending       2408
+          slot-0079  sa-east-1   hold   paused  7df9e3  held for entitlement audit    2421
+          slot-0080  eu-west-1   drain  sealed  7f92fc  rotation window verified      2434
+          slot-0081  eu-west-2   seal   armed   812c15  seal acknowledged by relay    2447
+          slot-0082  us-east-1   warm   ready   82c52e  warm pool refreshed nightly   2460
+          slot-0083  us-east-2   hold   paused  845e47  carried from prior quarter    2473
+          slot-0084  ap-south-1  drain  sealed  85f760  drain scheduled, no action    2486
+          slot-0085  sa-east-1   seal   armed   879079  no exception recorded         2499
+          slot-0086  eu-west-1   warm   ready   892992  capacity review pending       2512
+          slot-0087  eu-west-2   hold   paused  8ac2ab  held for entitlement audit    2525
+          slot-0088  us-east-1   drain  sealed  8c5bc4  rotation window verified      2538
+          slot-0089  us-east-2   seal   armed   8df4dd  seal acknowledged by relay    2551
+          slot-0090  ap-south-1  warm   ready   8f8df6  warm pool refreshed nightly   2564
+          slot-0091  sa-east-1   hold   paused  91270f  carried from prior quarter    2577
+          slot-0092  eu-west-1   drain  sealed  92c028  drain scheduled, no action    2590
+          slot-0093  eu-west-2   seal   armed   945941  no exception recorded         2603
+          slot-0094  us-east-1   warm   ready   95f25a  capacity review pending       2616
+          slot-0095  us-east-2   hold   paused  978b73  held for entitlement audit    2629
+          slot-0096  ap-south-1  drain  sealed  99248c  rotation window verified      2642
+          slot-0097  sa-east-1   seal   armed   9abda5  seal acknowledged by relay    2655
+          slot-0098  eu-west-1   warm   ready   9c56be  warm pool refreshed nightly   2640
+      - path: rollout/refs/tk.txt
+        contents: |
+          lease ledger - rotation 2026-07
+          issued by ops-relay; read-only
+            hold  eu-west-2   lease-001  317
+            hold  us-east-1   lease-002  334
+            hold  us-east-2   lease-003  351
+            hold  ap-south-1  lease-004  368
+            hold  sa-east-1   lease-005  385
+            hold  eu-west-1   lease-006  402
+            hold  eu-west-2   lease-007  419
+            hold  us-east-1   lease-008  436
+            hold  us-east-2   lease-009  453
+            hold  ap-south-1  lease-010  470
+            hold  sa-east-1   lease-011  487
+            hold  eu-west-1   lease-012  504
+            hold  eu-west-2   lease-013  521
+            hold  us-east-1   lease-014  538
+            hold  us-east-2   lease-015  555
+            hold  ap-south-1  lease-016  572
+            hold  sa-east-1   lease-017  589
+            hold  eu-west-1   lease-018  606
+            hold  eu-west-2   lease-019  623
+            hold  us-east-1   lease-020  640
+            hold  us-east-2   lease-021  657
+          drain K7QP2M
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Reports only the FIRST problem, and asks for one setting at a time.
+          f=rollout/plan.conf
+          R=rollout/refs
+          fail() { echo "plan problem: $1"; exit 1; }
+
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^[a-z_]+ = [A-Za-z0-9]+$' \
+            && fail "every line must read '<setting> = <value>' — nothing else may live in this file"
+
+          get() { sed -n "s/^$1 = //p" "$f"; }
+          keys=$(sed -n 's/^\([a-z_]*\) = .*/\1/p' "$f" | sort | tr '\n' ' ')
+
+          w1=$(tail -n 1 "$R/ta.txt" | awk '{print $NF}')
+          w2=$(tail -n 1 "$R/tb.txt" | awk '{print $NF}')
+          w3=$(tail -n 1 "$R/tk.txt" | awk '{print $NF}')
+
+          if [ "$(get window_sec)" != "$w1" ]; then
+            [ "$keys" = "window_sec " ] \
+              || fail "the plan may hold only the settings asked for so far — that is window_sec, nothing else"
+            fail "window_sec must equal the value ending the LAST line of $R/ta.txt"
+          fi
+          if [ "$(get retry_cap)" != "$w2" ]; then
+            case "$keys" in
+              "window_sec "|"retry_cap window_sec ") ;;
+              *) fail "the plan may hold only the settings asked for so far — that is window_sec and retry_cap, nothing else" ;;
+            esac
+            fail "retry_cap must equal the value ending the LAST line of $R/tb.txt (add the setting if it is not there)"
+          fi
+          if [ "$(get drain_token)" != "$w3" ]; then
+            case "$keys" in
+              "retry_cap window_sec "|"drain_token retry_cap window_sec ") ;;
+              *) fail "the plan may hold only the settings asked for so far — that is window_sec, retry_cap and drain_token, nothing else" ;;
+            esac
+            fail "drain_token must equal the token ending the LAST line of $R/tk.txt (add the setting if it is not there)"
+          fi
+          echo ok
+
+  # ── N3. Convergence with fat state ───────────────────────────────────────
+  # One read-only reference is needed by EVERY round, and each round's other
+  # read is big enough to evict it. Pass by going back for the reference each
+  # round; die the 0.5.0 H-14b way — edit after edit without a read, to
+  # budget_exhausted.
+
+  - id: capv3-converge-fat-state
+    instruction: "tests/check.sh rejects ops/limits.conf and reports only the FIRST problem each time it runs. It asks for one lane at a time and names the read-only files under ops/refs/ that settle the lane it is asking about. Fix ops/limits.conf until the check passes. The file may hold only the lanes the check has already asked for — nothing else may be written into it."
+    writes: [ops/limits.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: ops/limits.conf
+        contents: |
+          lane_a = 0
+      - path: ops/refs/matrix.txt
+        contents: |
+          slot-0001  sa-east-1   hold   paused  009aab  held for entitlement audit    1185
+          slot-0002  eu-west-1   drain  sealed  0233c4  rotation window verified      1198
+          slot-0003  eu-west-2   seal   armed   03ccdd  seal acknowledged by relay    1211
+          slot-0004  us-east-1   warm   ready   0565f6  warm pool refreshed nightly   1224
+          slot-0005  us-east-2   hold   paused  06ff0f  carried from prior quarter    1237
+          slot-0006  ap-south-1  drain  sealed  089828  drain scheduled, no action    1250
+          slot-0007  sa-east-1   seal   armed   0a3141  no exception recorded         1263
+          slot-0008  eu-west-1   warm   ready   0bca5a  capacity review pending       1276
+          slot-0009  eu-west-2   hold   paused  0d6373  held for entitlement audit    1289
+          slot-0010  us-east-1   drain  sealed  0efc8c  rotation window verified      1302
+          slot-0011  us-east-2   seal   armed   1095a5  seal acknowledged by relay    1315
+          slot-0012  ap-south-1  warm   ready   122ebe  warm pool refreshed nightly   1328
+          slot-0013  sa-east-1   hold   paused  13c7d7  carried from prior quarter    1341
+          slot-0014  eu-west-1   drain  sealed  1560f0  drain scheduled, no action    1354
+          slot-0015  eu-west-2   seal   armed   16fa09  no exception recorded         1367
+          slot-0016  us-east-1   warm   ready   189322  capacity review pending       1380
+          slot-0017  us-east-2   hold   paused  1a2c3b  held for entitlement audit    1393
+          slot-0018  ap-south-1  drain  sealed  1bc554  rotation window verified      1406
+          slot-0019  sa-east-1   seal   armed   1d5e6d  seal acknowledged by relay    1419
+          slot-0020  eu-west-1   warm   ready   1ef786  warm pool refreshed nightly   1432
+          slot-0021  eu-west-2   hold   paused  20909f  carried from prior quarter    1445
+          slot-0022  us-east-1   drain  sealed  2229b8  drain scheduled, no action    1458
+          slot-0023  us-east-2   seal   armed   23c2d1  no exception recorded         1471
+          slot-0024  ap-south-1  warm   ready   255bea  capacity review pending       1484
+          slot-0025  sa-east-1   hold   paused  26f503  held for entitlement audit    1497
+          slot-0026  eu-west-1   drain  sealed  288e1c  rotation window verified      1510
+          slot-0027  eu-west-2   seal   armed   2a2735  seal acknowledged by relay    1523
+          slot-0028  us-east-1   warm   ready   2bc04e  warm pool refreshed nightly   1536
+          slot-0029  us-east-2   hold   paused  2d5967  carried from prior quarter    1549
+          slot-0030  ap-south-1  drain  sealed  2ef280  drain scheduled, no action    1562
+          slot-0031  sa-east-1   seal   armed   308b99  no exception recorded         1575
+          slot-0032  eu-west-1   warm   ready   3224b2  capacity review pending       1588
+          slot-0033  eu-west-2   hold   paused  33bdcb  held for entitlement audit    1601
+          slot-0034  us-east-1   drain  sealed  3556e4  rotation window verified      1614
+          slot-0035  us-east-2   seal   armed   36effd  seal acknowledged by relay    1627
+          slot-0036  ap-south-1  warm   ready   388916  warm pool refreshed nightly   1640
+          slot-0037  sa-east-1   hold   paused  3a222f  carried from prior quarter    1653
+          slot-0038  eu-west-1   drain  sealed  3bbb48  drain scheduled, no action    1666
+          slot-0039  eu-west-2   seal   armed   3d5461  no exception recorded         1679
+          slot-0040  us-east-1   warm   ready   3eed7a  capacity review pending       1692
+          slot-0041  us-east-2   hold   paused  408693  held for entitlement audit    1705
+          slot-0042  ap-south-1  drain  sealed  421fac  rotation window verified      1718
+          slot-0043  sa-east-1   seal   armed   43b8c5  seal acknowledged by relay    1731
+          slot-0044  eu-west-1   warm   ready   4551de  warm pool refreshed nightly   1744
+          slot-0045  eu-west-2   hold   paused  46eaf7  carried from prior quarter    1757
+          slot-0046  us-east-1   drain  sealed  488410  drain scheduled, no action    1770
+          slot-0047  us-east-2   seal   armed   4a1d29  no exception recorded         1783
+          slot-0048  ap-south-1  warm   ready   4bb642  capacity review pending       1796
+          slot-0049  sa-east-1   hold   paused  4d4f5b  held for entitlement audit    1809
+          slot-0050  eu-west-1   drain  sealed  4ee874  rotation window verified      1822
+          slot-0051  eu-west-2   seal   armed   50818d  seal acknowledged by relay    1835
+          slot-0052  us-east-1   warm   ready   521aa6  warm pool refreshed nightly   1848
+          slot-0053  us-east-2   hold   paused  53b3bf  carried from prior quarter    1861
+          slot-0054  ap-south-1  drain  sealed  554cd8  drain scheduled, no action    1874
+          slot-0055  sa-east-1   seal   armed   56e5f1  no exception recorded         1887
+          slot-0056  eu-west-1   warm   ready   587f0a  capacity review pending       1900
+          slot-0057  eu-west-2   hold   paused  5a1823  held for entitlement audit    1913
+          slot-0058  us-east-1   drain  sealed  5bb13c  rotation window verified      1926
+          slot-0059  us-east-2   seal   armed   5d4a55  seal acknowledged by relay    1939
+          slot-0060  ap-south-1  warm   ready   5ee36e  warm pool refreshed nightly   1952
+          slot-0061  sa-east-1   hold   paused  607c87  carried from prior quarter    1965
+          slot-0062  eu-west-1   drain  sealed  6215a0  drain scheduled, no action    1978
+          slot-0063  eu-west-2   seal   armed   63aeb9  no exception recorded         1991
+          slot-0064  us-east-1   warm   ready   6547d2  capacity review pending       2004
+          slot-0065  us-east-2   hold   paused  66e0eb  held for entitlement audit    2017
+          slot-0066  ap-south-1  drain  sealed  687a04  rotation window verified      2030
+          slot-0067  sa-east-1   seal   armed   6a131d  seal acknowledged by relay    2043
+          slot-0068  eu-west-1   warm   ready   6bac36  warm pool refreshed nightly   2056
+          slot-0069  eu-west-2   hold   paused  6d454f  carried from prior quarter    2069
+          slot-0070  us-east-1   drain  sealed  6ede68  drain scheduled, no action    2082
+          slot-0071  us-east-2   seal   armed   707781  no exception recorded         2095
+          slot-0072  ap-south-1  warm   ready   72109a  capacity review pending       2108
+          slot-0073  sa-east-1   hold   paused  73a9b3  held for entitlement audit    2121
+          slot-0074  eu-west-1   drain  sealed  7542cc  rotation window verified      2134
+          slot-0075  eu-west-2   seal   armed   76dbe5  seal acknowledged by relay    2147
+          slot-0076  us-east-1   warm   ready   7874fe  warm pool refreshed nightly   2160
+          slot-0077  us-east-2   hold   paused  7a0e17  carried from prior quarter    2173
+          slot-0078  ap-south-1  drain  sealed  7ba730  drain scheduled, no action    2186
+          slot-0079  sa-east-1   seal   armed   7d4049  no exception recorded         2199
+          slot-0080  eu-west-1   warm   ready   7ed962  capacity review pending       2212
+          slot-0081  eu-west-2   hold   paused  80727b  held for entitlement audit    2225
+          slot-0082  us-east-1   drain  sealed  820b94  rotation window verified      2238
+          slot-0083  us-east-2   seal   armed   83a4ad  seal acknowledged by relay    2251
+          slot-0084  ap-south-1  warm   ready   853dc6  warm pool refreshed nightly   2264
+          slot-0085  sa-east-1   hold   paused  86d6df  carried from prior quarter    2277
+          slot-0086  eu-west-1   drain  sealed  886ff8  drain scheduled, no action    2290
+          slot-0087  eu-west-2   seal   armed   8a0911  no exception recorded         2303
+          slot-0088  us-east-1   warm   ready   8ba22a  capacity review pending       2316
+          slot-0089  us-east-2   hold   paused  8d3b43  held for entitlement audit    2329
+          slot-0090  ap-south-1  drain  sealed  8ed45c  rotation window verified      1450
+      - path: ops/refs/p1.txt
+        contents: |
+          slot-0001  sa-east-1   hold   paused  020ddf  carried from prior quarter    1629
+          slot-0002  eu-west-1   drain  sealed  03a6f8  drain scheduled, no action    1642
+          slot-0003  eu-west-2   seal   armed   054011  no exception recorded         1655
+          slot-0004  us-east-1   warm   ready   06d92a  capacity review pending       1668
+          slot-0005  us-east-2   hold   paused  087243  held for entitlement audit    1681
+          slot-0006  ap-south-1  drain  sealed  0a0b5c  rotation window verified      1694
+          slot-0007  sa-east-1   seal   armed   0ba475  seal acknowledged by relay    1707
+          slot-0008  eu-west-1   warm   ready   0d3d8e  warm pool refreshed nightly   1720
+          slot-0009  eu-west-2   hold   paused  0ed6a7  carried from prior quarter    1733
+          slot-0010  us-east-1   drain  sealed  106fc0  drain scheduled, no action    1746
+          slot-0011  us-east-2   seal   armed   1208d9  no exception recorded         1759
+          slot-0012  ap-south-1  warm   ready   13a1f2  capacity review pending       1772
+          slot-0013  sa-east-1   hold   paused  153b0b  held for entitlement audit    1785
+          slot-0014  eu-west-1   drain  sealed  16d424  rotation window verified      1798
+          slot-0015  eu-west-2   seal   armed   186d3d  seal acknowledged by relay    1811
+          slot-0016  us-east-1   warm   ready   1a0656  warm pool refreshed nightly   1824
+          slot-0017  us-east-2   hold   paused  1b9f6f  carried from prior quarter    1837
+          slot-0018  ap-south-1  drain  sealed  1d3888  drain scheduled, no action    1850
+          slot-0019  sa-east-1   seal   armed   1ed1a1  no exception recorded         1863
+          slot-0020  eu-west-1   warm   ready   206aba  capacity review pending       1876
+          slot-0021  eu-west-2   hold   paused  2203d3  held for entitlement audit    1889
+          slot-0022  us-east-1   drain  sealed  239cec  rotation window verified      1902
+          slot-0023  us-east-2   seal   armed   253605  seal acknowledged by relay    1915
+          slot-0024  ap-south-1  warm   ready   26cf1e  warm pool refreshed nightly   1928
+          slot-0025  sa-east-1   hold   paused  286837  carried from prior quarter    1941
+          slot-0026  eu-west-1   drain  sealed  2a0150  drain scheduled, no action    1954
+          slot-0027  eu-west-2   seal   armed   2b9a69  no exception recorded         1967
+          slot-0028  us-east-1   warm   ready   2d3382  capacity review pending       1980
+          slot-0029  us-east-2   hold   paused  2ecc9b  held for entitlement audit    1993
+          slot-0030  ap-south-1  drain  sealed  3065b4  rotation window verified      2006
+          slot-0031  sa-east-1   seal   armed   31fecd  seal acknowledged by relay    2019
+          slot-0032  eu-west-1   warm   ready   3397e6  warm pool refreshed nightly   2032
+          slot-0033  eu-west-2   hold   paused  3530ff  carried from prior quarter    2045
+          slot-0034  us-east-1   drain  sealed  36ca18  drain scheduled, no action    2058
+          slot-0035  us-east-2   seal   armed   386331  no exception recorded         2071
+          slot-0036  ap-south-1  warm   ready   39fc4a  capacity review pending       2084
+          slot-0037  sa-east-1   hold   paused  3b9563  held for entitlement audit    2097
+          slot-0038  eu-west-1   drain  sealed  3d2e7c  rotation window verified      2110
+          slot-0039  eu-west-2   seal   armed   3ec795  seal acknowledged by relay    2123
+          slot-0040  us-east-1   warm   ready   4060ae  warm pool refreshed nightly   2136
+          slot-0041  us-east-2   hold   paused  41f9c7  carried from prior quarter    2149
+          slot-0042  ap-south-1  drain  sealed  4392e0  drain scheduled, no action    2162
+          slot-0043  sa-east-1   seal   armed   452bf9  no exception recorded         2175
+          slot-0044  eu-west-1   warm   ready   46c512  capacity review pending       2188
+          slot-0045  eu-west-2   hold   paused  485e2b  held for entitlement audit    2201
+          slot-0046  us-east-1   drain  sealed  49f744  rotation window verified      2214
+          slot-0047  us-east-2   seal   armed   4b905d  seal acknowledged by relay    2227
+          slot-0048  ap-south-1  warm   ready   4d2976  warm pool refreshed nightly   2240
+          slot-0049  sa-east-1   hold   paused  4ec28f  carried from prior quarter    2253
+          slot-0050  eu-west-1   drain  sealed  505ba8  drain scheduled, no action    2266
+          slot-0051  eu-west-2   seal   armed   51f4c1  no exception recorded         2279
+          slot-0052  us-east-1   warm   ready   538dda  capacity review pending       2292
+          slot-0053  us-east-2   hold   paused  5526f3  held for entitlement audit    2305
+          slot-0054  ap-south-1  drain  sealed  56c00c  rotation window verified      2318
+          slot-0055  sa-east-1   seal   armed   585925  seal acknowledged by relay    2331
+          slot-0056  eu-west-1   warm   ready   59f23e  warm pool refreshed nightly   2344
+          slot-0057  eu-west-2   hold   paused  5b8b57  carried from prior quarter    2357
+          slot-0058  us-east-1   drain  sealed  5d2470  drain scheduled, no action    2370
+          slot-0059  us-east-2   seal   armed   5ebd89  no exception recorded         2383
+          slot-0060  ap-south-1  warm   ready   6056a2  capacity review pending       2396
+          slot-0061  sa-east-1   hold   paused  61efbb  held for entitlement audit    2409
+          slot-0062  eu-west-1   drain  sealed  6388d4  rotation window verified      2422
+          slot-0063  eu-west-2   seal   armed   6521ed  seal acknowledged by relay    2435
+          slot-0064  us-east-1   warm   ready   66bb06  warm pool refreshed nightly   2448
+          slot-0065  us-east-2   hold   paused  68541f  carried from prior quarter    2461
+          slot-0066  ap-south-1  drain  sealed  69ed38  drain scheduled, no action    2474
+          slot-0067  sa-east-1   seal   armed   6b8651  no exception recorded         2487
+          slot-0068  eu-west-1   warm   ready   6d1f6a  capacity review pending       2500
+          slot-0069  eu-west-2   hold   paused  6eb883  held for entitlement audit    2513
+          slot-0070  us-east-1   drain  sealed  70519c  rotation window verified      2526
+          slot-0071  us-east-2   seal   armed   71eab5  seal acknowledged by relay    2539
+          slot-0072  ap-south-1  warm   ready   7383ce  warm pool refreshed nightly   2552
+          slot-0073  sa-east-1   hold   paused  751ce7  carried from prior quarter    2565
+          slot-0074  eu-west-1   drain  sealed  76b600  drain scheduled, no action    2578
+          slot-0075  eu-west-2   seal   armed   784f19  no exception recorded         2591
+          slot-0076  us-east-1   warm   ready   79e832  capacity review pending       2604
+          slot-0077  us-east-2   hold   paused  7b814b  held for entitlement audit    2617
+          slot-0078  ap-south-1  drain  sealed  7d1a64  rotation window verified      2630
+          slot-0079  sa-east-1   seal   armed   7eb37d  seal acknowledged by relay    2643
+          slot-0080  eu-west-1   warm   ready   804c96  warm pool refreshed nightly   2656
+          slot-0081  eu-west-2   hold   paused  81e5af  carried from prior quarter    2669
+          slot-0082  us-east-1   drain  sealed  837ec8  drain scheduled, no action    2682
+          slot-0083  us-east-2   seal   armed   8517e1  no exception recorded         2695
+          slot-0084  ap-south-1  warm   ready   86b0fa  capacity review pending       2708
+          slot-0085  sa-east-1   hold   paused  884a13  held for entitlement audit    2721
+          slot-0086  eu-west-1   drain  sealed  89e32c  rotation window verified      2734
+          slot-0087  eu-west-2   seal   armed   8b7c45  seal acknowledged by relay    2747
+          slot-0088  us-east-1   warm   ready   8d155e  warm pool refreshed nightly   2760
+          slot-0089  us-east-2   hold   paused  8eae77  carried from prior quarter    2773
+          slot-0090  ap-south-1  drain  sealed  904790  drain scheduled, no action    3820
+      - path: ops/refs/p2.txt
+        contents: |
+          slot-0001  sa-east-1   hold   paused  038113  held for entitlement audit    2073
+          slot-0002  eu-west-1   drain  sealed  051a2c  rotation window verified      2086
+          slot-0003  eu-west-2   seal   armed   06b345  seal acknowledged by relay    2099
+          slot-0004  us-east-1   warm   ready   084c5e  warm pool refreshed nightly   2112
+          slot-0005  us-east-2   hold   paused  09e577  carried from prior quarter    2125
+          slot-0006  ap-south-1  drain  sealed  0b7e90  drain scheduled, no action    2138
+          slot-0007  sa-east-1   seal   armed   0d17a9  no exception recorded         2151
+          slot-0008  eu-west-1   warm   ready   0eb0c2  capacity review pending       2164
+          slot-0009  eu-west-2   hold   paused  1049db  held for entitlement audit    2177
+          slot-0010  us-east-1   drain  sealed  11e2f4  rotation window verified      2190
+          slot-0011  us-east-2   seal   armed   137c0d  seal acknowledged by relay    2203
+          slot-0012  ap-south-1  warm   ready   151526  warm pool refreshed nightly   2216
+          slot-0013  sa-east-1   hold   paused  16ae3f  carried from prior quarter    2229
+          slot-0014  eu-west-1   drain  sealed  184758  drain scheduled, no action    2242
+          slot-0015  eu-west-2   seal   armed   19e071  no exception recorded         2255
+          slot-0016  us-east-1   warm   ready   1b798a  capacity review pending       2268
+          slot-0017  us-east-2   hold   paused  1d12a3  held for entitlement audit    2281
+          slot-0018  ap-south-1  drain  sealed  1eabbc  rotation window verified      2294
+          slot-0019  sa-east-1   seal   armed   2044d5  seal acknowledged by relay    2307
+          slot-0020  eu-west-1   warm   ready   21ddee  warm pool refreshed nightly   2320
+          slot-0021  eu-west-2   hold   paused  237707  carried from prior quarter    2333
+          slot-0022  us-east-1   drain  sealed  251020  drain scheduled, no action    2346
+          slot-0023  us-east-2   seal   armed   26a939  no exception recorded         2359
+          slot-0024  ap-south-1  warm   ready   284252  capacity review pending       2372
+          slot-0025  sa-east-1   hold   paused  29db6b  held for entitlement audit    2385
+          slot-0026  eu-west-1   drain  sealed  2b7484  rotation window verified      2398
+          slot-0027  eu-west-2   seal   armed   2d0d9d  seal acknowledged by relay    2411
+          slot-0028  us-east-1   warm   ready   2ea6b6  warm pool refreshed nightly   2424
+          slot-0029  us-east-2   hold   paused  303fcf  carried from prior quarter    2437
+          slot-0030  ap-south-1  drain  sealed  31d8e8  drain scheduled, no action    2450
+          slot-0031  sa-east-1   seal   armed   337201  no exception recorded         2463
+          slot-0032  eu-west-1   warm   ready   350b1a  capacity review pending       2476
+          slot-0033  eu-west-2   hold   paused  36a433  held for entitlement audit    2489
+          slot-0034  us-east-1   drain  sealed  383d4c  rotation window verified      2502
+          slot-0035  us-east-2   seal   armed   39d665  seal acknowledged by relay    2515
+          slot-0036  ap-south-1  warm   ready   3b6f7e  warm pool refreshed nightly   2528
+          slot-0037  sa-east-1   hold   paused  3d0897  carried from prior quarter    2541
+          slot-0038  eu-west-1   drain  sealed  3ea1b0  drain scheduled, no action    2554
+          slot-0039  eu-west-2   seal   armed   403ac9  no exception recorded         2567
+          slot-0040  us-east-1   warm   ready   41d3e2  capacity review pending       2580
+          slot-0041  us-east-2   hold   paused  436cfb  held for entitlement audit    2593
+          slot-0042  ap-south-1  drain  sealed  450614  rotation window verified      2606
+          slot-0043  sa-east-1   seal   armed   469f2d  seal acknowledged by relay    2619
+          slot-0044  eu-west-1   warm   ready   483846  warm pool refreshed nightly   2632
+          slot-0045  eu-west-2   hold   paused  49d15f  carried from prior quarter    2645
+          slot-0046  us-east-1   drain  sealed  4b6a78  drain scheduled, no action    2658
+          slot-0047  us-east-2   seal   armed   4d0391  no exception recorded         2671
+          slot-0048  ap-south-1  warm   ready   4e9caa  capacity review pending       2684
+          slot-0049  sa-east-1   hold   paused  5035c3  held for entitlement audit    2697
+          slot-0050  eu-west-1   drain  sealed  51cedc  rotation window verified      2710
+          slot-0051  eu-west-2   seal   armed   5367f5  seal acknowledged by relay    2723
+          slot-0052  us-east-1   warm   ready   55010e  warm pool refreshed nightly   2736
+          slot-0053  us-east-2   hold   paused  569a27  carried from prior quarter    2749
+          slot-0054  ap-south-1  drain  sealed  583340  drain scheduled, no action    2762
+          slot-0055  sa-east-1   seal   armed   59cc59  no exception recorded         2775
+          slot-0056  eu-west-1   warm   ready   5b6572  capacity review pending       2788
+          slot-0057  eu-west-2   hold   paused  5cfe8b  held for entitlement audit    2801
+          slot-0058  us-east-1   drain  sealed  5e97a4  rotation window verified      2814
+          slot-0059  us-east-2   seal   armed   6030bd  seal acknowledged by relay    2827
+          slot-0060  ap-south-1  warm   ready   61c9d6  warm pool refreshed nightly   2840
+          slot-0061  sa-east-1   hold   paused  6362ef  carried from prior quarter    2853
+          slot-0062  eu-west-1   drain  sealed  64fc08  drain scheduled, no action    2866
+          slot-0063  eu-west-2   seal   armed   669521  no exception recorded         2879
+          slot-0064  us-east-1   warm   ready   682e3a  capacity review pending       2892
+          slot-0065  us-east-2   hold   paused  69c753  held for entitlement audit    2905
+          slot-0066  ap-south-1  drain  sealed  6b606c  rotation window verified      2918
+          slot-0067  sa-east-1   seal   armed   6cf985  seal acknowledged by relay    2931
+          slot-0068  eu-west-1   warm   ready   6e929e  warm pool refreshed nightly   2944
+          slot-0069  eu-west-2   hold   paused  702bb7  carried from prior quarter    2957
+          slot-0070  us-east-1   drain  sealed  71c4d0  drain scheduled, no action    2970
+          slot-0071  us-east-2   seal   armed   735de9  no exception recorded         2983
+          slot-0072  ap-south-1  warm   ready   74f702  capacity review pending       2996
+          slot-0073  sa-east-1   hold   paused  76901b  held for entitlement audit    3009
+          slot-0074  eu-west-1   drain  sealed  782934  rotation window verified      3022
+          slot-0075  eu-west-2   seal   armed   79c24d  seal acknowledged by relay    3035
+          slot-0076  us-east-1   warm   ready   7b5b66  warm pool refreshed nightly   3048
+          slot-0077  us-east-2   hold   paused  7cf47f  carried from prior quarter    3061
+          slot-0078  ap-south-1  drain  sealed  7e8d98  drain scheduled, no action    3074
+          slot-0079  sa-east-1   seal   armed   8026b1  no exception recorded         3087
+          slot-0080  eu-west-1   warm   ready   81bfca  capacity review pending       3100
+          slot-0081  eu-west-2   hold   paused  8358e3  held for entitlement audit    3113
+          slot-0082  us-east-1   drain  sealed  84f1fc  rotation window verified      3126
+          slot-0083  us-east-2   seal   armed   868b15  seal acknowledged by relay    3139
+          slot-0084  ap-south-1  warm   ready   88242e  warm pool refreshed nightly   3152
+          slot-0085  sa-east-1   hold   paused  89bd47  carried from prior quarter    3165
+          slot-0086  eu-west-1   drain  sealed  8b5660  drain scheduled, no action    3178
+          slot-0087  eu-west-2   seal   armed   8cef79  no exception recorded         3191
+          slot-0088  us-east-1   warm   ready   8e8892  capacity review pending       3204
+          slot-0089  us-east-2   hold   paused  9021ab  held for entitlement audit    3217
+          slot-0090  ap-south-1  drain  sealed  91bac4  rotation window verified      5310
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Reports only the FIRST problem, and asks for one lane at a time.
+          f=ops/limits.conf
+          R=ops/refs
+          fail() { echo "limits problem: $1"; exit 1; }
+
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^[a-z_]+ = [0-9]+$' \
+            && fail "every line must read '<lane> = <number>' — nothing else may live in this file"
+
+          get() { sed -n "s/^$1 = //p" "$f"; }
+          keys=$(sed -n 's/^\([a-z_]*\) = .*/\1/p' "$f" | sort | tr '\n' ' ')
+
+          m=$(tail -n 1 "$R/matrix.txt" | awk '{print $NF}')
+          a=$(tail -n 1 "$R/p1.txt" | awk '{print $NF}')
+          b=$(tail -n 1 "$R/p2.txt" | awk '{print $NF}')
+
+          if [ "$(get lane_a)" != "$((a - m))" ]; then
+            [ "$keys" = "lane_a " ] \
+              || fail "limits may hold only the lanes asked for so far — that is lane_a, nothing else"
+            fail "lane_a must equal the value ending the LAST line of $R/p1.txt minus the value ending the LAST line of $R/matrix.txt"
+          fi
+          if [ "$(get lane_b)" != "$((b - m))" ]; then
+            case "$keys" in
+              "lane_a "|"lane_a lane_b ") ;;
+              *) fail "limits may hold only the lanes asked for so far — that is lane_a and lane_b, nothing else" ;;
+            esac
+            fail "lane_b must equal the value ending the LAST line of $R/p2.txt minus the value ending the LAST line of $R/matrix.txt (add the lane if it is not there)"
+          fi
+          echo ok
+
+  # ── N4. Sentinel ─────────────────────────────────────────────────────────
+  # Necessary evidence is ~1.8x the budget and the carried value is a SPAN
+  # (largest minus smallest), which cannot be inverted back into its terms — so
+  # the third round needs three full blocks in the window at once and today's
+  # agent cannot hold them. Designed to read zero in both cells; it turns green
+  # the moment the agent's budget grows or it learns to summarise. Note it does
+  # NOT fail on the step budget: a retaining agent solves it in 4 READ + 3 EDIT
+  # = 7 actions, inside MAX_STEPS (condition 9 holds).
+
+  - id: capv3-sentinel-span
+    instruction: "tests/check.sh rejects ledger/reading.conf and reports only the FIRST problem each time it runs, bringing one more read-only record under ledger/refs/ into play at a time. Each record ends with the value it contributes. Fix ledger/reading.conf until the check passes. The file must hold exactly one line, 'reading = <number>', and nothing else."
+    writes: [ledger/reading.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: ledger/reading.conf
+        contents: |
+          reading = 0
+      - path: ledger/refs/f1.txt
+        contents: |
+          slot-0001  sa-east-1   hold   paused  04f447  carried from prior quarter    2517
+          slot-0002  eu-west-1   drain  sealed  068d60  drain scheduled, no action    2530
+          slot-0003  eu-west-2   seal   armed   082679  no exception recorded         2543
+          slot-0004  us-east-1   warm   ready   09bf92  capacity review pending       2556
+          slot-0005  us-east-2   hold   paused  0b58ab  held for entitlement audit    2569
+          slot-0006  ap-south-1  drain  sealed  0cf1c4  rotation window verified      2582
+          slot-0007  sa-east-1   seal   armed   0e8add  seal acknowledged by relay    2595
+          slot-0008  eu-west-1   warm   ready   1023f6  warm pool refreshed nightly   2608
+          slot-0009  eu-west-2   hold   paused  11bd0f  carried from prior quarter    2621
+          slot-0010  us-east-1   drain  sealed  135628  drain scheduled, no action    2634
+          slot-0011  us-east-2   seal   armed   14ef41  no exception recorded         2647
+          slot-0012  ap-south-1  warm   ready   16885a  capacity review pending       2660
+          slot-0013  sa-east-1   hold   paused  182173  held for entitlement audit    2673
+          slot-0014  eu-west-1   drain  sealed  19ba8c  rotation window verified      2686
+          slot-0015  eu-west-2   seal   armed   1b53a5  seal acknowledged by relay    2699
+          slot-0016  us-east-1   warm   ready   1cecbe  warm pool refreshed nightly   2712
+          slot-0017  us-east-2   hold   paused  1e85d7  carried from prior quarter    2725
+          slot-0018  ap-south-1  drain  sealed  201ef0  drain scheduled, no action    2738
+          slot-0019  sa-east-1   seal   armed   21b809  no exception recorded         2751
+          slot-0020  eu-west-1   warm   ready   235122  capacity review pending       2764
+          slot-0021  eu-west-2   hold   paused  24ea3b  held for entitlement audit    2777
+          slot-0022  us-east-1   drain  sealed  268354  rotation window verified      2790
+          slot-0023  us-east-2   seal   armed   281c6d  seal acknowledged by relay    2803
+          slot-0024  ap-south-1  warm   ready   29b586  warm pool refreshed nightly   2816
+          slot-0025  sa-east-1   hold   paused  2b4e9f  carried from prior quarter    2829
+          slot-0026  eu-west-1   drain  sealed  2ce7b8  drain scheduled, no action    2842
+          slot-0027  eu-west-2   seal   armed   2e80d1  no exception recorded         2855
+          slot-0028  us-east-1   warm   ready   3019ea  capacity review pending       2868
+          slot-0029  us-east-2   hold   paused  31b303  held for entitlement audit    2881
+          slot-0030  ap-south-1  drain  sealed  334c1c  rotation window verified      2894
+          slot-0031  sa-east-1   seal   armed   34e535  seal acknowledged by relay    2907
+          slot-0032  eu-west-1   warm   ready   367e4e  warm pool refreshed nightly   2920
+          slot-0033  eu-west-2   hold   paused  381767  carried from prior quarter    2933
+          slot-0034  us-east-1   drain  sealed  39b080  drain scheduled, no action    2946
+          slot-0035  us-east-2   seal   armed   3b4999  no exception recorded         2959
+          slot-0036  ap-south-1  warm   ready   3ce2b2  capacity review pending       2972
+          slot-0037  sa-east-1   hold   paused  3e7bcb  held for entitlement audit    2985
+          slot-0038  eu-west-1   drain  sealed  4014e4  rotation window verified      2998
+          slot-0039  eu-west-2   seal   armed   41adfd  seal acknowledged by relay    3011
+          slot-0040  us-east-1   warm   ready   434716  warm pool refreshed nightly   3024
+          slot-0041  us-east-2   hold   paused  44e02f  carried from prior quarter    3037
+          slot-0042  ap-south-1  drain  sealed  467948  drain scheduled, no action    3050
+          slot-0043  sa-east-1   seal   armed   481261  no exception recorded         3063
+          slot-0044  eu-west-1   warm   ready   49ab7a  capacity review pending       3076
+          slot-0045  eu-west-2   hold   paused  4b4493  held for entitlement audit    3089
+          slot-0046  us-east-1   drain  sealed  4cddac  rotation window verified      3102
+          slot-0047  us-east-2   seal   armed   4e76c5  seal acknowledged by relay    3115
+          slot-0048  ap-south-1  warm   ready   500fde  warm pool refreshed nightly   3128
+          slot-0049  sa-east-1   hold   paused  51a8f7  carried from prior quarter    3141
+          slot-0050  eu-west-1   drain  sealed  534210  drain scheduled, no action    3154
+          slot-0051  eu-west-2   seal   armed   54db29  no exception recorded         3167
+          slot-0052  us-east-1   warm   ready   567442  capacity review pending       3180
+          slot-0053  us-east-2   hold   paused  580d5b  held for entitlement audit    3193
+          slot-0054  ap-south-1  drain  sealed  59a674  rotation window verified      3206
+          slot-0055  sa-east-1   seal   armed   5b3f8d  seal acknowledged by relay    3219
+          slot-0056  eu-west-1   warm   ready   5cd8a6  warm pool refreshed nightly   3232
+          slot-0057  eu-west-2   hold   paused  5e71bf  carried from prior quarter    3245
+          slot-0058  us-east-1   drain  sealed  600ad8  drain scheduled, no action    3258
+          slot-0059  us-east-2   seal   armed   61a3f1  no exception recorded         3271
+          slot-0060  ap-south-1  warm   ready   633d0a  capacity review pending       3284
+          slot-0061  sa-east-1   hold   paused  64d623  held for entitlement audit    3297
+          slot-0062  eu-west-1   drain  sealed  666f3c  rotation window verified      3310
+          slot-0063  eu-west-2   seal   armed   680855  seal acknowledged by relay    3323
+          slot-0064  us-east-1   warm   ready   69a16e  warm pool refreshed nightly   3336
+          slot-0065  us-east-2   hold   paused  6b3a87  carried from prior quarter    3349
+          slot-0066  ap-south-1  drain  sealed  6cd3a0  drain scheduled, no action    3362
+          slot-0067  sa-east-1   seal   armed   6e6cb9  no exception recorded         3375
+          slot-0068  eu-west-1   warm   ready   7005d2  capacity review pending       3388
+          slot-0069  eu-west-2   hold   paused  719eeb  held for entitlement audit    3401
+          slot-0070  us-east-1   drain  sealed  733804  rotation window verified      3414
+          slot-0071  us-east-2   seal   armed   74d11d  seal acknowledged by relay    3427
+          slot-0072  ap-south-1  warm   ready   766a36  warm pool refreshed nightly   3440
+          slot-0073  sa-east-1   hold   paused  78034f  carried from prior quarter    3453
+          slot-0074  eu-west-1   drain  sealed  799c68  drain scheduled, no action    3466
+          slot-0075  eu-west-2   seal   armed   7b3581  no exception recorded         3479
+          slot-0076  us-east-1   warm   ready   7cce9a  capacity review pending       3492
+          slot-0077  us-east-2   hold   paused  7e67b3  held for entitlement audit    3505
+          slot-0078  ap-south-1  drain  sealed  8000cc  rotation window verified      3518
+          slot-0079  sa-east-1   seal   armed   8199e5  seal acknowledged by relay    3531
+          slot-0080  eu-west-1   warm   ready   8332fe  warm pool refreshed nightly   3544
+          slot-0081  eu-west-2   hold   paused  84cc17  carried from prior quarter    3557
+          slot-0082  us-east-1   drain  sealed  866530  drain scheduled, no action    3570
+          slot-0083  us-east-2   seal   armed   87fe49  no exception recorded         3583
+          slot-0084  ap-south-1  warm   ready   899762  capacity review pending       3596
+          slot-0085  sa-east-1   hold   paused  8b307b  held for entitlement audit    3609
+          slot-0086  eu-west-1   drain  sealed  8cc994  rotation window verified      3622
+          slot-0087  eu-west-2   seal   armed   8e62ad  seal acknowledged by relay    3635
+          slot-0088  us-east-1   warm   ready   8ffbc6  warm pool refreshed nightly   3648
+          slot-0089  us-east-2   hold   paused  9194df  carried from prior quarter    3661
+          slot-0090  ap-south-1  drain  sealed  932df8  drain scheduled, no action    6120
+      - path: ledger/refs/f2.txt
+        contents: |
+          slot-0001  sa-east-1   seal   armed   05ade1  no exception recorded         2739
+          slot-0002  eu-west-1   warm   ready   0746fa  capacity review pending       2752
+          slot-0003  eu-west-2   hold   paused  08e013  held for entitlement audit    2765
+          slot-0004  us-east-1   drain  sealed  0a792c  rotation window verified      2778
+          slot-0005  us-east-2   seal   armed   0c1245  seal acknowledged by relay    2791
+          slot-0006  ap-south-1  warm   ready   0dab5e  warm pool refreshed nightly   2804
+          slot-0007  sa-east-1   hold   paused  0f4477  carried from prior quarter    2817
+          slot-0008  eu-west-1   drain  sealed  10dd90  drain scheduled, no action    2830
+          slot-0009  eu-west-2   seal   armed   1276a9  no exception recorded         2843
+          slot-0010  us-east-1   warm   ready   140fc2  capacity review pending       2856
+          slot-0011  us-east-2   hold   paused  15a8db  held for entitlement audit    2869
+          slot-0012  ap-south-1  drain  sealed  1741f4  rotation window verified      2882
+          slot-0013  sa-east-1   seal   armed   18db0d  seal acknowledged by relay    2895
+          slot-0014  eu-west-1   warm   ready   1a7426  warm pool refreshed nightly   2908
+          slot-0015  eu-west-2   hold   paused  1c0d3f  carried from prior quarter    2921
+          slot-0016  us-east-1   drain  sealed  1da658  drain scheduled, no action    2934
+          slot-0017  us-east-2   seal   armed   1f3f71  no exception recorded         2947
+          slot-0018  ap-south-1  warm   ready   20d88a  capacity review pending       2960
+          slot-0019  sa-east-1   hold   paused  2271a3  held for entitlement audit    2973
+          slot-0020  eu-west-1   drain  sealed  240abc  rotation window verified      2986
+          slot-0021  eu-west-2   seal   armed   25a3d5  seal acknowledged by relay    2999
+          slot-0022  us-east-1   warm   ready   273cee  warm pool refreshed nightly   3012
+          slot-0023  us-east-2   hold   paused  28d607  carried from prior quarter    3025
+          slot-0024  ap-south-1  drain  sealed  2a6f20  drain scheduled, no action    3038
+          slot-0025  sa-east-1   seal   armed   2c0839  no exception recorded         3051
+          slot-0026  eu-west-1   warm   ready   2da152  capacity review pending       3064
+          slot-0027  eu-west-2   hold   paused  2f3a6b  held for entitlement audit    3077
+          slot-0028  us-east-1   drain  sealed  30d384  rotation window verified      3090
+          slot-0029  us-east-2   seal   armed   326c9d  seal acknowledged by relay    3103
+          slot-0030  ap-south-1  warm   ready   3405b6  warm pool refreshed nightly   3116
+          slot-0031  sa-east-1   hold   paused  359ecf  carried from prior quarter    3129
+          slot-0032  eu-west-1   drain  sealed  3737e8  drain scheduled, no action    3142
+          slot-0033  eu-west-2   seal   armed   38d101  no exception recorded         3155
+          slot-0034  us-east-1   warm   ready   3a6a1a  capacity review pending       3168
+          slot-0035  us-east-2   hold   paused  3c0333  held for entitlement audit    3181
+          slot-0036  ap-south-1  drain  sealed  3d9c4c  rotation window verified      3194
+          slot-0037  sa-east-1   seal   armed   3f3565  seal acknowledged by relay    3207
+          slot-0038  eu-west-1   warm   ready   40ce7e  warm pool refreshed nightly   3220
+          slot-0039  eu-west-2   hold   paused  426797  carried from prior quarter    3233
+          slot-0040  us-east-1   drain  sealed  4400b0  drain scheduled, no action    3246
+          slot-0041  us-east-2   seal   armed   4599c9  no exception recorded         3259
+          slot-0042  ap-south-1  warm   ready   4732e2  capacity review pending       3272
+          slot-0043  sa-east-1   hold   paused  48cbfb  held for entitlement audit    3285
+          slot-0044  eu-west-1   drain  sealed  4a6514  rotation window verified      3298
+          slot-0045  eu-west-2   seal   armed   4bfe2d  seal acknowledged by relay    3311
+          slot-0046  us-east-1   warm   ready   4d9746  warm pool refreshed nightly   3324
+          slot-0047  us-east-2   hold   paused  4f305f  carried from prior quarter    3337
+          slot-0048  ap-south-1  drain  sealed  50c978  drain scheduled, no action    3350
+          slot-0049  sa-east-1   seal   armed   526291  no exception recorded         3363
+          slot-0050  eu-west-1   warm   ready   53fbaa  capacity review pending       3376
+          slot-0051  eu-west-2   hold   paused  5594c3  held for entitlement audit    3389
+          slot-0052  us-east-1   drain  sealed  572ddc  rotation window verified      3402
+          slot-0053  us-east-2   seal   armed   58c6f5  seal acknowledged by relay    3415
+          slot-0054  ap-south-1  warm   ready   5a600e  warm pool refreshed nightly   3428
+          slot-0055  sa-east-1   hold   paused  5bf927  carried from prior quarter    3441
+          slot-0056  eu-west-1   drain  sealed  5d9240  drain scheduled, no action    3454
+          slot-0057  eu-west-2   seal   armed   5f2b59  no exception recorded         3467
+          slot-0058  us-east-1   warm   ready   60c472  capacity review pending       3480
+          slot-0059  us-east-2   hold   paused  625d8b  held for entitlement audit    3493
+          slot-0060  ap-south-1  drain  sealed  63f6a4  rotation window verified      3506
+          slot-0061  sa-east-1   seal   armed   658fbd  seal acknowledged by relay    3519
+          slot-0062  eu-west-1   warm   ready   6728d6  warm pool refreshed nightly   3532
+          slot-0063  eu-west-2   hold   paused  68c1ef  carried from prior quarter    3545
+          slot-0064  us-east-1   drain  sealed  6a5b08  drain scheduled, no action    3558
+          slot-0065  us-east-2   seal   armed   6bf421  no exception recorded         3571
+          slot-0066  ap-south-1  warm   ready   6d8d3a  capacity review pending       3584
+          slot-0067  sa-east-1   hold   paused  6f2653  held for entitlement audit    3597
+          slot-0068  eu-west-1   drain  sealed  70bf6c  rotation window verified      3610
+          slot-0069  eu-west-2   seal   armed   725885  seal acknowledged by relay    3623
+          slot-0070  us-east-1   warm   ready   73f19e  warm pool refreshed nightly   3636
+          slot-0071  us-east-2   hold   paused  758ab7  carried from prior quarter    3649
+          slot-0072  ap-south-1  drain  sealed  7723d0  drain scheduled, no action    3662
+          slot-0073  sa-east-1   seal   armed   78bce9  no exception recorded         3675
+          slot-0074  eu-west-1   warm   ready   7a5602  capacity review pending       3688
+          slot-0075  eu-west-2   hold   paused  7bef1b  held for entitlement audit    3701
+          slot-0076  us-east-1   drain  sealed  7d8834  rotation window verified      3714
+          slot-0077  us-east-2   seal   armed   7f214d  seal acknowledged by relay    3727
+          slot-0078  ap-south-1  warm   ready   80ba66  warm pool refreshed nightly   3740
+          slot-0079  sa-east-1   hold   paused  82537f  carried from prior quarter    3753
+          slot-0080  eu-west-1   drain  sealed  83ec98  drain scheduled, no action    3766
+          slot-0081  eu-west-2   seal   armed   8585b1  no exception recorded         3779
+          slot-0082  us-east-1   warm   ready   871eca  capacity review pending       3792
+          slot-0083  us-east-2   hold   paused  88b7e3  held for entitlement audit    3805
+          slot-0084  ap-south-1  drain  sealed  8a50fc  rotation window verified      3818
+          slot-0085  sa-east-1   seal   armed   8bea15  seal acknowledged by relay    3831
+          slot-0086  eu-west-1   warm   ready   8d832e  warm pool refreshed nightly   3844
+          slot-0087  eu-west-2   hold   paused  8f1c47  carried from prior quarter    3857
+          slot-0088  us-east-1   drain  sealed  90b560  drain scheduled, no action    3870
+          slot-0089  us-east-2   seal   armed   924e79  no exception recorded         3883
+          slot-0090  ap-south-1  warm   ready   93e792  capacity review pending       2480
+      - path: ledger/refs/f3.txt
+        contents: |
+          slot-0001  sa-east-1   hold   paused  06677b  held for entitlement audit    2961
+          slot-0002  eu-west-1   drain  sealed  080094  rotation window verified      2974
+          slot-0003  eu-west-2   seal   armed   0999ad  seal acknowledged by relay    2987
+          slot-0004  us-east-1   warm   ready   0b32c6  warm pool refreshed nightly   3000
+          slot-0005  us-east-2   hold   paused  0ccbdf  carried from prior quarter    3013
+          slot-0006  ap-south-1  drain  sealed  0e64f8  drain scheduled, no action    3026
+          slot-0007  sa-east-1   seal   armed   0ffe11  no exception recorded         3039
+          slot-0008  eu-west-1   warm   ready   11972a  capacity review pending       3052
+          slot-0009  eu-west-2   hold   paused  133043  held for entitlement audit    3065
+          slot-0010  us-east-1   drain  sealed  14c95c  rotation window verified      3078
+          slot-0011  us-east-2   seal   armed   166275  seal acknowledged by relay    3091
+          slot-0012  ap-south-1  warm   ready   17fb8e  warm pool refreshed nightly   3104
+          slot-0013  sa-east-1   hold   paused  1994a7  carried from prior quarter    3117
+          slot-0014  eu-west-1   drain  sealed  1b2dc0  drain scheduled, no action    3130
+          slot-0015  eu-west-2   seal   armed   1cc6d9  no exception recorded         3143
+          slot-0016  us-east-1   warm   ready   1e5ff2  capacity review pending       3156
+          slot-0017  us-east-2   hold   paused  1ff90b  held for entitlement audit    3169
+          slot-0018  ap-south-1  drain  sealed  219224  rotation window verified      3182
+          slot-0019  sa-east-1   seal   armed   232b3d  seal acknowledged by relay    3195
+          slot-0020  eu-west-1   warm   ready   24c456  warm pool refreshed nightly   3208
+          slot-0021  eu-west-2   hold   paused  265d6f  carried from prior quarter    3221
+          slot-0022  us-east-1   drain  sealed  27f688  drain scheduled, no action    3234
+          slot-0023  us-east-2   seal   armed   298fa1  no exception recorded         3247
+          slot-0024  ap-south-1  warm   ready   2b28ba  capacity review pending       3260
+          slot-0025  sa-east-1   hold   paused  2cc1d3  held for entitlement audit    3273
+          slot-0026  eu-west-1   drain  sealed  2e5aec  rotation window verified      3286
+          slot-0027  eu-west-2   seal   armed   2ff405  seal acknowledged by relay    3299
+          slot-0028  us-east-1   warm   ready   318d1e  warm pool refreshed nightly   3312
+          slot-0029  us-east-2   hold   paused  332637  carried from prior quarter    3325
+          slot-0030  ap-south-1  drain  sealed  34bf50  drain scheduled, no action    3338
+          slot-0031  sa-east-1   seal   armed   365869  no exception recorded         3351
+          slot-0032  eu-west-1   warm   ready   37f182  capacity review pending       3364
+          slot-0033  eu-west-2   hold   paused  398a9b  held for entitlement audit    3377
+          slot-0034  us-east-1   drain  sealed  3b23b4  rotation window verified      3390
+          slot-0035  us-east-2   seal   armed   3cbccd  seal acknowledged by relay    3403
+          slot-0036  ap-south-1  warm   ready   3e55e6  warm pool refreshed nightly   3416
+          slot-0037  sa-east-1   hold   paused  3feeff  carried from prior quarter    3429
+          slot-0038  eu-west-1   drain  sealed  418818  drain scheduled, no action    3442
+          slot-0039  eu-west-2   seal   armed   432131  no exception recorded         3455
+          slot-0040  us-east-1   warm   ready   44ba4a  capacity review pending       3468
+          slot-0041  us-east-2   hold   paused  465363  held for entitlement audit    3481
+          slot-0042  ap-south-1  drain  sealed  47ec7c  rotation window verified      3494
+          slot-0043  sa-east-1   seal   armed   498595  seal acknowledged by relay    3507
+          slot-0044  eu-west-1   warm   ready   4b1eae  warm pool refreshed nightly   3520
+          slot-0045  eu-west-2   hold   paused  4cb7c7  carried from prior quarter    3533
+          slot-0046  us-east-1   drain  sealed  4e50e0  drain scheduled, no action    3546
+          slot-0047  us-east-2   seal   armed   4fe9f9  no exception recorded         3559
+          slot-0048  ap-south-1  warm   ready   518312  capacity review pending       3572
+          slot-0049  sa-east-1   hold   paused  531c2b  held for entitlement audit    3585
+          slot-0050  eu-west-1   drain  sealed  54b544  rotation window verified      3598
+          slot-0051  eu-west-2   seal   armed   564e5d  seal acknowledged by relay    3611
+          slot-0052  us-east-1   warm   ready   57e776  warm pool refreshed nightly   3624
+          slot-0053  us-east-2   hold   paused  59808f  carried from prior quarter    3637
+          slot-0054  ap-south-1  drain  sealed  5b19a8  drain scheduled, no action    3650
+          slot-0055  sa-east-1   seal   armed   5cb2c1  no exception recorded         3663
+          slot-0056  eu-west-1   warm   ready   5e4bda  capacity review pending       3676
+          slot-0057  eu-west-2   hold   paused  5fe4f3  held for entitlement audit    3689
+          slot-0058  us-east-1   drain  sealed  617e0c  rotation window verified      3702
+          slot-0059  us-east-2   seal   armed   631725  seal acknowledged by relay    3715
+          slot-0060  ap-south-1  warm   ready   64b03e  warm pool refreshed nightly   3728
+          slot-0061  sa-east-1   hold   paused  664957  carried from prior quarter    3741
+          slot-0062  eu-west-1   drain  sealed  67e270  drain scheduled, no action    3754
+          slot-0063  eu-west-2   seal   armed   697b89  no exception recorded         3767
+          slot-0064  us-east-1   warm   ready   6b14a2  capacity review pending       3780
+          slot-0065  us-east-2   hold   paused  6cadbb  held for entitlement audit    3793
+          slot-0066  ap-south-1  drain  sealed  6e46d4  rotation window verified      3806
+          slot-0067  sa-east-1   seal   armed   6fdfed  seal acknowledged by relay    3819
+          slot-0068  eu-west-1   warm   ready   717906  warm pool refreshed nightly   3832
+          slot-0069  eu-west-2   hold   paused  73121f  carried from prior quarter    3845
+          slot-0070  us-east-1   drain  sealed  74ab38  drain scheduled, no action    3858
+          slot-0071  us-east-2   seal   armed   764451  no exception recorded         3871
+          slot-0072  ap-south-1  warm   ready   77dd6a  capacity review pending       3884
+          slot-0073  sa-east-1   hold   paused  797683  held for entitlement audit    3897
+          slot-0074  eu-west-1   drain  sealed  7b0f9c  rotation window verified      3910
+          slot-0075  eu-west-2   seal   armed   7ca8b5  seal acknowledged by relay    3923
+          slot-0076  us-east-1   warm   ready   7e41ce  warm pool refreshed nightly   3936
+          slot-0077  us-east-2   hold   paused  7fdae7  carried from prior quarter    3949
+          slot-0078  ap-south-1  drain  sealed  817400  drain scheduled, no action    3962
+          slot-0079  sa-east-1   seal   armed   830d19  no exception recorded         3975
+          slot-0080  eu-west-1   warm   ready   84a632  capacity review pending       3988
+          slot-0081  eu-west-2   hold   paused  863f4b  held for entitlement audit    4001
+          slot-0082  us-east-1   drain  sealed  87d864  rotation window verified      4014
+          slot-0083  us-east-2   seal   armed   89717d  seal acknowledged by relay    4027
+          slot-0084  ap-south-1  warm   ready   8b0a96  warm pool refreshed nightly   4040
+          slot-0085  sa-east-1   hold   paused  8ca3af  carried from prior quarter    4053
+          slot-0086  eu-west-1   drain  sealed  8e3cc8  drain scheduled, no action    4066
+          slot-0087  eu-west-2   seal   armed   8fd5e1  no exception recorded         4079
+          slot-0088  us-east-1   warm   ready   916efa  capacity review pending       4092
+          slot-0089  us-east-2   hold   paused  930813  held for entitlement audit    4105
+          slot-0090  ap-south-1  drain  sealed  94a12c  rotation window verified      7450
+      - path: ledger/refs/f4.txt
+        contents: |
+          slot-0001  sa-east-1   seal   armed   072115  seal acknowledged by relay    3183
+          slot-0002  eu-west-1   warm   ready   08ba2e  warm pool refreshed nightly   3196
+          slot-0003  eu-west-2   hold   paused  0a5347  carried from prior quarter    3209
+          slot-0004  us-east-1   drain  sealed  0bec60  drain scheduled, no action    3222
+          slot-0005  us-east-2   seal   armed   0d8579  no exception recorded         3235
+          slot-0006  ap-south-1  warm   ready   0f1e92  capacity review pending       3248
+          slot-0007  sa-east-1   hold   paused  10b7ab  held for entitlement audit    3261
+          slot-0008  eu-west-1   drain  sealed  1250c4  rotation window verified      3274
+          slot-0009  eu-west-2   seal   armed   13e9dd  seal acknowledged by relay    3287
+          slot-0010  us-east-1   warm   ready   1582f6  warm pool refreshed nightly   3300
+          slot-0011  us-east-2   hold   paused  171c0f  carried from prior quarter    3313
+          slot-0012  ap-south-1  drain  sealed  18b528  drain scheduled, no action    3326
+          slot-0013  sa-east-1   seal   armed   1a4e41  no exception recorded         3339
+          slot-0014  eu-west-1   warm   ready   1be75a  capacity review pending       3352
+          slot-0015  eu-west-2   hold   paused  1d8073  held for entitlement audit    3365
+          slot-0016  us-east-1   drain  sealed  1f198c  rotation window verified      3378
+          slot-0017  us-east-2   seal   armed   20b2a5  seal acknowledged by relay    3391
+          slot-0018  ap-south-1  warm   ready   224bbe  warm pool refreshed nightly   3404
+          slot-0019  sa-east-1   hold   paused  23e4d7  carried from prior quarter    3417
+          slot-0020  eu-west-1   drain  sealed  257df0  drain scheduled, no action    3430
+          slot-0021  eu-west-2   seal   armed   271709  no exception recorded         3443
+          slot-0022  us-east-1   warm   ready   28b022  capacity review pending       3456
+          slot-0023  us-east-2   hold   paused  2a493b  held for entitlement audit    3469
+          slot-0024  ap-south-1  drain  sealed  2be254  rotation window verified      3482
+          slot-0025  sa-east-1   seal   armed   2d7b6d  seal acknowledged by relay    3495
+          slot-0026  eu-west-1   warm   ready   2f1486  warm pool refreshed nightly   3508
+          slot-0027  eu-west-2   hold   paused  30ad9f  carried from prior quarter    3521
+          slot-0028  us-east-1   drain  sealed  3246b8  drain scheduled, no action    3534
+          slot-0029  us-east-2   seal   armed   33dfd1  no exception recorded         3547
+          slot-0030  ap-south-1  warm   ready   3578ea  capacity review pending       3560
+          slot-0031  sa-east-1   hold   paused  371203  held for entitlement audit    3573
+          slot-0032  eu-west-1   drain  sealed  38ab1c  rotation window verified      3586
+          slot-0033  eu-west-2   seal   armed   3a4435  seal acknowledged by relay    3599
+          slot-0034  us-east-1   warm   ready   3bdd4e  warm pool refreshed nightly   3612
+          slot-0035  us-east-2   hold   paused  3d7667  carried from prior quarter    3625
+          slot-0036  ap-south-1  drain  sealed  3f0f80  drain scheduled, no action    3638
+          slot-0037  sa-east-1   seal   armed   40a899  no exception recorded         3651
+          slot-0038  eu-west-1   warm   ready   4241b2  capacity review pending       3664
+          slot-0039  eu-west-2   hold   paused  43dacb  held for entitlement audit    3677
+          slot-0040  us-east-1   drain  sealed  4573e4  rotation window verified      3690
+          slot-0041  us-east-2   seal   armed   470cfd  seal acknowledged by relay    3703
+          slot-0042  ap-south-1  warm   ready   48a616  warm pool refreshed nightly   3716
+          slot-0043  sa-east-1   hold   paused  4a3f2f  carried from prior quarter    3729
+          slot-0044  eu-west-1   drain  sealed  4bd848  drain scheduled, no action    3742
+          slot-0045  eu-west-2   seal   armed   4d7161  no exception recorded         3755
+          slot-0046  us-east-1   warm   ready   4f0a7a  capacity review pending       3768
+          slot-0047  us-east-2   hold   paused  50a393  held for entitlement audit    3781
+          slot-0048  ap-south-1  drain  sealed  523cac  rotation window verified      3794
+          slot-0049  sa-east-1   seal   armed   53d5c5  seal acknowledged by relay    3807
+          slot-0050  eu-west-1   warm   ready   556ede  warm pool refreshed nightly   3820
+          slot-0051  eu-west-2   hold   paused  5707f7  carried from prior quarter    3833
+          slot-0052  us-east-1   drain  sealed  58a110  drain scheduled, no action    3846
+          slot-0053  us-east-2   seal   armed   5a3a29  no exception recorded         3859
+          slot-0054  ap-south-1  warm   ready   5bd342  capacity review pending       3872
+          slot-0055  sa-east-1   hold   paused  5d6c5b  held for entitlement audit    3885
+          slot-0056  eu-west-1   drain  sealed  5f0574  rotation window verified      3898
+          slot-0057  eu-west-2   seal   armed   609e8d  seal acknowledged by relay    3911
+          slot-0058  us-east-1   warm   ready   6237a6  warm pool refreshed nightly   3924
+          slot-0059  us-east-2   hold   paused  63d0bf  carried from prior quarter    3937
+          slot-0060  ap-south-1  drain  sealed  6569d8  drain scheduled, no action    3950
+          slot-0061  sa-east-1   seal   armed   6702f1  no exception recorded         3963
+          slot-0062  eu-west-1   warm   ready   689c0a  capacity review pending       3976
+          slot-0063  eu-west-2   hold   paused  6a3523  held for entitlement audit    3989
+          slot-0064  us-east-1   drain  sealed  6bce3c  rotation window verified      4002
+          slot-0065  us-east-2   seal   armed   6d6755  seal acknowledged by relay    4015
+          slot-0066  ap-south-1  warm   ready   6f006e  warm pool refreshed nightly   4028
+          slot-0067  sa-east-1   hold   paused  709987  carried from prior quarter    4041
+          slot-0068  eu-west-1   drain  sealed  7232a0  drain scheduled, no action    4054
+          slot-0069  eu-west-2   seal   armed   73cbb9  no exception recorded         4067
+          slot-0070  us-east-1   warm   ready   7564d2  capacity review pending       4080
+          slot-0071  us-east-2   hold   paused  76fdeb  held for entitlement audit    4093
+          slot-0072  ap-south-1  drain  sealed  789704  rotation window verified      4106
+          slot-0073  sa-east-1   seal   armed   7a301d  seal acknowledged by relay    4119
+          slot-0074  eu-west-1   warm   ready   7bc936  warm pool refreshed nightly   4132
+          slot-0075  eu-west-2   hold   paused  7d624f  carried from prior quarter    4145
+          slot-0076  us-east-1   drain  sealed  7efb68  drain scheduled, no action    4158
+          slot-0077  us-east-2   seal   armed   809481  no exception recorded         4171
+          slot-0078  ap-south-1  warm   ready   822d9a  capacity review pending       4184
+          slot-0079  sa-east-1   hold   paused  83c6b3  held for entitlement audit    4197
+          slot-0080  eu-west-1   drain  sealed  855fcc  rotation window verified      4210
+          slot-0081  eu-west-2   seal   armed   86f8e5  seal acknowledged by relay    4223
+          slot-0082  us-east-1   warm   ready   8891fe  warm pool refreshed nightly   4236
+          slot-0083  us-east-2   hold   paused  8a2b17  carried from prior quarter    4249
+          slot-0084  ap-south-1  drain  sealed  8bc430  drain scheduled, no action    4262
+          slot-0085  sa-east-1   seal   armed   8d5d49  no exception recorded         4275
+          slot-0086  eu-west-1   warm   ready   8ef662  capacity review pending       4288
+          slot-0087  eu-west-2   hold   paused  908f7b  held for entitlement audit    4301
+          slot-0088  us-east-1   drain  sealed  922894  rotation window verified      4314
+          slot-0089  us-east-2   seal   armed   93c1ad  seal acknowledged by relay    4327
+          slot-0090  ap-south-1  warm   ready   955ac6  warm pool refreshed nightly   1120
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Reports only the FIRST problem, and brings one more record into play at a time.
+          f=ledger/reading.conf
+          R=ledger/refs
+          fail() { echo "ledger problem: $1"; exit 1; }
+
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^reading = [0-9]+$' \
+            && fail "the file must hold one line, 'reading = <number>' — nothing else may live in it"
+          test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "1" \
+            || fail "the file must hold one line, 'reading = <number>' — nothing else may live in it"
+
+          v=$(sed -n 's/^reading = //p' "$f")
+          t() { tail -n 1 "$R/$1" | awk '{print $NF}'; }
+          span() { printf '%s\n' "$@" | sort -n | awk 'NR==1 { lo = $1 } { hi = $1 } END { print hi - lo }'; }
+
+          a=$(t f1.txt); b=$(t f2.txt); c=$(t f3.txt); d=$(t f4.txt)
+
+          # One key, and each stage MOVES its target — so the ladder is walked from the
+          # most advanced state backwards. Testing the stages in ascending order would
+          # make a correct stage-B answer report stage A's complaint, because a stage-B
+          # answer is by construction no longer equal to stage A's.
+          test "$v" = "$(span "$a" "$b" "$c" "$d")" && { echo ok; exit 0; }
+          test "$v" = "$(span "$a" "$b" "$c")" \
+            && fail "reading must now also account for $R/f4.txt — largest minus smallest across f1, f2, f3 and f4"
+          test "$v" = "$(span "$a" "$b")" \
+            && fail "reading must now also account for $R/f3.txt — largest minus smallest across f1, f2 and f3"
+          fail "reading must be the largest minus the smallest of the values ending $R/f1.txt and $R/f2.txt"
