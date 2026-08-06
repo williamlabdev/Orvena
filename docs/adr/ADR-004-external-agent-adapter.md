@@ -156,7 +156,7 @@ ADR-003 已經把 containment 放在「子行程 spawn 的那一刻」。一個�
 
 ## References
 
-- [SLICE-018-aider-adapter.md](../../SLICE-018-aider-adapter.md) — 落地 slice(施力點、驗收、實測)
+- [SLICE-018-aider-adapter.md](../slices/SLICE-018-aider-adapter.md) — 落地 slice(施力點、驗收、實測)
 - [docs/benchmark-governance-differential-plan.md](../benchmark-governance-differential-plan.md) — §5 兩種 adapter 形態、D5 裁決
 - [ADR-003](./ADR-003-os-sandbox-boundary.md) — enforcement 下移到子行程邊界(本 ADR 的地基)
 - `crates/orvena-core/src/adapter/mod.rs` — envelope 本體(argv、sandbox policy、gate 迴圈、evidence)

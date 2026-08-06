@@ -4,7 +4,7 @@
 > D5 裁決的 adapter 順序 **Aider → OpenHands → Claude Code**。
 > 前置(015/016 OS sandbox)已就位;本片把那層圈禁**對準一個不是自家 loop 的
 > 子行程**,並把它接回既有的 gate / oracle / evidence 管線。
-> 隨附 [ADR-004](docs/adr/ADR-004-external-agent-adapter.md)。
+> 隨附 [ADR-004](../adr/ADR-004-external-agent-adapter.md)。
 
 ## 為什麼是這一片(現況缺口)
 

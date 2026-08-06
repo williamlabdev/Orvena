@@ -211,7 +211,7 @@ fail-closed —— because:
 
 ## References
 
-- [SLICE-os-sandbox.md](../../SLICE-os-sandbox.md) — 落地 slice(施力點、平台後端、驗收)
+- [SLICE-os-sandbox.md](../slices/SLICE-os-sandbox.md) — 落地 slice(施力點、平台後端、驗收)
 - [docs/benchmark-governance-differential-plan.md](../benchmark-governance-differential-plan.md) — §5 兩種 adapter 形態、D5 裁決
 - [ADR-001](./ADR-001-shell-tool-security-model.md) — 「`intent` 是信任聲明不是沙箱」的原始標註
 - `crates/orvena-core/src/exec.rs` — `CommandRunner::spawn_and_wait`(唯一 spawn 匯流點,施力點)

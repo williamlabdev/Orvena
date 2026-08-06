@@ -221,7 +221,7 @@ plan and rulings (D1–D6):
   leg (control-gated: skips rather than false-fails on kernels without
   Landlock); **Windows has no native backend** and follows the tier-bound
   fail-closed/warn path ([ADR-003](adr/ADR-003-os-sandbox-boundary.md),
-  [SLICE-os-sandbox-linux.md](../SLICE-os-sandbox-linux.md),
+  [SLICE-os-sandbox-linux.md](slices/SLICE-os-sandbox-linux.md),
   [CHANGELOG](../CHANGELOG.md)).
 - **Sandbox strength is relaxed-but-real** — allow-default subtraction: a
   malicious command can still damage files *inside* the root; deny-default
@@ -252,10 +252,10 @@ plan and rulings (D1–D6):
 | [ADR-001](adr/ADR-001-shell-tool-security-model.md) | shell tool security model — declarative command allow-list; model never authors command strings | ACCEPTED |
 | [ADR-002](adr/ADR-002-evidence-bundle-location.md) | evidence bundle location — `.orvena/runs/<epoch-ms>/evidence.json`; serialization in core, clock/paths in CLI | ACCEPTED |
 | [ADR-003](adr/ADR-003-os-sandbox-boundary.md) | OS-level sandbox — enforcement moved down to the child-process boundary; fail-closed by tier | ACCEPTED |
-| [SLICE-grep-tool.md](../SLICE-grep-tool.md) | read-only grep tool + `SEARCH` action wiring | DONE |
-| [SLICE-shell-run-tool.md](../SLICE-shell-run-tool.md) | declarative RUN tool + shared `CommandRunner` (implements ADR-001) | DONE |
-| [SLICE-os-sandbox.md](../SLICE-os-sandbox.md) | OS sandbox spawn-point confinement (implements ADR-003; macOS backend) | IMPLEMENTED |
-| [SLICE-os-sandbox-linux.md](../SLICE-os-sandbox-linux.md) | Linux backend — Landlock + seccomp re-exec shim | IMPLEMENTED |
+| [SLICE-grep-tool.md](slices/SLICE-grep-tool.md) | read-only grep tool + `SEARCH` action wiring | DONE |
+| [SLICE-shell-run-tool.md](slices/SLICE-shell-run-tool.md) | declarative RUN tool + shared `CommandRunner` (implements ADR-001) | DONE |
+| [SLICE-os-sandbox.md](slices/SLICE-os-sandbox.md) | OS sandbox spawn-point confinement (implements ADR-003; macOS backend) | IMPLEMENTED |
+| [SLICE-os-sandbox-linux.md](slices/SLICE-os-sandbox-linux.md) | Linux backend — Landlock + seccomp re-exec shim | IMPLEMENTED |
 | [MVP-SCOPE.md](../MVP-SCOPE.md) | what v0.1 must deliver vs. explicitly defer | working draft |
 | [benchmark-governance-differential-plan.md](benchmark-governance-differential-plan.md) | differential benchmark rulings D1–D6 (headline metrics, bench-only baseline, oracle independence, schema freeze, BYO-agent route, model matrix) | decided 2026-07-11 |
 | [docs/next/](next) | narrower follow-up tickets (evidence exit paths, scope-lock escape, bench validity) | per-ticket |

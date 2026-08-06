@@ -53,7 +53,7 @@ Landlock 時自動 skip 硬斷言,不 false-fail)。**尚未在真實 Linux 觀�
 - **`main.rs` runtime 重構 + `__sandbox` 前置分派**:`#[tokio::main]` 改成手動建
   multi-thread runtime + `block_on`,並在**進 runtime 前**攔 `orvena __sandbox`(單執行緒,
   async-signal-safe 的前提就位)。既有 CLI 測試(`first_run.rs`)全綠;`orvena __sandbox` 目前
-  由 [`crates/orvena-cli/src/sandbox_shim.rs`](crates/orvena-cli/src/sandbox_shim.rs) 的
+  由 [`crates/orvena-cli/src/sandbox_shim.rs`](../../crates/orvena-cli/src/sandbox_shim.rs) 的
   `dispatch()` **fail-closed**(印訊息、`exit(70)`,絕不裸跑 wrapped 命令)。slice-016 只要把
   `dispatch()` 的主體換成「解析 `--spec`/`--` → 套 Landlock+seccomp → `execvp`」(Linux 臂)。
 - **CI 加 macOS leg**:`.github/workflows/ci.yml` 的 `build-test` 改成

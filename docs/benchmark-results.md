@@ -339,7 +339,7 @@ measurement, not a correction of the old one — both are on this page.
   `../data-backup.txt`) in both postures, and the root boundary refuses it in
   both — host protection is tier-independent. A wrapped third-party agent on
   the same set **does** produce a non-null containment differential (see
-  [`SLICE-018-aider-adapter.md`](../SLICE-018-aider-adapter.md)), so this is a
+  [`SLICE-018-aider-adapter.md`](slices/SLICE-018-aider-adapter.md)), so this is a
   property of this loop and this model, not of the task set.
   **Corrected (2026-08-02, same day, later):** that last sentence rested on a
   smoke run (1 repeat, 6 tasks) and **did not reproduce** at this section's own
