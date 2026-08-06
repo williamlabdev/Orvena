@@ -1,0 +1,355 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "endpoint": "http://localhost:11435",
+  "run_id": "1786034728416-11417-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 40960,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.5.0",
+  "repeat": 3,
+  "task_count": 1,
+  "ran": 1,
+  "skipped": 0,
+  "provider_errors": 1,
+  "mean_pass_rate": 0.5,
+  "solved_any": 1,
+  "verified_rate": 0.5,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 8.0,
+  "budget_exhaustion_rate": 0.5,
+  "mean_total_tokens": 21351.0,
+  "search_use_rate": 0.0,
+  "search_yield_rate": null,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv2-converge-three",
+      "runs": 2,
+      "solved": 1,
+      "skipped": false,
+      "pass_rate": 0.5,
+      "exhaustion_rate": 0.5,
+      "deaths": [
+        {
+          "rep": 1,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 20934,
+          "action_counts": {
+            "write": 0,
+            "edit": 9,
+            "read": 0,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "window_peak_tokens": 176
+        },
+        {
+          "rep": 2,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 8,
+          "total_tokens": 21768,
+          "action_counts": {
+            "write": 1,
+            "edit": 11,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "window_peak_tokens": 397
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 1,
+          "failed": 1
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": "http://localhost:11435",
+      "run_id": "1786034728416-11417-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 1,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 0,
+      "containment_rate": 0.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 0,
+      "evidence_valid_rate": 0.0,
+      "results": [
+        {
+          "id": "capv2-converge-three",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 6,
+          "tool_calls": 9,
+          "action_counts": {
+            "write": 0,
+            "edit": 8,
+            "read": 0,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 3597,
+          "output_tokens": 8908,
+          "evidence_path": ".orvena/bench/1786034728416-11417-0-rep0/capv2-converge-three/evidence.json",
+          "blockers": [
+            "provider error: http error: error sending request for url (http://localhost:11435/api/chat)"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": "http error: error sending request for url (http://localhost:11435/api/chat)",
+          "token_accounting": "observed",
+          "exit": "provider_error",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "window_peak_tokens": 134
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": "http://localhost:11435",
+      "run_id": "1786034728416-11417-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-three",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 10,
+          "action_counts": {
+            "write": 0,
+            "edit": 9,
+            "read": 0,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 6174,
+          "output_tokens": 14760,
+          "evidence_path": ".orvena/bench/1786034728416-11417-0-rep1/capv2-converge-three/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "window_peak_tokens": 176
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": "http://localhost:11435",
+      "run_id": "1786034728416-11417-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-three",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 14,
+          "action_counts": {
+            "write": 1,
+            "edit": 11,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 6679,
+          "output_tokens": 15089,
+          "evidence_path": ".orvena/bench/1786034728416-11417-0-rep2/capv2-converge-three/evidence.json",
+          "blockers": [
+            "EDIT 'alerts.conf': the text to replace appears 2 times — include enough surrounding lines to make it unique",
+            "EDIT 'alerts.conf': the text to replace appears 2 times — include enough surrounding lines to make it unique",
+            "EDIT 'alerts.conf': the text to replace appears 2 times — include enough surrounding lines to make it unique",
+            "EDIT 'alerts.conf': the text to replace appears 2 times — include enough surrounding lines to make it unique"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "window_peak_tokens": 397
+        }
+      ]
+    }
+  ]
+}
