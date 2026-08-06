@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::metrics::{ExitReason, TokenAccounting};
+use crate::metrics::{ActionCounts, ExitReason, TokenAccounting};
 use crate::Result;
 
 /// The outcome of one task in the set.
@@ -190,6 +190,142 @@ pub(super) fn default_agent() -> String {
     "native".into()
 }
 
+/// How one run's searching went, as a class rather than a rate.
+///
+/// The classes exist because the rates kept collapsing into each other:
+/// `search_yield_rate` turned out to be the pass rate in another notation (in
+/// 30 probe runs, every run with a hit solved and every run without one failed
+/// — slice-026), so the usable signal is which *kind* of search failure a run
+/// died in, not what fraction of searches hit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SearchOutcome {
+    /// At least one SEARCH came back with a hit.
+    Hit,
+    /// Searches looked at files and every recorded outcome was zero hits —
+    /// the loop searched for the wrong thing.
+    Miss,
+    /// Searches were emitted but not one ever looked at a file (every outcome
+    /// errored at the tool boundary). This is the death slice-027 fixed for
+    /// globs; keeping it distinct from `Miss` is what would make a recurrence
+    /// visible as a tool problem instead of a model problem.
+    Blocked,
+    /// The loop never searched.
+    NoSearch,
+    /// The run's actions were not Orvena's to attribute (wrapped agent).
+    /// Never folded into `NoSearch`: a gap in the record is not a finding
+    /// about behaviour.
+    Unattributable,
+}
+
+impl SearchOutcome {
+    /// Classify one run from its action counts and per-search hits.
+    ///
+    /// `counts = None` means unattributable, **not** "zero searches" — the
+    /// same contract as [`TaskResult::action_counts`]. Errored searches record
+    /// `None` in `hits` and are never read as misses; a run whose every search
+    /// errored is `Blocked`, because nothing was ever actually searched.
+    pub fn classify(counts: Option<&ActionCounts>, hits: &[Option<u32>]) -> Self {
+        let Some(counts) = counts else {
+            return Self::Unattributable;
+        };
+        if hits.iter().flatten().any(|h| *h > 0) {
+            Self::Hit
+        } else if hits.iter().any(|h| h.is_some()) {
+            Self::Miss
+        } else if counts.search > 0 {
+            Self::Blocked
+        } else {
+            Self::NoSearch
+        }
+    }
+}
+
+/// One measured run's line in a task's death table — how it ended, what it
+/// spent, and which actions it spent that on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DeathRow {
+    /// Index into [`RepeatedReport::runs`], so a row traces back to its full
+    /// [`TaskResult`] and evidence bundle.
+    pub rep: u32,
+    /// In-loop outcome — the same definition [`TaskPassRate::solved`] counts.
+    pub solved: bool,
+    /// Ground truth (the external `verify`).
+    pub verified: bool,
+    pub exit: ExitReason,
+    pub steps: u32,
+    pub total_tokens: u32,
+    /// `None` = unattributable, never "all zero" — same contract as
+    /// [`TaskResult::action_counts`].
+    pub action_counts: Option<ActionCounts>,
+    /// Hits per SEARCH in order, verbatim from the run (`None` = errored).
+    pub search_hits: Vec<Option<u32>>,
+    pub search: SearchOutcome,
+}
+
+impl DeathRow {
+    /// The row for one measured run. `rep` is its index in
+    /// [`RepeatedReport::runs`].
+    pub fn of(rep: u32, r: &TaskResult) -> Self {
+        Self {
+            rep,
+            solved: r.completed,
+            verified: r.verified,
+            exit: r.exit,
+            steps: r.steps,
+            total_tokens: r.input_tokens + r.output_tokens,
+            action_counts: r.action_counts,
+            search_hits: r.search_hits.clone(),
+            search: SearchOutcome::classify(r.action_counts.as_ref(), &r.search_hits),
+        }
+    }
+}
+
+/// Solved/failed counts for one cell of [`SearchSolveTable`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SolveSplit {
+    pub solved: u32,
+    pub failed: u32,
+}
+
+/// How run-level search outcomes pair with solving, per task.
+///
+/// In 30 probe runs the correspondence was exact — hit ⇔ solved, without
+/// exception (slice-026) — which is why `search_yield_rate` cannot serve as a
+/// second reading. This table is what makes that correspondence, or its
+/// breakdown (which would be a new finding: a loop that found the answer and
+/// did not act, a shape never yet observed), checkable per task instead of by
+/// reading transcripts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchSolveTable {
+    pub hit: SolveSplit,
+    pub miss: SolveSplit,
+    pub blocked: SolveSplit,
+    pub no_search: SolveSplit,
+    pub unattributable: SolveSplit,
+}
+
+impl SearchSolveTable {
+    pub fn tally(rows: &[DeathRow]) -> Self {
+        let mut table = Self::default();
+        for row in rows {
+            let cell = match row.search {
+                SearchOutcome::Hit => &mut table.hit,
+                SearchOutcome::Miss => &mut table.miss,
+                SearchOutcome::Blocked => &mut table.blocked,
+                SearchOutcome::NoSearch => &mut table.no_search,
+                SearchOutcome::Unattributable => &mut table.unattributable,
+            };
+            if row.solved {
+                cell.solved += 1;
+            } else {
+                cell.failed += 1;
+            }
+        }
+        table
+    }
+}
+
 /// Per-task pass rate across repeated runs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskPassRate {
@@ -198,6 +334,25 @@ pub struct TaskPassRate {
     pub solved: u32,
     pub skipped: bool,
     pub pass_rate: f32,
+    /// Fraction of this task's measured runs that ended `budget_exhausted`.
+    /// Per task, unlike [`RepeatedReport::budget_exhaustion_rate`]: a floor
+    /// model dies differently on different tasks, and a set-level mean hides
+    /// exactly the per-task shape calibration reads (slice-026).
+    #[serde(default)]
+    pub exhaustion_rate: f32,
+    /// The death table (slice-026): one row per measured run, in repeat order.
+    /// What a calibration run publishes about a task is not a percentage but
+    /// how its runs died — the pass rate needs ~96 runs to stabilize, while
+    /// the death classification was identical across three invocations whose
+    /// pass rates differed by 59 points. Empty on reports written before the
+    /// field, and on skipped tasks.
+    #[serde(default)]
+    pub deaths: Vec<DeathRow>,
+    /// See [`SearchSolveTable`]. All-zero on pre-field reports — telling that
+    /// apart from "measured, nothing searched" is what `deaths` being empty
+    /// or not is for.
+    #[serde(default)]
+    pub search_vs_solved: SearchSolveTable,
 }
 
 /// Aggregate of `repeat` benchmark runs — a de-noised completion rate that
@@ -409,4 +564,77 @@ pub fn write_report(report: &BenchReport, path: &Path) -> Result<()> {
     }
     std::fs::write(path, serde_json::to_string_pretty(report)?)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn counts(search: u32) -> ActionCounts {
+        ActionCounts { search, ..Default::default() }
+    }
+
+    #[test]
+    fn a_run_with_any_hit_is_hit_even_among_errors_and_misses() {
+        let hits = vec![None, Some(0), Some(3)];
+        assert_eq!(SearchOutcome::classify(Some(&counts(3)), &hits), SearchOutcome::Hit);
+    }
+
+    #[test]
+    fn all_zero_outcomes_are_a_miss_not_a_block() {
+        // It looked — in the wrong places. A model problem, not a tool problem.
+        let hits = vec![Some(0), Some(0)];
+        assert_eq!(SearchOutcome::classify(Some(&counts(2)), &hits), SearchOutcome::Miss);
+    }
+
+    #[test]
+    fn every_search_erroring_is_blocked_not_a_miss() {
+        // The slice-027 death: searches emitted, none ever looked at a file.
+        // Reading it as Miss would blame the model for a tool boundary.
+        let hits = vec![None, None, None];
+        assert_eq!(SearchOutcome::classify(Some(&counts(3)), &hits), SearchOutcome::Blocked);
+    }
+
+    #[test]
+    fn never_searching_and_unattributable_are_different_classes() {
+        assert_eq!(SearchOutcome::classify(Some(&counts(0)), &[]), SearchOutcome::NoSearch);
+        // None counts = a wrapped agent's run. "No record" is not "no search".
+        assert_eq!(SearchOutcome::classify(None, &[]), SearchOutcome::Unattributable);
+    }
+
+    #[test]
+    fn the_tally_pairs_each_outcome_with_solving() {
+        let row = |solved: bool, search: SearchOutcome| DeathRow {
+            rep: 0,
+            solved,
+            verified: solved,
+            exit: ExitReason::GatesPassed,
+            steps: 2,
+            total_tokens: 100,
+            action_counts: Some(counts(1)),
+            search_hits: Vec::new(),
+            search,
+        };
+        let table = SearchSolveTable::tally(&[
+            row(true, SearchOutcome::Hit),
+            row(false, SearchOutcome::Miss),
+            row(false, SearchOutcome::Miss),
+            row(false, SearchOutcome::Blocked),
+        ]);
+        assert_eq!(table.hit, SolveSplit { solved: 1, failed: 0 });
+        assert_eq!(table.miss, SolveSplit { solved: 0, failed: 2 });
+        assert_eq!(table.blocked, SolveSplit { solved: 0, failed: 1 });
+        assert_eq!(table.no_search, SolveSplit::default());
+    }
+
+    #[test]
+    fn a_pre_death_table_report_still_reads_back() {
+        // The committed reports this field postdates must stay readable, and
+        // must read as "not recorded" (empty deaths), never as measured zeros.
+        let old = r#"{"id":"t","runs":3,"solved":1,"skipped":false,"pass_rate":0.33}"#;
+        let t: TaskPassRate = serde_json::from_str(old).unwrap();
+        assert!(t.deaths.is_empty());
+        assert_eq!(t.exhaustion_rate, 0.0);
+        assert_eq!(t.search_vs_solved, SearchSolveTable::default());
+    }
 }

@@ -34,8 +34,9 @@ pub mod task;
 
 pub use mode::GovernanceMode;
 pub use report::{
-    write_matrix_report, write_repeated_report, write_report, BenchReport, Differential,
-    MatrixReport, RepeatedReport, RunProvenance, TaskPassRate, TaskResult,
+    write_matrix_report, write_repeated_report, write_report, BenchReport, DeathRow, Differential,
+    MatrixReport, RepeatedReport, RunProvenance, SearchOutcome, SearchSolveTable, SolveSplit,
+    TaskPassRate, TaskResult,
 };
 pub use runner::{run_benchmark, run_benchmark_matrix, run_benchmark_repeated};
 pub use task::{BenchTask, BenchTaskSet, SeedFile};

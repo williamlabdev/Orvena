@@ -10,6 +10,7 @@ use anyhow::{bail, Context, Result};
 use orvena_core::adapter::{self, AgentSelection};
 use orvena_core::benchmark::{
     self, BenchReport, BenchTaskSet, GovernanceMode, MatrixReport, RepeatedReport, RunProvenance,
+    SolveSplit, TaskPassRate,
 };
 use orvena_core::config::agent::ProviderSelection;
 use orvena_core::config::Config;
@@ -358,6 +359,39 @@ fn print_provenance(p: Option<&RunProvenance>) {
     }
 }
 
+/// One line summarizing a task's death table: how many runs burned their
+/// budget, and how each search outcome paired with solving. `None` when the
+/// report predates the table (nothing measured is not "0% exhausted").
+fn death_note(t: &TaskPassRate) -> Option<String> {
+    if t.deaths.is_empty() {
+        return None;
+    }
+    let exhausted = t
+        .deaths
+        .iter()
+        .filter(|d| d.exit == orvena_core::metrics::ExitReason::BudgetExhausted)
+        .count();
+    let s = &t.search_vs_solved;
+    let cells: Vec<String> = [
+        ("hit", s.hit),
+        ("miss", s.miss),
+        ("blocked", s.blocked),
+        ("no-search", s.no_search),
+        ("unattributed", s.unattributable),
+    ]
+    .iter()
+    .filter(|(_, split)| split.solved + split.failed > 0)
+    .map(|(name, split): &(&str, SolveSplit)| {
+        format!("{name} {}/{}", split.solved, split.solved + split.failed)
+    })
+    .collect();
+    Some(format!(
+        "deaths: {exhausted}/{} exhausted  |  search→solved: {}",
+        t.deaths.len(),
+        cells.join(", ")
+    ))
+}
+
 fn print_repeated(r: &RepeatedReport) {
     println!("── benchmark ({} runs/task) [{}] ──", r.repeat, r.governance);
     println!("provider:  {} / {}", r.provider, r.model);
@@ -379,6 +413,12 @@ fn print_repeated(r: &RepeatedReport) {
                 t.runs,
                 t.pass_rate * 100.0
             );
+            // The death table (slice-026): calibration reads how a task's runs
+            // died, not just how many passed — printed per task because the
+            // set-level exhaustion mean hides exactly the per-task shape.
+            if let Some(line) = death_note(t) {
+                println!("  {:<18} {line}", "");
+            }
         }
     }
     // With nothing measured, every rate below would print 0% — which reads as

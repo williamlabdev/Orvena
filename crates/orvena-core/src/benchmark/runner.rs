@@ -22,8 +22,8 @@ use crate::{Error, Result};
 use super::aggregate::{aggregate, derive_differential, rate, weakest_accounting};
 use super::mode::GovernanceMode;
 use super::report::{
-    default_agent, BenchReport, MatrixReport, RepeatedReport, RunProvenance, TaskPassRate,
-    TaskResult,
+    default_agent, BenchReport, DeathRow, MatrixReport, RepeatedReport, RunProvenance,
+    SearchSolveTable, TaskPassRate, TaskResult,
 };
 use super::task::{BenchTask, BenchTaskSet};
 
@@ -482,6 +482,9 @@ pub async fn run_benchmark_repeated(
                 solved: 0,
                 skipped: true,
                 pass_rate: 0.0,
+                exhaustion_rate: 0.0,
+                deaths: Vec::new(),
+                search_vs_solved: SearchSolveTable::default(),
             });
             continue;
         }
@@ -489,24 +492,33 @@ pub async fn run_benchmark_repeated(
         // that died on a provider error is not a failed attempt at the task —
         // it is a missing attempt, and dividing by it would silently deflate
         // the pass rate by however much the API was down.
-        let measured_runs = runs
+        let measured: Vec<(u32, &TaskResult)> = runs
             .iter()
-            .filter(|rep| rep.results.iter().any(|r| r.id == t.id && r.provider_error.is_none()))
-            .count() as u32;
-        let solved = runs
-            .iter()
-            .filter(|rep| {
-                rep.results
+            .enumerate()
+            .filter_map(|(rep, run)| {
+                run.results
                     .iter()
-                    .any(|r| r.id == t.id && r.completed && r.provider_error.is_none())
+                    .find(|r| r.id == t.id && r.provider_error.is_none())
+                    .map(|r| (rep as u32, r))
             })
-            .count() as u32;
+            .collect();
+        let measured_runs = measured.len() as u32;
+        let solved = measured.iter().filter(|(_, r)| r.completed).count() as u32;
+        // The death table (slice-026): what calibration reads about a task is
+        // not its pass rate but how its runs died — built here, where every
+        // repeat of the task is in view at once.
+        let deaths: Vec<DeathRow> = measured.iter().map(|(rep, r)| DeathRow::of(*rep, r)).collect();
+        let exhausted =
+            deaths.iter().filter(|d| d.exit == ExitReason::BudgetExhausted).count() as u32;
         tasks.push(TaskPassRate {
             id: t.id.clone(),
             runs: measured_runs,
             solved,
             skipped: false,
             pass_rate: rate(solved, measured_runs),
+            exhaustion_rate: rate(exhausted, measured_runs),
+            search_vs_solved: SearchSolveTable::tally(&deaths),
+            deaths,
         });
     }
 

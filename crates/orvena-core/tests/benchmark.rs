@@ -262,6 +262,24 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
     assert!((report.mean_pass_rate - 0.5).abs() < f32::EPSILON, "mean: {}", report.mean_pass_rate);
     assert_eq!(report.solved_any, 1);
 
+    // The death table (slice-026/030): one row per measured run, in repeat
+    // order, traceable back to `runs[]`; a skipped task publishes none.
+    assert_eq!(a.deaths.iter().map(|d| d.rep).collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert!(a.deaths.iter().all(|d| d.solved), "every make-a run solved");
+    assert_eq!(b.deaths.len(), 3);
+    assert!(b.deaths.iter().all(|d| !d.solved), "no fix-b run solved");
+    assert!(n.deaths.is_empty(), "a skipped task has no deaths to tabulate");
+    // Every row lands in exactly one cell of the search/solve correspondence.
+    let cells = |t: &benchmark::TaskPassRate| {
+        let s = &t.search_vs_solved;
+        [s.hit, s.miss, s.blocked, s.no_search, s.unattributable]
+            .iter()
+            .map(|c| c.solved + c.failed)
+            .sum::<u32>()
+    };
+    assert_eq!(cells(a), 3);
+    assert_eq!(cells(b), 3);
+
     let _ = std::fs::remove_dir_all(&base);
 }
 
