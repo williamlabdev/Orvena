@@ -352,10 +352,9 @@ pub(crate) async fn run_loop_with(
                                 p.trim_start_matches("./")
                             }
                             if hits.iter().any(|h| {
-                                last_read
-                                    .iter()
-                                    .any(|(p, s)| norm(p) == norm(&h.path)
-                                        && window.evicted_steps.contains(s))
+                                last_read.iter().any(|(p, s)| {
+                                    norm(p) == norm(&h.path) && window.evicted_steps.contains(s)
+                                })
                             }) {
                                 if let Some(n) = report.dropped_research.as_mut() {
                                     *n += 1;
