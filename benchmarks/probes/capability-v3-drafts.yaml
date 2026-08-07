@@ -112,8 +112,26 @@
 #   tails); (c) the window arithmetic's gate format was invented — real
 #   gate evidence is "[solved] <task-id>: <complaint>" (driver.rs:481-485)
 #   and successful EDITs emit no tool evidence (fixed: driver-faithful
-#   reconstruction). N1/N3 otherwise survived round 2; the armor chain
-#   has survived all rounds.
+#   reconstruction). draft-6 round 3 (third zero-context attack):
+#   REFUTED the round-2 fix itself on N1/N3 — the guard selector
+#   `sed -n '/^[a-z]/p'` was blind to any line not starting with a
+#   lowercase letter, so a covert `A=<value>` line rode the intermediate
+#   byte-cap slack (cap = final size; early rounds leave 14-70 free
+#   bytes) and cached the pool tails / the matrix term after all
+#   (executed to `ok` by the reviewer). N4 survived on its own pattern —
+#   any-non-blank-line selector + zero per-round slack. Fixed by
+#   adopting exactly that: EVERY non-blank line must match the enumerated
+#   grammar (header / frozen line / key line), and non-blank line count
+#   must equal total line count (whitespace-only lines were a residual
+#   composition channel inside the slack). Same round: window arithmetic
+#   corrected for per-block step headers and the batch block's single
+#   gate line. The armor chain has survived all three rounds.""),
+(#   f1. Three zero-context B2 rounds are done; each refuted structural
+#       pieces (all fixed in place) while the armor chain itself survived
+#       every round — round 2 explicitly recommended ruling it "confirmed
+#       information structure" for N1/N3 and extending it to N4, which
+#       draft-6 does. A confirmatory pass on the round-3 guard fix is the
+#       remaining gate before probes.
 # * All seeds, armor selections and complaint sequences are generated and
 #   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
 #   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order
@@ -224,9 +242,15 @@ tasks:
   #     certified as an unread file's last line; the only certain selector
   #     for a tail presupposes the read; catch-all renders dearer than the
   #     READ (all generator-asserted, deanchored()).
-  #   stash walk: growing keys + exact byte cap + per-line width regex,
-  #     all ordered BEFORE the chain — see Writable above; multi-slot
-  #     stash and pin pre-fill are regression-tested as PREEMPTED.
+  #   stash walk: growing keys + exact byte cap + ALL-LINES format guard
+  #     (every non-blank line must be the header, the owner line, or a
+  #     legal key line — B2 round 3 executed a covert `A=<tail>` cache
+  #     through the old lowercase-only selector) + blank-line equality
+  #     (whitespace-only lines were a composition channel in the slack),
+  #     all ordered BEFORE the chain. Multi-slot stash, pin pre-fill,
+  #     covert lines and blank lines are regression-tested as PREEMPTED.
+  #     Residual micro-channels (duplicate frozen lines, key-line order)
+  #     carry < 7 bits against 62-bit values — noted, not load-bearing.
   #
   # Expected deaths: fabricated round-4 value (grounding rule catches →
   # burned steps); edit-without-goback after the dropped marker
@@ -259,8 +283,10 @@ tasks:
           test "$(wc -c < "$f" | tr -d ' ')" -le 136 || fail "deploy.conf must stay within 136 bytes"
           grep -qxF '# staging deploy manifest' "$f" || fail "an unrelated line changed: header"
           grep -qxF 'owner = platform' "$f" || fail "an unrelated line changed: owner"
-          sed -n '/^[a-z]/p' "$f" | grep -v '^owner = platform$' | grep -qvE '^(release|mirror|fallback|rollback) = [a-z0-9]{12}$' \
-            && fail "every field line must read '<field> = <12-character value>' — nothing else may live in this file"
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# staging deploy manifest|owner = platform|(release|mirror|fallback|rollback) = [a-z0-9]{12})$' \
+            && fail "every line must be the header, the owner line, or '<field> = <12-character value>' — nothing else may live in this file"
+          test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \
+            || fail "blank lines may not live in this file"
           get() { sed -n "s/^$1 = //p" "$f"; }
           keys=$(sed -n 's/^\([a-z]*\) = .*/\1/p' "$f" | grep -v '^owner$' | sort | tr '\n' ' ')
           want=$(awk '$1=="k1"{print $2}' notes/s9.txt)
@@ -635,8 +661,11 @@ tasks:
   #     run on chosen input.
   #   search walk: both terms are last-line positional in de-anchored
   #     corpora; a difference appears in no file at all.
-  #   stash walk: growing keys + {4} width gate + exact cap, all before
-  #     the lane checks — the m0 carry is regression-tested as PREEMPTED.
+  #   stash walk: growing keys + {4} width gate + exact cap + ALL-LINES
+  #     format guard + blank-line equality (B2 round 3: a covert `A=<m0>`
+  #     line rode the old lowercase-only selector inside the 14-byte
+  #     slack), all before the lane checks — the m0 carry and the covert
+  #     line are regression-tested as PREEMPTED.
   #
   # Expected deaths: the 0.5.0 H-14b family signature — edit streak with
   # zero go-backs ("still editing" is not "re-reading"), budget_exhausted;
@@ -661,8 +690,10 @@ tasks:
           test "$(wc -c < "$f" | tr -d ' ')" -le 78 || fail "limits.conf must stay within 78 bytes"
           grep -qxF '# capacity limits — planner input' "$f" || fail "an unrelated line changed: header"
           grep -qxF 'guard = fixed' "$f" || fail "an unrelated line changed: guard"
-          sed -n '/^[a-z]/p' "$f" | grep -v '^guard = fixed$' | grep -qvE '^lane_[ab] = [0-9]{4}$' \
-            && fail "every lane line must read 'lane_<x> = <4-digit number>' — nothing else may live in this file"
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# capacity limits — planner input|guard = fixed|lane_[ab] = [0-9]{4})$' \
+            && fail "every line must be the header, the guard line, or 'lane_<x> = <4-digit number>' — nothing else may live in this file"
+          test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \
+            || fail "blank lines may not live in this file"
           get() { sed -n "s/^$1 = //p" "$f"; }
           keys=$(sed -n 's/^\(lane_[a-z]*\) = .*/\1/p' "$f" | sort | tr '\n' ' ')
           m=$(tail -n 1 refs/matrix.txt | awk '{print $NF}')

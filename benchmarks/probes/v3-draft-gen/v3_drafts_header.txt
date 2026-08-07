@@ -112,8 +112,26 @@
 #   tails); (c) the window arithmetic's gate format was invented — real
 #   gate evidence is "[solved] <task-id>: <complaint>" (driver.rs:481-485)
 #   and successful EDITs emit no tool evidence (fixed: driver-faithful
-#   reconstruction). N1/N3 otherwise survived round 2; the armor chain
-#   has survived all rounds.
+#   reconstruction). draft-6 round 3 (third zero-context attack):
+#   REFUTED the round-2 fix itself on N1/N3 — the guard selector
+#   `sed -n '/^[a-z]/p'` was blind to any line not starting with a
+#   lowercase letter, so a covert `A=<value>` line rode the intermediate
+#   byte-cap slack (cap = final size; early rounds leave 14-70 free
+#   bytes) and cached the pool tails / the matrix term after all
+#   (executed to `ok` by the reviewer). N4 survived on its own pattern —
+#   any-non-blank-line selector + zero per-round slack. Fixed by
+#   adopting exactly that: EVERY non-blank line must match the enumerated
+#   grammar (header / frozen line / key line), and non-blank line count
+#   must equal total line count (whitespace-only lines were a residual
+#   composition channel inside the slack). Same round: window arithmetic
+#   corrected for per-block step headers and the batch block's single
+#   gate line. The armor chain has survived all three rounds.""),
+(#   f1. Three zero-context B2 rounds are done; each refuted structural
+#       pieces (all fixed in place) while the armor chain itself survived
+#       every round — round 2 explicitly recommended ruling it "confirmed
+#       information structure" for N1/N3 and extending it to N4, which
+#       draft-6 does. A confirmatory pass on the round-3 guard fix is the
+#       remaining gate before probes.
 # * All seeds, armor selections and complaint sequences are generated and
 #   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
 #   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order

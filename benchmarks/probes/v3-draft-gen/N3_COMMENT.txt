@@ -44,8 +44,11 @@
   #     run on chosen input.
   #   search walk: both terms are last-line positional in de-anchored
   #     corpora; a difference appears in no file at all.
-  #   stash walk: growing keys + {4} width gate + exact cap, all before
-  #     the lane checks — the m0 carry is regression-tested as PREEMPTED.
+  #   stash walk: growing keys + {4} width gate + exact cap + ALL-LINES
+  #     format guard + blank-line equality (B2 round 3: a covert `A=<m0>`
+  #     line rode the old lowercase-only selector inside the 14-byte
+  #     slack), all before the lane checks — the m0 carry and the covert
+  #     line are regression-tested as PREEMPTED.
   #
   # Expected deaths: the 0.5.0 H-14b family signature — edit streak with
   # zero go-backs ("still editing" is not "re-reading"), budget_exhausted;

@@ -65,9 +65,15 @@
   #     certified as an unread file's last line; the only certain selector
   #     for a tail presupposes the read; catch-all renders dearer than the
   #     READ (all generator-asserted, deanchored()).
-  #   stash walk: growing keys + exact byte cap + per-line width regex,
-  #     all ordered BEFORE the chain — see Writable above; multi-slot
-  #     stash and pin pre-fill are regression-tested as PREEMPTED.
+  #   stash walk: growing keys + exact byte cap + ALL-LINES format guard
+  #     (every non-blank line must be the header, the owner line, or a
+  #     legal key line — B2 round 3 executed a covert `A=<tail>` cache
+  #     through the old lowercase-only selector) + blank-line equality
+  #     (whitespace-only lines were a composition channel in the slack),
+  #     all ordered BEFORE the chain. Multi-slot stash, pin pre-fill,
+  #     covert lines and blank lines are regression-tested as PREEMPTED.
+  #     Residual micro-channels (duplicate frozen lines, key-line order)
+  #     carry < 7 bits against 62-bit values — noted, not load-bearing.
   #
   # Expected deaths: fabricated round-4 value (grounding rule catches →
   # burned steps); edit-without-goback after the dropped marker

@@ -167,8 +167,10 @@ fail() {{ echo "deploy problem: $1"; exit 1; }}
 test "$(wc -c < "$f" | tr -d ' ')" -le {N1_CAP} || fail "deploy.conf must stay within {N1_CAP} bytes"
 grep -qxF '# staging deploy manifest' "$f" || fail "an unrelated line changed: header"
 grep -qxF 'owner = platform' "$f" || fail "an unrelated line changed: owner"
-sed -n '/^[a-z]/p' "$f" | grep -v '^owner = platform$' | grep -qvE '^(release|mirror|fallback|rollback) = [a-z0-9]{{12}}$' \\
-  && fail "every field line must read '<field> = <12-character value>' — nothing else may live in this file"
+sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# staging deploy manifest|owner = platform|(release|mirror|fallback|rollback) = [a-z0-9]{{12}})$' \\
+  && fail "every line must be the header, the owner line, or '<field> = <12-character value>' — nothing else may live in this file"
+test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \\
+  || fail "blank lines may not live in this file"
 get() {{ sed -n "s/^$1 = //p" "$f"; }}
 keys=$(sed -n 's/^\\([a-z]*\\) = .*/\\1/p' "$f" | grep -v '^owner$' | sort | tr '\\n' ' ')
 want=$(awk '$1=="k1"{{print $2}}' notes/s9.txt)
@@ -239,8 +241,10 @@ fail() {{ echo "limits problem: $1"; exit 1; }}
 test "$(wc -c < "$f" | tr -d ' ')" -le {N3_CAP} || fail "limits.conf must stay within {N3_CAP} bytes"
 grep -qxF '# capacity limits — planner input' "$f" || fail "an unrelated line changed: header"
 grep -qxF 'guard = fixed' "$f" || fail "an unrelated line changed: guard"
-sed -n '/^[a-z]/p' "$f" | grep -v '^guard = fixed$' | grep -qvE '^lane_[ab] = [0-9]{{4}}$' \\
-  && fail "every lane line must read 'lane_<x> = <4-digit number>' — nothing else may live in this file"
+sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# capacity limits — planner input|guard = fixed|lane_[ab] = [0-9]{{4}})$' \\
+  && fail "every line must be the header, the guard line, or 'lane_<x> = <4-digit number>' — nothing else may live in this file"
+test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \\
+  || fail "blank lines may not live in this file"
 get() {{ sed -n "s/^$1 = //p" "$f"; }}
 keys=$(sed -n 's/^\\(lane_[a-z]*\\) = .*/\\1/p' "$f" | sort | tr '\\n' ' ')
 m=$(tail -n 1 refs/matrix.txt | awk '{{print $NF}}')
@@ -436,6 +440,36 @@ def n1_keys_regressions():
 
 n1_keys_regressions()
 
+
+def n1_covert_line_regression():
+    """B2 round-3 walk: a line not starting with [a-z] was invisible to the
+    old guard selector — `A=<tail>` cached the whole pool candidate set
+    inside the intermediate byte-cap slack. The all-lines format guard and
+    the blank-line equality guard must both preempt any reveal."""
+    d = tempfile.mkdtemp(prefix='v3draft-n1covert-')
+    try:
+        materialize(n1_seeds, d)
+        set_field(d, 'deploy.conf', 'release', n1_release, 'owner = platform')
+        p = os.path.join(d, 'deploy.conf')
+        open(p, 'a').write(f'A={n1_mirror}\n')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and 'nothing else may live in this file' in first, \
+            f'covert line was not stopped: {first!r}'
+        assert 'inv-' not in first, 'covert line still received a reveal'
+        # whitespace-only line (a composition channel inside the cap slack)
+        open(p, 'w').write('# staging deploy manifest\n'
+                           f'release = {n1_release}\n   \nowner = platform\n')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and 'blank lines' in first, f'blank line not stopped: {first!r}'
+        print('  N1 covert-line regressions: non-[a-z] line preempted, blank line preempted')
+    finally:
+        shutil.rmtree(d)
+
+
+n1_covert_line_regression()
+
 n3_seeds = {'limits.conf': n3_limits, 'tests/check.sh': n3_check, **n3_files}
 verify('N3', n3_seeds, 'limits.conf',
        [('lane_a', n3_lane_a), ('lane_b', n3_lane_b)],
@@ -464,6 +498,27 @@ def n3_carry_regression():
 
 
 n3_carry_regression()
+
+
+def n3_covert_line_regression():
+    """B2 round-3: `A=<m0>` under the old selector cached the matrix term
+    in the 14-byte cap slack. Must be preempted before any reveal."""
+    d = tempfile.mkdtemp(prefix='v3draft-n3covert-')
+    try:
+        materialize(n3_seeds, d)
+        set_field(d, 'limits.conf', 'lane_a', n3_lane_a, 'guard = fixed')
+        open(os.path.join(d, 'limits.conf'), 'a').write(f'A={n3_m0}\n')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and 'nothing else may live in this file' in first, \
+            f'covert matrix-term line was not stopped: {first!r}'
+        assert 'refs/p' not in first, 'covert line still received the lane_b reveal'
+        print('  N3 covert-line regression: non-[a-z] carry line preempted')
+    finally:
+        shutil.rmtree(d)
+
+
+n3_covert_line_regression()
 
 n4_seeds = {'reading.conf': n4_reading, 'tests/check.sh': n4_check, **n4_files}
 verify('N4', n4_seeds, 'reading.conf',
@@ -520,14 +575,15 @@ LONGEST = {
 TASK_ID = {'N1': 'capv3-pin-eviction', 'N3': 'capv3-converge-fatref',
            'N4': 'capv3-sentinel-span'}
 GATE = {k: f"[solved] {TASK_ID[k]}: {v}\n" for k, v in LONGEST.items()}
+STEP_HDR = est('── evidence from step 99 ──\n')  # driver.rs:99-104, per kept block
 
 
 def rblock(task, path, body):
-    return est(f"READ '{path}':\n{body}" + GATE[task])
+    return est(f"READ '{path}':\n{body}" + GATE[task]) + STEP_HDR
 
 
 def eblock(task):
-    return est(GATE[task])  # successful edits emit no tool evidence
+    return est(GATE[task]) + STEP_HDR  # successful edits emit no tool evidence
 
 
 fails = []
@@ -553,8 +609,11 @@ require('round-3 edit still sees inv_j (largest)', e + hi + e <= BUDGET,
         f's4+s5+s6 = {e + hi + e} <= {BUDGET}')
 require('recovery fits', s1 + e + hi + e <= BUDGET,
         f're-read pin + newest blocks = {s1 + e + hi + e} <= {BUDGET}')
-require('cond-11 batch block dies', s1 + lo1 + lo2 + est(n1_check) > BUDGET,
-        f'pin+2 smallest pool files+check = {s1 + lo1 + lo2 + est(n1_check)} > {BUDGET}')
+n1_batch = est("READ 'notes/s9.txt':\n" + pin_body
+               + ''.join(f"READ '{p}':\n" + b for p, b in sorted(n1_pool.items())[:2])
+               + "READ 'tests/check.sh':\n" + n1_check + GATE['N1']) + STEP_HDR
+require('cond-11 batch block dies (single-step block, one gate)', n1_batch > BUDGET,
+        f'pin+2 pool files+check as ONE block = {n1_batch} > {BUDGET}')
 require('cond-9: 8 actions', True, 'R pin, E, R inv_i, E, R inv_j, E, R pin, E = 8 (zero slack, flag f2)')
 
 print('--- N3 (matrix term needed every round, evicted between rounds) ---')
