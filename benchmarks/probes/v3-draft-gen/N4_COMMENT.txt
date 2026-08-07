@@ -1,42 +1,59 @@
-  # ══ N4 — sentinel (capv3-sentinel-fullset) ═══════════════════════════════
+  # ══ N4 — sentinel (capv3-sentinel-span) ══════════════════════════════════
   #
   # Designed to read low/zero in BOTH cells on agent 0.5.0 and to flip red
   # the moment the agent learns retention/summarization — v3's E, per
-  # ruling iv. The death mechanism is ARITHMETIC, not luck:
+  # ruling iv. The alt session's span shape, adopted per the merge ruling
+  # (this also RESOLVES flag f3: necessary evidence is now 4 blocks ≈
+  # 1.77x 4096, inside the ruled 1.5–2x band).
   #
-  #   5 chained rounds over 3 fat refs, reuse pattern a,b,c,a,b with
-  #   armored (unpredictable) keys. Necessary distinct evidence =
-  #   3 x ~1975 ≈ 5930 tok ≈ 1.45 x 4096 (flag f3: under the ruled 1.5–2x
-  #   band; bounded by the READ cap and condition 9 — see header).
+  # Mechanism: the carried value is a SPAN (largest minus smallest of the
+  # values ending refs/f1..f4.txt). The running state is a (min,max) PAIR;
+  # the single writable slot is width-gated to <= 4 digits, so it carries at
+  # most ONE number. A span cannot be extended by a new term without the
+  # side it does not record. Stages: span(f1,f2) → +f3 → +f4, each stage
+  # moves the target (asserted), reveals follow correct stage values only.
   #
-  #   with-retention honest walk (future agent): R a, R b, R c + E x5 =
-  #     8 actions — a legal <=8 path EXISTS, so condition 9 holds.
-  #   0.5.0 non-batch (JIT re-read): the window cannot hold a ref across
-  #     a round (same arithmetic as N1/N3), so every round pays a read:
-  #     (R, E) x 5 = 10 actions > MAX_STEPS → budget_exhausted around
-  #     round 4. Signature: gradual squeeze-out, re-reads present.
-  #   0.5.0 batch: s1 giant read (all refs, ~5900 tok, newest-exempt),
-  #     s2 fix t1 → giant off the exemption, cliff-evicted whole; rounds
-  #     2–5 each need reveal→read→edit = 2 steps: 1 + 1 + 2x4 = 10 steps
-  #     > 8 → dies. Signature: cliff then re-read burn.
-  #   Both cells die with distinct, telemetry-visible shapes — exactly the
-  #   two shapes the type table predicts for the sentinel.
+  # Width gate provenance (draft-5): the alt draft's format regex was an
+  # unbounded [0-9]+ — min·max CONCATENATED into the slot passes it, the
+  # writable reprint (context.rs:56-73, outside the evidence budget) hands
+  # it back every step, and the sentinel walks in 6 actions. The {1,4}
+  # width gate + byte cap close the pair-carry; the generator regression-
+  # tests the concat stash (guard preempts, no reveal).
   #
-  # Condition 11 self-test:
-  #   batch walk: close at s2? NO — t2..t5 keys are armored.
-  #   compute-channel walk: none exists — RUN is fixed-argv only
-  #     (tools/shell.rs); the t2..t5 keys are unknowable until each
-  #     reveal, and reveals only follow real fixes: >= 2 steps per round
-  #     stands on the reveal mechanics alone.
-  #   stash walk: placeholders are answer-width and the cap is the
-  #     solved size + 4B — honest states are size-constant, any
-  #     insertion trips the guard, and the guard preempts every round
-  #     reveal (the 8000 print budget would NOT have stopped it;
-  #     draft-1's self-blinding claim was refuted by the verifier).
-  #     The needed evidence is three ~7.8KB refs that no field can
-  #     carry: the sentinel arithmetic is untouched.
+  # RESIDUAL WALKS — documented and generator-asserted, not denied. The
+  # check is stateless and tests the final span first, and span = f(the two
+  # global extremes), so:
+  #   (i) 2-extreme close: a model holding both global extremes closes
+  #       without walking stages. Extremes sit in NON-ADJACENT files
+  #       (min: f2, max: f4) and corpora are uniform — no a-priori signal
+  #       says which pair matters, so a blind 2-read try is a 1-in-6 pair
+  #       guess at ~3 actions per try.
+  #   (ii) disciplined extreme-tracking: single-slot carry of one running
+  #       extreme + eviction-aware ordering can pass in ~6-7 actions. That
+  #       IS elite window management — if a cell turns green, verify the
+  #       action log (which files were read, what interim values were
+  #       written) before reading it as capability arrival; do not take the
+  #       pass column at face value. A stage-skip (correct span(f1..f3)
+  #       written without stage A ever passing) is part of this signature.
+  #
+  # Expected 0.5.0 deaths (arithmetic, not luck):
+  #   JIT walk: every stage beyond A needs a term whose block is gone —
+  #     re-read loops burn steps (dropped_reread/research high, steps
+  #     exhaust);
+  #   batch walk: ~7.3k giant read is newest-exempt for one step, then
+  #     cliff-evicted whole; stage arithmetic restarts from nothing.
+  #   Three blocks never coexist (asserted: f1+f2+f3 > 4096), and stage C
+  #   needs information from three files' tails at once unless an extreme
+  #   is carried — which the slot width fights.
+  #
+  # Condition 11 self-test: batch close at s2 fails — stage reveals hang on
+  # correct stage values, and only stage A is computable from the giant
+  # newest block at s2 (that is one stage, not the task — the giant is gone
+  # at s3 and stages B/C still need their terms). No compute channel (RUN
+  # fixed-argv); no search shortcut (positional tails, differences in no
+  # file for the spans themselves).
   #
   # Freeze note: reads 0/0 are only meaningful with the probe confirming
-  # window_peak_tokens near/over budget and the two death shapes; a zero
-  # that comes from anything else (parse errors, provider faults) is not
-  # a sentinel reading.
+  # window_peak_tokens near/over budget and the death shapes above; a zero
+  # from parse errors or provider faults is not a sentinel reading. A green
+  # is only a reading after action-log verification (residual walk ii).

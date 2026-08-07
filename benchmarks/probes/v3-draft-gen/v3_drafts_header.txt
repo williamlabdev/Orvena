@@ -1,87 +1,111 @@
 # Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
 #
-# Status: DRAFT (0807) — pre-probe, pre-freeze. Design: SLICE-032 (ratified
-# 0807, four rulings). These are the N1/N3/N4 shapes from the type table;
-# N2's shape is separately locked by ruling iii (header-signal probe, 6/6)
-# and is not drafted here. Numbers from these tasks never enter any official
-# account; the probe protocol below must pass before any freeze talk.
+# Status: DRAFT-5 (0807, the MERGE) — pre-probe, pre-freeze. Design:
+# SLICE-032 (ratified 0807, four rulings). These are the N1/N3/N4 shapes
+# from the type table; N2's shape is separately locked by ruling iii
+# (header-signal probe, 6/6) and is not drafted here. Numbers from these
+# tasks never enter any official account; the probe protocol below must
+# pass before any freeze talk.
+#
+# PROVENANCE — the 0807 draft collision and its ruling:
+# Two sessions drafted v3 in parallel. draft-4 (0eba93c: armor chain,
+# anti-stash width guards, reviewed by verifier x2) and the alt draft
+# (9b91b4b: uniform/positional corpora, span sentinel). Each refuted one
+# load-bearing claim of the other:
+#   * draft-4's hole: complaints named row keys and rows led with them —
+#     `SEARCH <key>` fetches any fat value for ~32 tokens vs a ~2000-token
+#     READ; the window pressure all three tasks stand on evaporates.
+#   * alt's hole: tests/check.sh is readable corpus; with a plaintext
+#     field↔source map its condition-11 case collapses, and its N4 format
+#     gate (unbounded [0-9]+) admits a min·max concat stash through the
+#     writable-reprint channel — the sentinel walks in 6 actions.
+# Ruling (0807 late): merge with draft-4 as the base, the alt corpus form
+# swapped in, N4 recast as the span sentinel. draft-5 is that merge; each
+# draft's surviving mechanism closes the other's hole.
 #
 # What every task here shares (mechanism dossier, verified in code 0807):
 #
 # * Sequential first-problem-only check (H pattern): reveal k+1 exists only
 #   after fix k — real state dependency, per design condition 11.
-# * ARMOR CHAIN (new in v3, needs review): the slot key for round k+1 is
-#   derived from the CORRECT value of field k via `cksum` — key = crc % 97+1.
-#   Why: condition 11's literal self-test ("batch model reads the whole
-#   corpus incl. tests/check.sh at step 1 — can it close at step 2?") kills
-#   every plaintext-mapping design: reading check.sh reveals the full
-#   field↔slot map, and the step-1 giant block is still the newest block at
-#   step 2 (newest-block exemption), so a one-shot full write closes at
-#   step 2 with zero window pressure. v2-H has exactly this property. With
-#   the armor, the mapping is not mentally recoverable (CRC is not text
-#   reasoning), and no compute channel exists: RUN executes only
-#   pre-declared fixed-argv commands (.orvena/commands.yaml, tools/
-#   shell.rs) — the model cannot hand cksum any input. Keys are unknowable
-#   until each reveal, and reveals only follow real fixes. Honest walkers
-#   never see the armor: each complaint names the key in plaintext at
-#   runtime. N1's round-4 pin key is armored for the same reason (see the
-#   pre-fill walk in its block).
-# * Anti-stash guards: placeholders are the same width (12 chars) as
-#   every answer and the byte cap is the exact solved size + 4B, plus
-#   exact line count + grep -qxF frozen lines — ALL ordered BEFORE the
-#   chain checks, so honest walks are size-constant and any insertion
-#   preempts the next round reveal. Writable contents print into the
-#   prompt each step (context.rs:56-73) outside the 4096 evidence budget,
-#   and the 8000 whole-prompt budget does NOT self-limit a stash
-#   (system+head ≈ 600 tok leaves ~7.4k of print room — the verifier
-#   refuted draft-1's self-blinding claim, incl. a zero-cost pack into a
-#   not-yet-checked field line). What actually closes the hole is gate
-#   ordering: a stashed file trips a guard, and a guard complaint
-#   preempts every round reveal — stash and progress are mutually
-#   exclusive, so stash/unstash cycles cost 2 edits per round against
-#   1 JIT re-read. Strictly dominated; probes still watch for it.
+# * UNIFORM / POSITIONAL CORPORA (condition 14, from the alt draft): fat
+#   records are fixed-shape, every record ends in a same-shape value, and
+#   the operative value is the file's LAST line. No pattern formable
+#   without having read the file singles it out; a catch-all SEARCH
+#   returns every line with a path:line: prefix (~1.25x the READ it would
+#   replace) and MAX_HITS=200 stops multi-file sweeps. N1's pin file is
+#   the deliberate exemption (see its block: the needle is SUPPOSED to be
+#   cheap to re-acquire; the go-back is the measurement).
+# * ARMOR CHAIN (from draft-4, now file-level): which pool file (N1, N3)
+#   or which pin key (N1 round 4) settles round k+1 is derived from the
+#   CORRECT value of field k via `cksum` at runtime. Why: condition 11's
+#   literal self-test kills every plaintext-mapping design — reading
+#   check.sh reveals the full map, and the step-1 giant block is still the
+#   newest block at step 2 (newest-block exemption), so a one-shot full
+#   write closes at step 2 with zero window pressure (v2-H has exactly
+#   this property). With the armor the map is not mentally recoverable
+#   (CRC is not text reasoning) and no compute channel exists: RUN
+#   executes only pre-declared fixed-argv commands (.orvena/commands.yaml,
+#   tools/shell.rs). Keys are unknowable until each reveal, and reveals
+#   only follow real fixes. Honest walkers never see the armor: each
+#   complaint names the file/key in plaintext at runtime.
+# * Anti-stash guards (from draft-4): placeholders are answer-width, the
+#   byte cap is the exact solved size + 4B, exact line count + grep -qxF
+#   frozen lines — ALL ordered BEFORE the chain checks, so honest walks
+#   are size-constant and any insertion preempts the next round reveal.
+#   Writable contents print into the prompt each step (context.rs:56-73)
+#   outside the 4096 evidence budget, and the 8000 whole-prompt budget
+#   does NOT self-limit a stash — gate ordering is what closes the hole:
+#   stash and progress are mutually exclusive. N4 adds a {1,4} digit
+#   width gate for the same reason (the pair-carry stash).
 # * Complaints POINT at the source and never quote the expected literal
-#   (L-forensics 0807: quoted literals in feedback became the wrong answer;
-#   freshness traps are a DIFFERENT axis and must not contaminate these).
-# * Fat refs are 98 lines / ~7.7KB ≈ 1950 tokens — deliberately under the
-#   READ/RUN truncation edge (100 lines / 8KB, cap_run_output), so one READ
-#   returns the whole file untruncated.
-# * Adversarial review trail (0807): round 1 — verifier refuted two
-#   draft-1 claims (print-budget self-blinding: false arithmetic;
-#   "RUN-simulator walk": the channel does not exist, RUN is fixed-argv);
-#   draft-3 added byte-cap guards and armored N1's round-4 key after the
-#   pre-fill walk was found. Round 2 — verifier executed a live stash
-#   walk through draft-3's N1 cap (five pin values in a not-yet-checked
-#   field, 7 actions, zero dropped_reread); draft-4 answers with
-#   answer-width placeholders + solved-size+4 caps, and the exact walk
-#   is now a regression test in the generator. Residue: the 1-in-4
-#   single-candidate pre-fill guess (see N1 block) is irreducible.
-# * All seeds, chains and complaint sequences are generated and MECHANICALLY
-#   verified by benchmarks/probes/v3-draft-gen/gen_v3_drafts.py: honest walk applied fix-by-fix,
-#   complaint order asserted exact, final check asserted `ok`.
+#   (L-forensics 0807: quoted literals in feedback became the wrong
+#   answer; freshness traps are a DIFFERENT axis and must not contaminate
+#   these).
+# * Fat refs are deliberately under the READ/RUN truncation edge (100
+#   lines / 8KB, cap_run_output), so one READ returns the whole file
+#   untruncated: N1 pool 99 lines / ~8.1KB ≈ 2030 tok; N3/N4 refs 90
+#   lines / ~7.1KB ≈ 1778 tok.
+# * Adversarial review trail: draft-1→4 (verifier x2: print-budget
+#   self-blinding refuted; RUN-simulator channel nonexistent; live stash
+#   walk through draft-3's cap → answer-width placeholders + solved+4
+#   caps, stash walk now a generator regression test). draft-4→5 (the
+#   collision review above; the SEARCH-cost bypass and the concat stash
+#   are both closed and both regression-tested). Residue: N1's 1-in-4
+#   single-candidate pre-fill guess is irreducible; N4's residual walks
+#   are documented in its block and asserted by the generator.
+# * All seeds, armor selections and complaint sequences are generated and
+#   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
+#   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order
+#   asserted exact, final check asserted `ok`, window arithmetic asserted
+#   against the agent estimator (ceil(chars/4)), corpus uniformity
+#   asserted, stash/shortcut walks regression-tested.
+#
+# Telemetry: death classification uses the SLICE-032 instrument
+# (evictions / dropped_reread / dropped_research / window_peak_tokens).
+# The 0807 instrument gap is CLOSED (42e59da): dropped_research counts
+# SEARCH re-acquisition of an evicted path, so a go-back by the route the
+# READ truncation note recommends no longer scores as invention.
 #
 # Probe protocol before any freeze (SLICE-032 calibration section):
 #   (i)  token-shape probe: real run per task; require window_peak_tokens
-#        near 4096 and evictions.first_step > 0 for N1/N3 (pressure real);
-#        if no eviction shows, fatten refs toward the truncation edge.
-#   (ii) behavior probe: small n, both cells; death signatures must land in
-#        the type-table classes (dropped_reread separates ordering-death
-#        from reread-death). Watch items are listed per task below.
-#   Telemetry caveat for (ii): dropped_reread counts repeat READs of
-#   evicted paths — a model that re-fetches via SEARCH/grep instead of READ
-#   may not count; classify from action logs if the counter reads zero.
+#        near 4096 and evictions.first_step > 0 for N1/N3 (pressure
+#        real); if no eviction shows, fatten refs toward the truncation
+#        edge (N1 is already at 99 lines — the remaining slack is bytes,
+#        not lines).
+#   (ii) behavior probe: small n, both cells; death signatures must land
+#        in the type-table classes. Per-task watch items in the blocks.
 #
-# Open flags for ruling (none block probing):
-#   f1. The armor chain is a new mechanism — CTR/fresh-eyes should attack
-#       it before freeze (is a runtime-computed slot key still "information
-#       structure", per condition 10? The values remain read-to-know; the
-#       armor only hides the MAP, never a value).
+# Open flags for ruling:
+#   f1. The armor chain awaits its ruled B2 round: a zero-context
+#       fresh-eyes attack on this merged draft before any probe.
 #   f2. N1's honest worst case is exactly 8 actions — zero slack; one
-#       exploratory read (ls, check.sh) costs the run. That IS the
-#       read-restraint axis, but the behavior probe must confirm it
-#       doesn't just measure step-arithmetic luck.
-#   f3. N4's necessary-evidence total is 3 x ~1975 ≈ 5930 tok ≈ 1.45x4096,
-#       under the ruled 1.5–2x band: the READ truncation cap (2048/read)
-#       bounds what one fat ref can carry, and a 4th ref pushes the
-#       with-retention honest walk to 9 actions, breaking condition 9.
-#       Either accept 1.45x or rule a shape change.
+#       exploratory read costs the run. That IS the read-restraint axis,
+#       but the behavior probe must confirm it doesn't just measure
+#       step-arithmetic luck.
+#   f3. RESOLVED by the span shape: N4 necessary evidence = 1.77x 4096,
+#       inside the ruled 1.5–2x band.
+#   f4. N4's residual walks (2-extreme close; disciplined single-slot
+#       extreme tracking) are accepted-and-documented rather than closed —
+#       closing them is impossible while the check stays stateless and the
+#       answer stays a span. Rule: accept with action-log verification
+#       duty, or order a different aggregate.

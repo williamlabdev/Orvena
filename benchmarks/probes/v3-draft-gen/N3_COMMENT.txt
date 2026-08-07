@@ -1,43 +1,52 @@
   # ══ N3 — convergence + fat state (capv3-converge-fatref) ═════════════════
   #
-  # Shape: H deepened. One fat reference (refs/matrix.txt) is consulted in
-  # EVERY round, but the gate's own output is fat (complaint line first,
-  # then a static 84-line audit block ≈ 1650 tok, well under the 100-line/
-  # 8KB RUN cap): each new round's feedback evicts the previous round's
-  # matrix read, so every round demands a fresh re-read.
+  # Shape: H deepened. Each lane is a SUBTRACTION — the value ending a pool
+  # file's last line minus the value ending refs/matrix.txt's last line —
+  # so the matrix term is re-needed in EVERY round, and the round's other
+  # fat read evicts it (asserted: m+p1+edit fits; +p_j exceeds; the re-read
+  # round fits again). Round 2's pool file is armored: p2 vs p3 selected by
+  # cksum(lane_a's correct value) at runtime.
   #
-  # Pressure arithmetic: round-k block = READ matrix ~1950 + gate ~1700 ≈
-  # 3700; round-k+1 edit block = ~120 + 1700 ≈ 1820. 1820 + 3700 > 4096 →
-  # the previous round's matrix is ALWAYS evicted before it is needed
-  # again. This is the type-table row verbatim: "the reference was squeezed
-  # out in the previous round".
+  # MERGE NOTE (draft-5): draft-4's N3 (row-keyed chain inside one matrix +
+  # a fat static audit dump on every gate fail) died twice over in the 0807
+  # collision review. The row keys fall to condition 14 (SEARCH fetches a
+  # named row for ~32 tokens). The audit dump is structurally incompatible
+  # with the merged pairwise need: gate output rides on EVERY step's block,
+  # so fat-gate + two coexisting fat reads can never fit 4096 and the task
+  # would break condition 9 outright. The eviction source in draft-5 is the
+  # pair itself; the subtraction is what makes the pair necessary (a lane
+  # value that is a bare tail copy would let the constant matrix term be
+  # carried in the writable file for free after round 1).
   #
-  # The audit block is STATIC (identical every run) by design: stale and
-  # fresh copies are indistinguishable AND identical, so no freshness
-  # confusion is possible — L-forensics ruled that freshness traps are a
-  # different axis and must not be mixed into a window-pressure task. The
-  # complaint line comes FIRST so output truncation can never eat it.
+  # Why the answer is not searchable at all: lane values exist in NO file —
+  # they are differences. And the terms are positional (condition 14).
   #
-  # Condition 9: honest walk = (R matrix, E) x 3 = 6 actions, slack 2.
+  # Arithmetic watch item (probe, not a flag): a lane is a 4-digit
+  # subtraction done by the model. An arithmetic slip and an invented value
+  # both die as wrong-value complaints; the behavior probe must separate
+  # them from the action log (a slip follows fresh reads of both terms —
+  # both tails in-window at the edit; invention edits with a term missing
+  # from the window).
+  #
+  # Condition 9: honest walk = R matrix, R p1, E, R p_j, R matrix, E = 6
+  # actions, slack 2.
   #
   # Condition 11 self-test:
-  #   batch walk: s1 READ matrix+check.sh; gate reveals round-1 complaint.
-  #     Close at s2? NO — slots for s2/s3 are cksum-armored.
-  #   compute-channel walk: none exists — RUN is fixed-argv only
-  #     (tools/shell.rs), so the cksum chain cannot be precomputed; and
-  #     the fat gate output rides along on every step regardless, so the
-  #     matrix is evicted between rounds no matter what the model knows.
-  #   stash walk: a stashed matrix WOULD print free each step (the 8000
-  #     print budget does not self-limit it — draft-1's claim refuted),
-  #     but placeholders are answer-width (12 chars) and the cap is the
-  #     solved size + 4B: honest states are size-constant, any insertion
-  #     trips the guard, and the guard preempts every round reveal. The
-  #     necessary evidence is a ~7.8KB file that no field can carry
-  #     anyway. Behavior probe watch item.
+  #   batch walk: s1 READ matrix+p1+p2+p3+check.sh (> 4096, dropped whole
+  #     once anything lands after it). Close at s2? NO — the round-2 pool
+  #     file hangs off lane_a's correct value via cksum; s2 can fix lane_a
+  #     (both terms readable in the giant newest block) but lane_b's file
+  #     is unknowable until the reveal, and by then the giant is evicted.
+  #   compute-channel walk: none — RUN is fixed-argv only (tools/shell.rs);
+  #     cksum cannot be run on chosen input.
+  #   search walk: both terms are last-line positional; a difference
+  #     appears in no file.
+  #   stash walk: placeholders are answer-width (4 digits), cap = solved
+  #     size + 4B, guards precede the lane checks — insertion preempts the
+  #     reveal. The necessary evidence is two ~7.1KB files that no 4-char
+  #     field can carry.
   #
   # Expected deaths: the 0.5.0 H-14b family signature — edit streak with
-  # zero re-reads ("still editing" is not "re-reading"), budget_exhausted;
-  # dropped_reread distinguishes ordering-death from reread-death.
-  # Watch item (L contamination): two audit blocks briefly coexist in the
-  # window before eviction; if oscillation on already-fixed fields shows
-  # up, the audit block is polluting and the shape must be rebuilt.
+  # zero go-backs ("still editing" is not "re-reading"), budget_exhausted;
+  # dropped_reread + dropped_research together separate ordering-death from
+  # reread-death (SEARCH recovery no longer reads as invention).

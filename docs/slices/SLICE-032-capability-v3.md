@@ -4,7 +4,7 @@
 > 題目未草擬、未探針、未校準;下一刀=遙測儀器(先儀器、再探針、再題)。
 > 進度:**遙測儀器已落地(0807)**——bundle/report per-run 三欄位
 > `evictions`(count/first_step/evicted_steps)、`dropped_reread`、
-> `window_peak_tokens`,`None`=不可歸因(沿 `action_counts` 契約),
+> `window_peak_tokens`(0807 補第四欄 `dropped_research`,SEARCH 回讀),`None`=不可歸因(沿 `action_counts` 契約),
 > 加欄位不動 v1 驗證(validator 是必要欄位檢查,非封閉 schema);
 > agent 版號未動,視窗行為零改變(僅觀測)。
 > 審查:已過 CTR + fresh-eyes(0806)。
@@ -100,6 +100,28 @@ v3 的難度來自**必要證據總量與視窗容量的比值**——兩把尺�
     「本尺的壓力係數以 agent 0.5.0(EVIDENCE_BUDGET_TOKENS=4096)
     為基準」寫進檔頭。
 
+草擬期追加兩條(0807 兩支平行草稿各貢獻一條,查碼所得,非設計願望;
+draft-5 合併後兩條皆為全題硬約束):
+
+13. **writable 目標必須是封閉、等寬凍結的 key 集,且每 key 有嚴格值
+    格式**。理由:writable 檔內容每步重印進 prompt,計價在 role 預算、
+    不在證據預算(`context.rs:56-74`)——它是免費、永不被擠出的暫存板。
+    沒有這條,任何 v3 題都可以「把針抄進 writable、完全不管理視窗」
+    通過,且遙測分不出它與好排序(兩者 dropped_* 皆 0)。封法:值一律
+    答案等寬佔位 + byte cap = 解完尺寸+4B + 行數凍結 + guard 排在
+    chain 檢查之前——stash 與進度互斥(draft-4 系,兩輪 verifier 實跑
+    驗證;N4 的 {1,4} 位寬閘同源:無界 [0-9]+ 曾讓 min·max 併接塞縫,
+    哨兵 6 動作變綠)。
+14. **必要證據不可被定向 SEARCH 廉價提取**。理由:SEARCH 只回匹配行
+    (`driver.rs:340-356`),READ 截斷提示還主動推薦它——值若坐在可辨識
+    行上,成本 ~1 行而非整塊,壓力係數蒸發(draft-4 的 row-keyed 鏈
+    正是這樣被 alt 支實測打穿:`SEARCH a37` ~32 tok 對 READ ~2000 tok)。
+    封法:記錄**均勻**(每行同形)、操作值**位置式**(檔案末行)——
+    不讀檔就沒有任何 pattern 能單出它;catch-all SEARCH 帶 `path:line:`
+    前綴,~1.25× 於被替代的 READ,且 MAX_HITS=200 擋跨檔掃。
+    豁免:N1 的針(pin 檔)刻意 row-keyed——針本來就該便宜重取,
+    量的是「回去拿」這個決策,dropped_research 讓這條路可見。
+
 ## 題型草案(形狀,不是題;凍題前必過探針)
 
 | # | 方向 | 形狀 | 死法簽名(儀器要能看到的) | 防繞 |
@@ -187,6 +209,33 @@ N1 evictions.first_step ≤ 7——N1 擠出餘裕僅 ~150 tok,不到就加胖)
 1.45×4096 低於裁定帶 1.5–2×(受 READ 截頂與條件 9 夾擠)。
 L 取證修正已吃入:三題皆純擠出壓力,無新鮮度陷阱混造
 (N3 audit 塊刻意靜態)。
+
+## 草稿碰撞與合併(0807 深夜→次晨):draft-5
+
+兩支 session 平行草擬 v3:draft-4(`0eba93c`)與 alt 草稿(`9b91b4b`,
+uniform/positional 語料+span 哨兵)。互審各打穿對方一條承重主張:
+
+- draft-4 傷:投訴明文報 row key 且肥檔每行以 key 開頭 →
+  `SEARCH <key>` ~32 tok 取值(對 READ ~2000 tok),三題賴以成立的
+  視窗壓力歸零(=條件 14 的動機)。
+- alt 傷:check.sh 本身可讀,明文欄位↔來源映射使其條件 11 論證塌陷
+  (=armor chain 的動機);且其 N4 格式閘無界([0-9]+),min·max
+  併接可塞進 writable 重印通道,哨兵 6 動作變綠(=條件 13 位寬閘)。
+
+裁定(william):**draft-4 為底 + alt 語料形式 + N4 換 span 形狀**。
+draft-5 即該合併:armor 從選 row 改為**選檔**(row 級 armor 在條件 14
+下必死),N1 三檔池、N3 減法對(matrix 項每輪必需)+ {p2,p3} armor
+池、N4 span 哨兵加 {1,4} 位寬閘與極值非相鄰排布(f2=min、f4=max)。
+draft-4 的 N3 audit 肥 gate 廢除:gate 輸出每步上車,肥 gate + 成對
+肥塊結構性放不進 4096,題會破條件 9。
+
+flag 更新:f3 已解(span 形狀使 N4 必要證據 1.77×4096,入裁定帶);
+新增 f4——N4 殘餘走法(2-extreme 速通;單槽極值追蹤)為「記錄並
+斷言存在」而非封死(check 無態+答案是 span 時不可封),裁:接受
++動作日誌驗證義務,或改 aggregate。f2 照舊待裁。儀器缺口已補
+(`42e59da`:dropped_research,SEARCH 回讀不再計為編造)。
+產生器全面機械驗證:誠實走法逐輪投訴序列、stash/併接迴歸、
+視窗算式(以 agent 估價器)、語料均勻性,全部 assert 不過不出檔。
 
 ## 裁決(0807,william):四項全裁可
 
