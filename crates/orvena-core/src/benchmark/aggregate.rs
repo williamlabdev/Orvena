@@ -226,6 +226,7 @@ mod tests {
             exit: crate::metrics::ExitReason::GatesPassed,
             evictions: None,
             dropped_reread: None,
+            dropped_research: None,
             window_peak_tokens: None,
         }
     }

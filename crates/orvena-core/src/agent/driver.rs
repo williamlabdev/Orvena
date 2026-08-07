@@ -175,6 +175,7 @@ pub(crate) async fn run_loop_with(
     // nothing was evicted", not as "not attributable".
     report.evictions = Some(crate::metrics::Evictions::default());
     report.dropped_reread = Some(0);
+    report.dropped_research = Some(0);
     report.window_peak_tokens = Some(0);
     // One labeled block per step that produced evidence; the window the next
     // attempt sees is assembled by `retained_evidence` (accumulate, not
@@ -340,6 +341,26 @@ pub(crate) async fn run_loop_with(
                 step::Action::Search { pattern, path } => {
                     match grep.search(&pattern, path.as_deref()) {
                         Ok(hits) => {
+                            // The dropped-research instrument: this SEARCH hit a
+                            // path whose last successful READ now sits in an
+                            // evicted block — re-acquisition by the route the
+                            // READ truncation note recommends. Counted once per
+                            // SEARCH action, symmetric with dropped_reread.
+                            // Hit paths are root-relative; READ paths are as the
+                            // model wrote them, so compare modulo a `./` prefix.
+                            fn norm(p: &str) -> &str {
+                                p.trim_start_matches("./")
+                            }
+                            if hits.iter().any(|h| {
+                                last_read
+                                    .iter()
+                                    .any(|(p, s)| norm(p) == norm(&h.path)
+                                        && window.evicted_steps.contains(s))
+                            }) {
+                                if let Some(n) = report.dropped_research.as_mut() {
+                                    *n += 1;
+                                }
+                            }
                             let capped = if hits.len() >= crate::tools::grep::MAX_HITS {
                                 " (capped — narrow the pattern or path for the rest)"
                             } else {
@@ -745,6 +766,46 @@ mod tests {
         assert!(
             peak > 2000 && peak <= EVIDENCE_BUDGET_TOKENS,
             "the peak is one big block's cost, under the budget: {peak}"
+        );
+    }
+
+    #[test]
+    fn a_search_into_an_evicted_path_counts_as_dropped_research() {
+        // Same pressure shape as the dropped_reread test, but the recovery at
+        // step 3 goes through SEARCH — the route the READ truncation note
+        // recommends. dropped_reread must stay 0 (no re-READ happened) and
+        // dropped_research must catch the go-back, or a SEARCH recovery is
+        // indistinguishable from a value invented from memory.
+        let root =
+            std::env::temp_dir().join(format!("orvena-window-research-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let big = format!("{}\n", "x".repeat(80)).repeat(110);
+        std::fs::write(root.join("big1.txt"), &big).unwrap();
+        std::fs::write(root.join("big2.txt"), &big).unwrap();
+
+        let provider = ScriptedReader {
+            script: vec![
+                "<<<READ big1.txt\n>>>",
+                "<<<READ big2.txt\n>>>",
+                "<<<SEARCH x\nbig1.txt\n>>>",
+            ],
+            calls: Mutex::new(0),
+        };
+        let mut cfg = config(vec![]);
+        cfg.roles.roles[0].allowed_tools.push("grep.search".into());
+        let agent = super::super::Agent::with_provider(cfg, &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report =
+            rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+
+        assert_eq!(report.dropped_reread, Some(0), "no re-READ was issued");
+        assert_eq!(
+            report.dropped_research,
+            Some(1),
+            "step 3's SEARCH hit the path whose evidence the window dropped"
         );
     }
 

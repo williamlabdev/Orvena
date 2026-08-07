@@ -107,6 +107,7 @@ pub async fn run_benchmark(
                 exit: ExitReason::Unrecorded,
                 evictions: None,
                 dropped_reread: None,
+                dropped_research: None,
                 window_peak_tokens: None,
             });
             continue;
@@ -209,6 +210,7 @@ pub async fn run_benchmark(
                     exit: report.exit,
                     evictions: report.evictions,
                     dropped_reread: report.dropped_reread,
+                    dropped_research: report.dropped_research,
                     window_peak_tokens: report.window_peak_tokens,
                 }
             }
@@ -243,6 +245,7 @@ pub async fn run_benchmark(
                 exit: ExitReason::Unrecorded,
                 evictions: None,
                 dropped_reread: None,
+                dropped_research: None,
                 window_peak_tokens: None,
             },
         });
@@ -792,6 +795,7 @@ mod tests {
             exit: ExitReason::GatesPassed,
             evictions: None,
             dropped_reread: None,
+            dropped_research: None,
             window_peak_tokens: None,
         }
     }

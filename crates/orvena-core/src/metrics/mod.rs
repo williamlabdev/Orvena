@@ -165,6 +165,17 @@ pub struct RunReport {
     /// and it never happened. Additive — stays v1.
     #[serde(default)]
     pub dropped_reread: Option<u32>,
+    /// SEARCH actions with at least one hit in a path whose most recent
+    /// successful READ sits in an evicted evidence block — the model going
+    /// back for dropped evidence by the route the READ truncation note
+    /// recommends ("SEARCH for the rest"). Without this counter such a run
+    /// is indistinguishable from one that invented the value from memory
+    /// (`dropped_reread` counts re-READs only), and those are the two sides
+    /// the v3 ruler exists to separate. Counted once per SEARCH action, on
+    /// the attempt. Same `None` contract as `dropped_reread`. Additive —
+    /// stays v1.
+    #[serde(default)]
+    pub dropped_research: Option<u32>,
     /// Peak token occupancy of the assembled evidence window across all steps
     /// (same estimator as the budget it is measured against). Verifies a
     /// task's pressure coefficient actually reached the budget — a task that
@@ -274,6 +285,7 @@ impl RunReport {
             // attribution contract as `action_counts`.
             evictions: None,
             dropped_reread: None,
+            dropped_research: None,
             window_peak_tokens: None,
         }
     }

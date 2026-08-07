@@ -94,6 +94,12 @@ pub struct TaskResult {
     /// re-read-death divide. Same `None` contract as `evictions`.
     #[serde(default)]
     pub dropped_reread: Option<u32>,
+    /// SEARCHes that hit an already-evicted path (see
+    /// [`crate::metrics::RunReport::dropped_research`]) — re-acquisition by
+    /// SEARCH instead of READ; without it a SEARCH recovery is scored like an
+    /// invented value. Same `None` contract as `evictions`.
+    #[serde(default)]
+    pub dropped_research: Option<u32>,
     /// Peak window occupancy in tokens (see
     /// [`crate::metrics::RunReport::window_peak_tokens`]) — whether the task's
     /// pressure coefficient actually reached the evidence budget. Same `None`
@@ -286,6 +292,8 @@ pub struct DeathRow {
     #[serde(default)]
     pub dropped_reread: Option<u32>,
     #[serde(default)]
+    pub dropped_research: Option<u32>,
+    #[serde(default)]
     pub window_peak_tokens: Option<u32>,
 }
 
@@ -305,6 +313,7 @@ impl DeathRow {
             search: SearchOutcome::classify(r.action_counts.as_ref(), &r.search_hits),
             evictions: r.evictions.clone(),
             dropped_reread: r.dropped_reread,
+            dropped_research: r.dropped_research,
             window_peak_tokens: r.window_peak_tokens,
         }
     }
@@ -645,6 +654,7 @@ mod tests {
             search,
             evictions: None,
             dropped_reread: None,
+            dropped_research: None,
             window_peak_tokens: None,
         };
         let table = SearchSolveTable::tally(&[
