@@ -12,3 +12,11 @@
 
 # macOS noise
 .DS_Store
+
+# Session handoffs are addressed to the next working session, not to a reader
+# of this project — they say "don't touch X" and "waiting on a ruling", and
+# they are false the moment the next session does anything. A slice is a
+# decision record and stays true as history; a handoff is a snapshot that
+# rots silently, and in a public repo the two are indistinguishable at a
+# glance. They live in the private notes repo alongside their index instead.
+HANDOFF_*.md

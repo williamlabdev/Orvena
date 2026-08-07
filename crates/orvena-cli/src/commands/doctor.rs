@@ -29,16 +29,24 @@ pub fn run() -> Result<()> {
     };
 
     let kind = &config.agent.provider.kind;
-    match registry::readiness(kind) {
+    match registry::readiness(&config.agent.provider) {
         Readiness::Ready => println!("✓ provider '{kind}': ready"),
         Readiness::MissingKey(key) => {
             ok = false;
             println!("✗ provider '{kind}': {key} not set — add it to .env");
         }
+        Readiness::MissingBaseUrl => {
+            ok = false;
+            println!(
+                "✗ provider '{kind}': base_url is not set — add it under `provider:` in \
+                 .orvena/orvena.yaml (this kind has no default endpoint)"
+            );
+        }
         Readiness::Unknown => {
             ok = false;
             println!(
-                "✗ provider '{kind}': unknown — choose anthropic | openai | openrouter | ollama | offline"
+                "✗ provider '{kind}': unknown — choose anthropic | openai | openrouter | ollama | \
+                 openai_compat | offline"
             );
         }
     }

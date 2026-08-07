@@ -36,6 +36,11 @@ echo "== scaffolding a throwaway project in $WORK =="
 sed -i.bak "s/kind: anthropic/kind: ${PROVIDER}/; s#model: claude-opus-4-8#model: ${MODEL}#" \
   .orvena/orvena.yaml && rm -f .orvena/orvena.yaml.bak
 
+# One set of sampling for every model (B1, 0806) — without it the backend
+# decides and the two calibration cells are not comparable. slice-029.
+. "$REPO/scripts/lib/calibration-sampling.sh"
+apply_calibration_sampling .orvena/orvena.yaml "$BIN"
+
 echo
 echo "== sanity: offline dry-run (fast, deterministic, no model) =="
 "$BIN" bench --provider offline --tasks "$TASKS" --repeat 2

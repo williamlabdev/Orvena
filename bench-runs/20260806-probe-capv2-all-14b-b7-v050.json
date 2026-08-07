@@ -1,0 +1,328 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "endpoint": null,
+  "run_id": "1786031049513-63374-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 40960,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.5.0",
+  "repeat": 3,
+  "task_count": 1,
+  "ran": 1,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 1.0,
+  "solved_any": 1,
+  "verified_rate": 1.0,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 5.0,
+  "budget_exhaustion_rate": 0.0,
+  "mean_total_tokens": 10063.0,
+  "search_use_rate": 0.0,
+  "search_yield_rate": null,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv2-converge-quota-four",
+      "runs": 3,
+      "solved": 3,
+      "skipped": false,
+      "pass_rate": 1.0,
+      "exhaustion_rate": 0.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 4,
+          "total_tokens": 7922,
+          "action_counts": {
+            "write": 0,
+            "edit": 4,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 1,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 5,
+          "total_tokens": 13244,
+          "action_counts": {
+            "write": 1,
+            "edit": 1,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 2,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 6,
+          "total_tokens": 9023,
+          "action_counts": {
+            "write": 0,
+            "edit": 7,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 3,
+          "failed": 0
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786031049513-63374-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota-four",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 6,
+          "action_counts": {
+            "write": 0,
+            "edit": 4,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 3152,
+          "output_tokens": 4770,
+          "evidence_path": ".orvena/bench/1786031049513-63374-0-rep0/capv2-converge-quota-four/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786031049513-63374-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota-four",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 5,
+          "tool_calls": 5,
+          "action_counts": {
+            "write": 1,
+            "edit": 1,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 4750,
+          "output_tokens": 8494,
+          "evidence_path": ".orvena/bench/1786031049513-63374-0-rep1/capv2-converge-quota-four/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786031049513-63374-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota-four",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 6,
+          "tool_calls": 9,
+          "action_counts": {
+            "write": 0,
+            "edit": 7,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 5075,
+          "output_tokens": 3948,
+          "evidence_path": ".orvena/bench/1786031049513-63374-0-rep2/capv2-converge-quota-four/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    }
+  ]
+}

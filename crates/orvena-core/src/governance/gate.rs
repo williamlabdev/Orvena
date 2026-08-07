@@ -9,6 +9,7 @@
 //! keeps the `sh -c` path because its command string is human-authored.
 
 use crate::config::gates::{Gate, Gatekeeper};
+use crate::exec::sandbox::Sandbox;
 use crate::exec::{CommandRunner, RunError};
 use std::path::Path;
 
@@ -25,7 +26,28 @@ pub struct GateOutcome {
 pub struct GateRunner;
 
 impl GateRunner {
-    pub fn run(gate: &Gate, cwd: &Path) -> GateOutcome {
+    pub fn run(gate: &Gate, cwd: &Path, sandbox: &Sandbox) -> GateOutcome {
+        Self::run_with_env(gate, cwd, sandbox, &[])
+    }
+
+    /// As [`GateRunner::run`], but with `env` overlaid on the verify command's
+    /// environment.
+    ///
+    /// Callers that confine a gate need this: a confined child inherits the
+    /// *host's* `TMPDIR`, which is outside the writable set, so any tool that
+    /// reaches for system temp fails on permission rather than on the thing the
+    /// gate is checking. `cargo test` is the concrete case — `rustdoc` creates
+    /// its doctest directory under `TMPDIR`, so a correct fix scores as a failed
+    /// gate. Pointing the gate at a writable temp is the fix; widening the
+    /// writable set to include system temp is not, because a benchmark whose
+    /// workdir lives under temp would then have "confinement" cover everything
+    /// (see `benchmark::runner::temp_extra_writable`).
+    pub fn run_with_env(
+        gate: &Gate,
+        cwd: &Path,
+        sandbox: &Sandbox,
+        env: &[(String, String)],
+    ) -> GateOutcome {
         match gate.gatekeeper {
             Gatekeeper::Human => GateOutcome {
                 gate: gate.name.clone(),
@@ -37,11 +59,11 @@ impl GateRunner {
                 None => GateOutcome {
                     gate: gate.name.clone(),
                     passed: false,
-                    evidence:
-                        "automated gate has no `verify` command — cannot produce evidence".into(),
+                    evidence: "automated gate has no `verify` command — cannot produce evidence"
+                        .into(),
                     needs_human: false,
                 },
-                Some(cmd) => Self::run_verify(&gate.name, cmd, cwd, gate.timeout()),
+                Some(cmd) => Self::run_verify(&gate.name, cmd, cwd, gate.timeout(), sandbox, env),
             },
         }
     }
@@ -51,8 +73,13 @@ impl GateRunner {
         cmd: &str,
         cwd: &Path,
         timeout: std::time::Duration,
+        sandbox: &Sandbox,
+        env: &[(String, String)],
     ) -> GateOutcome {
-        match CommandRunner::new(cwd, timeout).run_shell(cmd) {
+        match CommandRunner::with_sandbox(cwd, timeout, sandbox.clone())
+            .with_env(env.to_vec())
+            .run_shell(cmd)
+        {
             Ok(out) if out.timed_out => GateOutcome {
                 gate: name.to_string(),
                 passed: false,
@@ -90,6 +117,15 @@ impl GateRunner {
                 evidence: format!("could not run verify command: {e}"),
                 needs_human: false,
             },
+            // Sandbox fail-closed: the verify never ran because the OS sandbox
+            // was unavailable. That is a verify failure (never a silent pass),
+            // and the reason is captured as evidence.
+            Err(RunError::Sandbox(e)) => GateOutcome {
+                gate: name.to_string(),
+                passed: false,
+                evidence: format!("could not run verify command: {e}"),
+                needs_human: false,
+            },
         }
     }
 }
@@ -111,14 +147,18 @@ mod tests {
 
     #[test]
     fn exit_zero_passes() {
-        let outcome = GateRunner::run(&gate("true", None), &std::env::temp_dir());
+        let outcome =
+            GateRunner::run(&gate("true", None), &std::env::temp_dir(), &Sandbox::disabled());
         assert!(outcome.passed);
     }
 
     #[test]
     fn nonzero_exit_fails_with_evidence() {
-        let outcome =
-            GateRunner::run(&gate("echo boom 1>&2; exit 1", None), &std::env::temp_dir());
+        let outcome = GateRunner::run(
+            &gate("echo boom 1>&2; exit 1", None),
+            &std::env::temp_dir(),
+            &Sandbox::disabled(),
+        );
         assert!(!outcome.passed);
         assert!(outcome.evidence.contains("boom"));
     }
@@ -127,7 +167,11 @@ mod tests {
     fn a_gate_that_outruns_its_timeout_fails_verify() {
         // The deliberate behavior change from unifying on CommandRunner: a hung
         // verify is a verify failure (passed = false), not an infinite hang.
-        let outcome = GateRunner::run(&gate("sleep 30", Some(1)), &std::env::temp_dir());
+        let outcome = GateRunner::run(
+            &gate("sleep 30", Some(1)),
+            &std::env::temp_dir(),
+            &Sandbox::disabled(),
+        );
         assert!(!outcome.passed, "a timed-out gate must not pass");
         assert!(outcome.evidence.contains("timed out"), "evidence: {}", outcome.evidence);
         assert!(!outcome.needs_human);
@@ -137,7 +181,8 @@ mod tests {
     fn silent_failure_synthesizes_exit_status() {
         // A verify that fails with no output must still yield actionable evidence
         // (the exit code), or the re-attempt loop has nothing to converge on.
-        let outcome = GateRunner::run(&gate("exit 7", None), &std::env::temp_dir());
+        let outcome =
+            GateRunner::run(&gate("exit 7", None), &std::env::temp_dir(), &Sandbox::disabled());
         assert!(!outcome.passed);
         assert!(
             outcome.evidence.contains("exited 7"),
@@ -157,7 +202,7 @@ mod tests {
             gatekeeper: Gatekeeper::Automated,
             timeout_secs: None,
         };
-        let outcome = GateRunner::run(&g, &std::env::temp_dir());
+        let outcome = GateRunner::run(&g, &std::env::temp_dir(), &Sandbox::disabled());
         assert!(!outcome.passed, "a verify-less automated gate must not pass");
         assert!(!outcome.needs_human);
         assert!(outcome.evidence.contains("verify"), "evidence: {}", outcome.evidence);
@@ -172,7 +217,7 @@ mod tests {
             gatekeeper: Gatekeeper::Human,
             timeout_secs: None,
         };
-        let outcome = GateRunner::run(&g, &std::env::temp_dir());
+        let outcome = GateRunner::run(&g, &std::env::temp_dir(), &Sandbox::disabled());
         assert!(outcome.needs_human);
         assert!(!outcome.passed);
     }

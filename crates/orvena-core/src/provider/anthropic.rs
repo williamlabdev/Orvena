@@ -1,7 +1,7 @@
 //! Anthropic (Claude) provider over the Messages API.
 
 use super::{ChatRequest, ChatResponse, Provider};
-use crate::config::agent::ProviderSelection;
+use crate::config::agent::{ProviderSelection, Sampling};
 use crate::error::{Error, Result};
 use async_trait::async_trait;
 
@@ -10,13 +10,25 @@ pub struct Anthropic {
     api_key: String,
     model: String,
     base_url: String,
+    sampling: Option<Sampling>,
 }
 
 impl Anthropic {
     pub fn from_env(sel: &ProviderSelection) -> Result<Self> {
-        let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
-            Error::Provider("ANTHROPIC_API_KEY is not set — put it in .env".into())
-        })?;
+        let api_key = std::env::var("ANTHROPIC_API_KEY")
+            .map_err(|_| Error::Provider("ANTHROPIC_API_KEY is not set — put it in .env".into()))?;
+        // The Messages API has no seed parameter. Dropping it silently would
+        // hand back an unreproducible run under a config that says otherwise —
+        // the same class of quiet downgrade the `api_key_evn` typo caused, and
+        // refused for the same reason.
+        if sel.sampling.and_then(|s| s.seed).is_some() {
+            return Err(Error::Provider(
+                "provider 'anthropic' does not support `sampling.seed` — the Messages API has \
+                 no seed parameter. Remove it rather than let the config claim a reproducibility \
+                 the run will not have."
+                    .into(),
+            ));
+        }
         Ok(Self {
             client: reqwest::Client::new(),
             api_key,
@@ -25,6 +37,7 @@ impl Anthropic {
                 .base_url
                 .clone()
                 .unwrap_or_else(|| "https://api.anthropic.com".to_string()),
+            sampling: sel.sampling,
         })
     }
 }
@@ -51,12 +64,17 @@ impl Provider for Anthropic {
             .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
             .collect();
 
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": self.model,
             "max_tokens": req.max_tokens,
             "system": system,
             "messages": messages,
         });
+        if let Some(s) = self.sampling {
+            body["temperature"] = serde_json::json!(s.temperature);
+            body["top_p"] = serde_json::json!(s.top_p);
+            body["top_k"] = serde_json::json!(s.top_k);
+        }
 
         let resp = self
             .client

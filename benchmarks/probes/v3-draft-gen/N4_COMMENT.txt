@@ -1,0 +1,65 @@
+  # ══ N4 — sentinel (capv3-sentinel-span) ══════════════════════════════════
+  #
+  # Designed to read low/zero in BOTH cells on agent 0.5.0 and to flip red
+  # the moment the agent learns retention/summarization — v3's E, per
+  # ruling iv. Span shape from the alt draft (resolves flag f3: operative
+  # evidence = 4 blocks ≈ 1.74x 4096, inside the ruled 1.5–2x band), with
+  # an ARMORED FILE SET added in B2 round 2.
+  #
+  # Why the armor: round 2 refuted the unarmored set outright — all four
+  # file names are visible in the first prompt (file_inventory), the check
+  # is stateless and tests the final span first, and the step-1 giant
+  # block is newest-exempt: READ f1..f4 at s1, write the global span at
+  # s2, done in TWO steps with zero window pressure. The sentinel read
+  # green for the most natural strategy there is.
+  #
+  # Mechanism now: refs/f1..f6 exist; the span runs over f1, f2 plus TWO
+  # cksum-picked files revealed stage by stage (nB = f(span(f1,f2)),
+  # nC = f(stage-B span), nC != nB asserted). A batch reader holds six
+  # tails and still cannot compute the final span — it does not know which
+  # four files count. Decoy tails are chosen so every candidate stage-B
+  # span is distinct (guess floor 1/4, asserted); stage reveals name the
+  # picked files in plaintext for the honest walker.
+  #
+  # Carried value: a SPAN (largest minus smallest) — the running state is
+  # a (min,max) PAIR, and the single writable slot is {1,4}-width-gated
+  # (plus an exact byte cap), so it carries at most ONE 4-digit number.
+  # The alt draft's unbounded [0-9]+ admitted a min·max concat stash
+  # through the writable reprint; closed and regression-tested.
+  #
+  # RESIDUAL WALKS — documented and generator-asserted, not denied:
+  #   (i) final-first close: the stateless check still accepts a correct
+  #       final span written from nothing — but composing it now requires
+  #       knowing BOTH armored picks, i.e. walking the reveals (or a blind
+  #       tail-pair guess across 6 uniform files at ~3 actions per try).
+  #   (ii) stage-skip: a correct stage-B span draws the f_nC reveal
+  #       without stage A ever passing — knowledge of nB is still needed.
+  #   (iii) disciplined extreme-tracking with the single 4-digit carry +
+  #       eviction-aware ordering can pass in ~7 actions once the picks
+  #       are revealed. That IS elite window management — a green cell is
+  #       only a reading after action-log verification (which files read,
+  #       what interim values written).
+  #
+  # Expected 0.5.0 deaths (arithmetic, not luck):
+  #   JIT walk: every stage beyond A needs a term whose block is gone —
+  #     re-read loops burn steps (dropped_reread/research high);
+  #   batch walk: ~10.6k giant read is newest-exempt for one step, then
+  #     cliff-evicted whole; only stage A is computable from it, and the
+  #     stage-B pick is unknowable at that point.
+  #   Three operative blocks never coexist (asserted for every triple),
+  #   and stage C needs three tails at once unless an extreme is carried —
+  #   which the slot width fights.
+  #
+  # Condition 9: a retaining agent solves in 4 READ + 3 EDIT = 7 actions
+  # (reveals name the picked files; decoys are never read on the honest
+  # walk).
+  #
+  # Condition 11 self-test: batch close at s2 fails — only stage A is
+  # computable from the giant newest block; the picks are cksum-armored.
+  # No compute channel (RUN fixed-argv); no search shortcut (de-anchored
+  # positional tails, and the spans themselves appear in no file).
+  #
+  # Freeze note: reads 0/0 are only meaningful with the probe confirming
+  # window_peak_tokens near/over budget and the death shapes above; a zero
+  # from parse errors or provider faults is not a sentinel reading. A
+  # green is only a reading after action-log verification (residual iii).

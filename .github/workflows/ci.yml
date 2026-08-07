@@ -10,15 +10,24 @@ env:
 
 jobs:
   build-test:
-    name: build · test · clippy · boundary
-    runs-on: ubuntu-latest
+    # Run every gate on both platforms. macOS is where the OS sandbox is enforced
+    # today (slice-015: `sandbox-exec`), so its containment tests only actually
+    # run on the macos leg; Linux currently fails closed (the Landlock backend
+    # lands in slice-016, at which point its containment tests run on the ubuntu
+    # leg). Keep both green.
+    name: build · test · clippy · boundary (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust (stable + clippy)
+      - name: Install Rust (stable + clippy + rustfmt)
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -29,11 +38,42 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      # Re-run the Linux sandbox containment test with output visible, so the log
+      # unambiguously records whether the OS actually enforced (Landlock present)
+      # or the test self-skipped (kernel without Landlock) — a plain green check
+      # cannot distinguish the two. Look for a `SANDBOX-LINUX:` line.
+      - name: Sandbox containment signal (Linux)
+        if: runner.os == 'Linux'
+        run: cargo test -p orvena-cli --test sandbox_linux -- --nocapture
+
+      # Same reasoning for the escape suite, on both platforms: it self-skips
+      # when no backend is enforcing, and a skip is indistinguishable from a
+      # pass in the summary line. Look for an `ESCAPE SUITE:` line — its absence
+      # means every technique was actually exercised.
+      - name: Escape-technique signal
+        run: cargo test -p orvena-cli --test escape_techniques -- --nocapture
+
+      - name: Formatting (rustfmt.toml is tuned to this codebase's style)
+        run: cargo fmt --all --check
+
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Boundary check (no research leaks)
         run: ./scripts/boundary-check.sh
+
+  # Orvena ships a binary built from source, and its only network-facing surface
+  # is the provider client (reqwest + rustls). An advisory against that chain is
+  # something users inherit on `cargo install`, so it gates rather than informs.
+  # Runs once, not per-OS: the lockfile is platform-independent.
+  audit:
+    name: supply chain (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   install-smoke:
     name: clean-machine install

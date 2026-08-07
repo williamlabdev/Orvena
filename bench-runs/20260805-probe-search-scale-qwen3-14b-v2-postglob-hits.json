@@ -1,0 +1,323 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "endpoint": null,
+  "run_id": "1785927195204-72251-0",
+  "governance": "engineering",
+  "agent": "native 0.4.0",
+  "repeat": 3,
+  "task_count": 2,
+  "ran": 2,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 0.6666667,
+  "solved_any": 2,
+  "verified_rate": 0.6666667,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 4.3333335,
+  "budget_exhaustion_rate": 0.33333334,
+  "mean_total_tokens": 7470.3335,
+  "search_use_rate": 1.0,
+  "search_yield_rate": 0.21052632,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "probe-needle-12",
+      "runs": 3,
+      "solved": 3,
+      "skipped": false,
+      "pass_rate": 1.0
+    },
+    {
+      "id": "probe-needle-40",
+      "runs": 3,
+      "solved": 1,
+      "skipped": false,
+      "pass_rate": 0.33333334
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1785927195204-72251-0-rep0",
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 2,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.5,
+      "verified": 1,
+      "verified_rate": 0.5,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-needle-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 0,
+            "search": 1,
+            "run": 1
+          },
+          "search_hits": [
+            1
+          ],
+          "input_tokens": 2381,
+          "output_tokens": 1103,
+          "evidence_path": ".orvena/bench/1785927195204-72251-0-rep0/probe-needle-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "probe-needle-40",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 0,
+            "edit": 0,
+            "read": 0,
+            "search": 6,
+            "run": 2
+          },
+          "search_hits": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "input_tokens": 7907,
+          "output_tokens": 7958,
+          "evidence_path": ".orvena/bench/1785927195204-72251-0-rep0/probe-needle-40/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1785927195204-72251-0-rep1",
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 2,
+      "passed": 2,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 2,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-needle-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 2,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 0,
+            "search": 1,
+            "run": 1
+          },
+          "search_hits": [
+            1
+          ],
+          "input_tokens": 1565,
+          "output_tokens": 713,
+          "evidence_path": ".orvena/bench/1785927195204-72251-0-rep1/probe-needle-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "probe-needle-40",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 2,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 0,
+            "search": 1,
+            "run": 1
+          },
+          "search_hits": [
+            1
+          ],
+          "input_tokens": 1938,
+          "output_tokens": 1124,
+          "evidence_path": ".orvena/bench/1785927195204-72251-0-rep1/probe-needle-40/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1785927195204-72251-0-rep2",
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 2,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.5,
+      "verified": 1,
+      "verified_rate": 0.5,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-needle-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 0,
+            "search": 2,
+            "run": 0
+          },
+          "search_hits": [
+            0,
+            1
+          ],
+          "input_tokens": 2370,
+          "output_tokens": 1626,
+          "evidence_path": ".orvena/bench/1785927195204-72251-0-rep2/probe-needle-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "probe-needle-40",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 0,
+            "edit": 0,
+            "read": 0,
+            "search": 8,
+            "run": 0
+          },
+          "search_hits": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "input_tokens": 7881,
+          "output_tokens": 8256,
+          "evidence_path": ".orvena/bench/1785927195204-72251-0-rep2/probe-needle-40/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    }
+  ]
+}

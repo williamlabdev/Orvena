@@ -1,0 +1,508 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.6:35b",
+  "endpoint": null,
+  "run_id": "1786009159181-95490-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 262144,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.5.0",
+  "repeat": 3,
+  "task_count": 2,
+  "ran": 2,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 1.0,
+  "solved_any": 2,
+  "verified_rate": 1.0,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 3.0,
+  "budget_exhaustion_rate": 0.0,
+  "mean_total_tokens": 4810.3335,
+  "search_use_rate": 0.33333334,
+  "search_yield_rate": 0.6666667,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv2-needle-semantic",
+      "runs": 3,
+      "solved": 3,
+      "skipped": false,
+      "pass_rate": 1.0,
+      "exhaustion_rate": 0.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 4158,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 5,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 1,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 4,
+          "total_tokens": 6405,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 1,
+            "search": 2,
+            "run": 0
+          },
+          "search_hits": [
+            0,
+            1
+          ],
+          "search": "hit"
+        },
+        {
+          "rep": 2,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 3433,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 1,
+            "search": 1,
+            "run": 0
+          },
+          "search_hits": [
+            1
+          ],
+          "search": "hit"
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 2,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 1,
+          "failed": 0
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    },
+    {
+      "id": "capv2-converge-quota",
+      "runs": 3,
+      "solved": 3,
+      "skipped": false,
+      "pass_rate": 1.0,
+      "exhaustion_rate": 0.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 5042,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 1,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 5419,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 2,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 2,
+          "total_tokens": 4405,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 3,
+          "failed": 0
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1786009159181-95490-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 2,
+      "passed": 2,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 2,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-needle-semantic",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 6,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 5,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 2413,
+          "output_tokens": 1745,
+          "evidence_path": ".orvena/bench/1786009159181-95490-0-rep0/capv2-needle-semantic/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 4,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 2701,
+          "output_tokens": 2341,
+          "evidence_path": ".orvena/bench/1786009159181-95490-0-rep0/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1786009159181-95490-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 2,
+      "passed": 2,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 2,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-needle-semantic",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 4,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 1,
+            "search": 2,
+            "run": 0
+          },
+          "search_hits": [
+            0,
+            1
+          ],
+          "input_tokens": 3222,
+          "output_tokens": 3183,
+          "evidence_path": ".orvena/bench/1786009159181-95490-0-rep1/capv2-needle-semantic/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 2701,
+          "output_tokens": 2718,
+          "evidence_path": ".orvena/bench/1786009159181-95490-0-rep1/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1786009159181-95490-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 2,
+      "passed": 2,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 2,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-needle-semantic",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 1,
+            "search": 1,
+            "run": 0
+          },
+          "search_hits": [
+            1
+          ],
+          "input_tokens": 2321,
+          "output_tokens": 1112,
+          "evidence_path": ".orvena/bench/1786009159181-95490-0-rep2/capv2-needle-semantic/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 2,
+          "tool_calls": 4,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 1726,
+          "output_tokens": 2679,
+          "evidence_path": ".orvena/bench/1786009159181-95490-0-rep2/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    }
+  ]
+}

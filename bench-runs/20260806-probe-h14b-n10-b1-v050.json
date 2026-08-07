@@ -1,0 +1,498 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "endpoint": null,
+  "run_id": "1786019373328-65113-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 40960,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.5.0",
+  "repeat": 5,
+  "task_count": 1,
+  "ran": 1,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 0.8,
+  "solved_any": 1,
+  "verified_rate": 0.8,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 4.8,
+  "budget_exhaustion_rate": 0.2,
+  "mean_total_tokens": 10479.2,
+  "search_use_rate": 0.0,
+  "search_yield_rate": null,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv2-converge-quota",
+      "runs": 5,
+      "solved": 4,
+      "skipped": false,
+      "pass_rate": 0.8,
+      "exhaustion_rate": 0.2,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 4,
+          "total_tokens": 6534,
+          "action_counts": {
+            "write": 1,
+            "edit": 1,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 1,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 4,
+          "total_tokens": 6482,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 2,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 27004,
+          "action_counts": {
+            "write": 0,
+            "edit": 14,
+            "read": 3,
+            "search": 0,
+            "run": 2
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 3,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 4,
+          "total_tokens": 5873,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 4,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 4,
+          "total_tokens": 6503,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 4,
+          "failed": 1
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786019373328-65113-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 4,
+          "action_counts": {
+            "write": 1,
+            "edit": 1,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 3124,
+          "output_tokens": 3410,
+          "evidence_path": ".orvena/bench/1786019373328-65113-0-rep0/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786019373328-65113-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 5,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 3124,
+          "output_tokens": 3358,
+          "evidence_path": ".orvena/bench/1786019373328-65113-0-rep1/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786019373328-65113-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 19,
+          "action_counts": {
+            "write": 0,
+            "edit": 14,
+            "read": 3,
+            "search": 0,
+            "run": 2
+          },
+          "search_hits": [],
+          "input_tokens": 7161,
+          "output_tokens": 19843,
+          "evidence_path": ".orvena/bench/1786019373328-65113-0-rep2/capv2-converge-quota/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786019373328-65113-0-rep3",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 5,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 3128,
+          "output_tokens": 2745,
+          "evidence_path": ".orvena/bench/1786019373328-65113-0-rep3/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786019373328-65113-0-rep4",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-converge-quota",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 5,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 3128,
+          "output_tokens": 3375,
+          "evidence_path": ".orvena/bench/1786019373328-65113-0-rep4/capv2-converge-quota/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    }
+  ]
+}

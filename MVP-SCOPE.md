@@ -45,7 +45,7 @@ VISION 的長期承諾是「發布一個誠實的外部 benchmark 數字」。�
 | 子系統 | Rust 現況 | 檔案 |
 | :--- | :--- | :--- |
 | Bounded 迴圈(prepare→call→apply→gate,capped by max_steps) | ✅ 可運作 | `agent/driver.rs` |
-| Provider 抽象(Anthropic/OpenAI/OpenRouter/Ollama/offline,無預設) | ✅ 可運作 | `provider/*` |
+| Provider 抽象(Anthropic/OpenAI/OpenRouter/Ollama/openai_compat/offline,無預設) | ✅ 可運作 | `provider/*` |
 | Config-first YAML(roles/gates/context-budgets/orvena.yaml) | ✅ 可運作 | `config/*` |
 | 三紀律(scope lock、read-only default、verifiable gates) | ✅ 可運作 | `governance/scope.rs`, `governance/gate.rs` |
 | Human/automated gate + verify 證據 | ✅ 可運作 | `governance/gate.rs` |

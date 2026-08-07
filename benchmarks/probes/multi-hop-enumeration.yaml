@@ -1,0 +1,568 @@
+# Orvena instrument probe — MULTI-HOP + ENUMERATION. NOT a ruler.
+#
+# Question: `probes/search-scale.yaml` is saturated on qwen3.6:35b (2/2, two
+# steps, ~2.9k tok, unmoved by dropping temperature from 1 to 0.6). That probe
+# is single-hop with a single hit: one grep finds the needle and one edit ends
+# the run. So it cannot price `--repeat` for the ceiling cell — variance
+# measured at saturation is zero, and a `repeat` priced there would read n=1 and
+# then miss on a v2 set that actually has difficulty (SLICE-026, "35b 那一腿的
+# n 未定").
+#
+# This probe exists to FIND THE DIFFICULTY BAND, not to score anyone. The
+# target is 50-75% on qwen3.6:35b (SLICE-026 calibration rule 1): >85% means
+# still saturated, <35% means it is measuring noise rather than capability.
+# Whatever band it lands in, the number is about the INSTRUMENT.
+#
+# FIRST READINGS (0806, qwen3.6:35b, B1 sampling, provenance identical across
+# every call — checked field by field, not assumed):
+#
+#   call 1 (n=3)    probe-multihop-12   2/3 =  67%   probe-multihop-20  0/3 = 0%
+#   call 2 (n=3)    probe-multihop-12   3/3 = 100%   probe-multihop-20  0/3 = 0%
+#   call 3 (n=10)   probe-multihop-12   3/10 = 30%
+#   call 4 (n=10)   probe-multihop-12   7/10 = 70%
+#   call 5 (n=10)   probe-multihop-12   4/10 = 40%
+#   pooled n=30     14/30 = 47%,  95% CI [30%, 64%]  (width 34pp)
+#
+# Three things came out of that, all of which outlive this file:
+#
+# 1. **No affordable n prices this cell, because the task is a coin flip on
+#    STRATEGY.** Pass/fail is decided by which approach the run picks, and the
+#    two groups are cleanly separated — the read counts are bimodal with an
+#    empty gap between 6 and 13, so the split is in the data, not in the
+#    threshold:
+#
+#      read-heavy (>=12 reads)   pass 14/16 = 88%
+#      search-first (<12 reads)  pass  0/14 =  0%
+#
+#    Reading the corpus wins; searching it loses, because the decoys are built
+#    so that one grep is always wrong. So the pass rate measures how often the
+#    loop happens to choose exhaustive reading — a Bernoulli draw. Getting the
+#    CI down to +/-10pp would take ~96 runs PER CELL (hours per task on 35b),
+#    which is not a calibration anyone can afford. The fix is not a bigger n:
+#    it is a task whose outcome does not hinge on the strategy drawn.
+#
+#    (The batch-to-batch spread — 30% / 70% / 40% — needs no extra mechanism to
+#    explain it: at p~0.5, n=10 carries a +/-16pp sampling error on its own. The
+#    load-bearing evidence is the within-run strategy split above, which
+#    sampling error cannot manufacture.)
+#
+# 2. **The 8-step budget is part of the task, not part of the runner's
+#    scenery.** `probe-multihop-20`'s 0% is NOT an enumeration failure: all six
+#    runs died as `reached max_steps (8)` having read only 4-6 of the 20
+#    configs. It is measuring the budget. And the budget cannot be tuned per
+#    task — `MAX_STEPS` is a hard-coded const in `benchmark/runner.rs` (a repo
+#    `.orvena/orvena.yaml` `max_steps:` does NOT reach the bench runner; raising
+#    it there changes nothing, as was confirmed the hard way). Its doc comment
+#    is explicit that changing it changes the envelope and results stop being
+#    poolable across values.
+#
+#    So this is a HARD CONSTRAINT ON v2 TASK DESIGN: every task must be solvable
+#    inside 8 steps. A corpus large enough that reading it exhausts the budget
+#    measures the envelope, not the agent — and the reading looks exactly like
+#    a capability finding while doing so. `probe-multihop-20` is kept here
+#    precisely as the demonstration of that failure mode; its 0% must never be
+#    quoted as a difficulty reading.
+#
+# 3. **The two failure modes leave no gap between them**, and that is the
+#    finding that bears on whether v2 is buildable at all. Small enough to read
+#    inside 8 steps (12 files) => reading always wins and the score is a
+#    strategy draw. Big enough that it cannot be read (20 files) => the budget
+#    is gone before the corpus is covered and the score measures the envelope.
+#    On this machine, at MAX_STEPS=8, qwen3.6:35b has NO band where searching is
+#    both necessary and sufficient. Any v2 task built on "make it find things"
+#    has to clear that gap first, or it will land in one of these two modes
+#    while looking like a capability reading.
+#
+# Also visible in the action counts: 35b solves the 12-file task by READING the
+# corpus (13-19 reads, often zero searches), not by searching it. At 12 files
+# that fits the budget; the moment it does not, the run dies. So this probe
+# presses multi-hop and enumeration, but it does NOT press tool selection —
+# do not read a passing run here as evidence the loop chose to search.
+#
+# It presses the two SLICE-026 dimensions that search-scale leaves untouched:
+#
+#   multi-hop     — which policies are retired is not in the service configs.
+#                   Evidence A (policy/registry.conf) must be read before
+#                   evidence B (svc/*.conf) means anything.
+#   enumeration   — the task is find-them-ALL. Missing one affected service
+#                   fails exactly as hard as naming a wrong one, and the check
+#                   never says how many there are.
+#
+# The load-bearing design choice: ONE GREP IS ALWAYS WRONG. An agent that greps
+# the obvious retired policy name gets a set that is both over- and
+# under-inclusive, by construction:
+#
+#   over  — `archive-cold-standby` is an ACTIVE policy whose name contains the
+#           retired `archive-cold`, so a substring match picks up a service that
+#           must NOT be listed.
+#   over  — one service carries a COMMENTED-OUT `# retention = archive-cold`
+#           above its real, active setting. It greps as a hit and is not one.
+#   under — a second (and in the 20-file task, a third) policy is also retired.
+#           Matching only the first one silently misses those services.
+#
+# So the run has to read the registry, cross it against every config, and
+# distinguish a live setting from a commented one. That is verification
+# (SLICE-026 dimension 1) riding on top of the other two.
+#
+# Design conditions carried over from SLICE-026 / the v1 header, all of which
+# this file is worthless without:
+#   1. The corpus is READ-ONLY: svc/ and policy/ are never in `writes`, so their
+#      CONTENTS never ride into the prompt — only their names, via the
+#      slice-025 inventory. The one writable file is the one the instruction
+#      says to write. This is the 0805 lesson that killed the first search-scale
+#      build (writable contents are printed in full, which hands over the
+#      answer).
+#   2. The check's feedback is SYMPTOM-level and, specifically, NEVER states the
+#      count. The count IS the enumeration being measured; "expected 4, found 3"
+#      would convert find-them-all into find-one-more.
+#   3. No temptation axis. The frozen corpus is never what the task asks to
+#      change, so "which file is it" never becomes "may I touch that file"
+#      (SLICE-026 rule 6). One number, one thing measured.
+#   4. No toolchain — difficulty comes from information structure, not from
+#      waiting on a compiler (SLICE-026, ruled 0805).
+#
+# Read `action_counts` per run, not just the pass rate (SLICE-026): a run that
+# passed after reading all 12 configs is a different finding from one that
+# passed on two searches, and a run that failed by listing 4-of-6 is a different
+# finding from one that burned its budget.
+
+tasks:
+  - id: probe-multihop-12
+    instruction: "The nightly rollup aborts: one or more service configs under svc/ request a retention policy that has been retired. policy/registry.conf records which policies are retired and what each retired one must be replaced with. The svc/ configs and the registry belong to another team and are frozen — do not edit them. Record the fix in rollup-overrides.conf instead: one line per affected service, '<service> = <replacement policy>'. tests/check.sh verifies."
+    writes: [rollup-overrides.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 120
+    seed:
+      - path: policy/registry.conf
+        contents: |
+          # Retention policy registry. A policy in state 'retired' must not be
+          # requested by any service; 'replacement' names what to request instead.
+
+          [archive-hot]
+          state = active
+
+          [archive-warm]
+          state = active
+
+          [archive-cold]
+          state = retired
+          replacement = archive-warm
+
+          [archive-cold-standby]
+          state = active
+
+          [archive-frozen]
+          state = retired
+          replacement = archive-hot
+      - path: svc/beacon.conf
+        contents: |
+          service = beacon
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 200
+          alert_channel = ops-bea
+          enabled = true
+      - path: svc/courier.conf
+        contents: |
+          service = courier
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 207
+          alert_channel = ops-cou
+          enabled = true
+      - path: svc/gateway.conf
+        contents: |
+          service = gateway
+          region = ap-south-1
+          retention = archive-cold
+          max_batch = 214
+          alert_channel = ops-gat
+          enabled = true
+      - path: svc/indexer.conf
+        contents: |
+          service = indexer
+          region = us-west-1
+          retention = archive-cold-standby
+          max_batch = 221
+          alert_channel = ops-ind
+          enabled = true
+      - path: svc/ledger.conf
+        contents: |
+          service = ledger
+          region = eu-west-1
+          retention = archive-frozen
+          max_batch = 228
+          alert_channel = ops-led
+          enabled = true
+      - path: svc/mailer.conf
+        contents: |
+          service = mailer
+          region = us-east-1
+          retention = archive-warm
+          max_batch = 235
+          alert_channel = ops-mai
+          enabled = true
+      - path: svc/notifier.conf
+        contents: |
+          service = notifier
+          region = ap-northeast-1
+          retention = archive-cold
+          max_batch = 242
+          alert_channel = ops-not
+          enabled = true
+      - path: svc/parser.conf
+        contents: |
+          service = parser
+          region = us-west-2
+          retention = archive-hot
+          max_batch = 249
+          alert_channel = ops-par
+          enabled = true
+      - path: svc/quota.conf
+        contents: |
+          service = quota
+          region = us-east-2
+          # retention = archive-cold
+          retention = archive-warm
+          max_batch = 256
+          alert_channel = ops-quo
+          enabled = true
+      - path: svc/relay.conf
+        contents: |
+          service = relay
+          region = eu-central-1
+          retention = archive-frozen
+          max_batch = 263
+          alert_channel = ops-rel
+          enabled = true
+      - path: svc/scheduler.conf
+        contents: |
+          service = scheduler
+          region = sa-east-1
+          retention = archive-warm
+          max_batch = 270
+          alert_channel = ops-sch
+          enabled = true
+      - path: svc/tracer.conf
+        contents: |
+          service = tracer
+          region = ca-central-1
+          retention = archive-hot
+          max_batch = 277
+          alert_channel = ops-tra
+          enabled = true
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Symptom-level feedback ONLY, and specifically: never name a service and
+          # never state how many are affected. The count is the enumeration this
+          # probe measures — handing it over turns find-them-all into find-one-more.
+          fail() { echo "rollup problem: $1"; exit 1; }
+
+          test -f rollup-overrides.conf || fail "rollup-overrides.conf is missing"
+          test "$(ls svc/ | wc -l)" -eq 12 || fail "no service config may be added or removed"
+          test "$(cat svc/*.conf | wc -l)" -eq 73 || fail "the frozen configs must keep their exact line count"
+          test "$(ls policy/ | wc -l)" -eq 1 || fail "nothing may be added to policy/"
+          test "$(wc -l < policy/registry.conf)" -eq 19 || fail "the policy registry must not be edited"
+
+          # Replacement for a policy, printed only when the registry marks it retired.
+          replacement_for() {
+            awk -v p="[$1]" '
+              $0 == p { inb = 1; next }
+              /^\[/ { inb = 0 }
+              inb && $1 == "state" { st = $3 }
+              inb && $1 == "replacement" { rp = $3 }
+              END { if (st == "retired") print rp }
+            ' policy/registry.conf
+          }
+
+          # The LIVE setting only: a commented-out retention line is not a request.
+          current_policy() {
+            grep -E '^[[:space:]]*retention[[:space:]]*=' "svc/$1.conf" \
+              | head -1 | cut -d= -f2 | tr -d '[:space:]'
+          }
+
+          # Accept 'gateway', 'gateway.conf' and 'svc/gateway.conf' alike: a run that
+          # enumerated correctly must not be scored as a miss over its spelling.
+          parsed=$(grep -v '^[[:space:]]*#' rollup-overrides.conf | grep '=' \
+            | sed 's/[[:space:]]//g; s|^svc/||; s|\.conf||' | tr '=' ' ')
+          test -n "$parsed" || fail "rollup-overrides.conf records no override"
+
+          listed=""
+          while read -r svc want; do
+            test -n "$svc" || continue
+            test -f "svc/$svc.conf" || fail "'$svc' is not a service under svc/"
+            rep=$(replacement_for "$(current_policy "$svc")")
+            test -n "$rep" || fail "'$svc' does not request a retired policy"
+            test "$want" = "$rep" || fail "the replacement named for '$svc' is not the one the registry prescribes"
+            case " $listed " in *" $svc "*) fail "'$svc' is listed more than once" ;; esac
+            listed="$listed $svc"
+          done <<PARSED
+          $parsed
+          PARSED
+
+          for f in svc/*.conf; do
+            svc=$(basename "$f" .conf)
+            if [ -n "$(replacement_for "$(current_policy "$svc")")" ]; then
+              case " $listed " in
+                *" $svc "*) ;;
+                *) fail "a service still requesting a retired policy is missing from the overrides" ;;
+              esac
+            fi
+          done
+
+          echo ok
+
+  - id: probe-multihop-20
+    instruction: "The nightly rollup aborts: one or more service configs under svc/ request a retention policy that has been retired. policy/registry.conf records which policies are retired and what each retired one must be replaced with. The svc/ configs and the registry belong to another team and are frozen — do not edit them. Record the fix in rollup-overrides.conf instead: one line per affected service, '<service> = <replacement policy>'. tests/check.sh verifies."
+    writes: [rollup-overrides.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 120
+    seed:
+      - path: policy/registry.conf
+        contents: |
+          # Retention policy registry. A policy in state 'retired' must not be
+          # requested by any service; 'replacement' names what to request instead.
+
+          [archive-hot]
+          state = active
+
+          [archive-warm]
+          state = active
+
+          [archive-cold]
+          state = retired
+          replacement = archive-warm
+
+          [archive-cold-standby]
+          state = active
+
+          [archive-frozen]
+          state = retired
+          replacement = archive-hot
+
+          [archive-glacier]
+          state = retired
+          replacement = archive-warm
+      - path: svc/auditor.conf
+        contents: |
+          service = auditor
+          region = us-east-1
+          retention = archive-hot
+          max_batch = 284
+          alert_channel = ops-aud
+          enabled = true
+      - path: svc/beacon.conf
+        contents: |
+          service = beacon
+          region = eu-west-1
+          retention = archive-warm
+          max_batch = 200
+          alert_channel = ops-bea
+          enabled = true
+      - path: svc/broker.conf
+        contents: |
+          service = broker
+          region = ap-south-1
+          retention = archive-glacier
+          max_batch = 291
+          alert_channel = ops-bro
+          enabled = true
+      - path: svc/cache.conf
+        contents: |
+          service = cache
+          region = us-west-1
+          retention = archive-warm
+          max_batch = 298
+          alert_channel = ops-cac
+          enabled = true
+      - path: svc/courier.conf
+        contents: |
+          service = courier
+          region = us-east-2
+          retention = archive-hot
+          max_batch = 207
+          alert_channel = ops-cou
+          enabled = true
+      - path: svc/dispatch.conf
+        contents: |
+          service = dispatch
+          region = eu-north-1
+          retention = archive-frozen
+          max_batch = 305
+          alert_channel = ops-dis
+          enabled = true
+      - path: svc/emitter.conf
+        contents: |
+          service = emitter
+          region = ap-southeast-2
+          retention = archive-cold-standby
+          max_batch = 312
+          alert_channel = ops-emi
+          enabled = true
+      - path: svc/fanout.conf
+        contents: |
+          service = fanout
+          region = us-west-2
+          retention = archive-hot
+          max_batch = 319
+          alert_channel = ops-fan
+          enabled = true
+      - path: svc/gateway.conf
+        contents: |
+          service = gateway
+          region = ap-south-1
+          retention = archive-cold
+          max_batch = 214
+          alert_channel = ops-gat
+          enabled = true
+      - path: svc/gauge.conf
+        contents: |
+          service = gauge
+          region = sa-east-1
+          retention = archive-warm
+          max_batch = 326
+          alert_channel = ops-gau
+          enabled = true
+      - path: svc/hasher.conf
+        contents: |
+          service = hasher
+          region = ca-central-1
+          retention = archive-glacier
+          max_batch = 333
+          alert_channel = ops-has
+          enabled = true
+      - path: svc/indexer.conf
+        contents: |
+          service = indexer
+          region = us-west-1
+          retention = archive-cold-standby
+          max_batch = 221
+          alert_channel = ops-ind
+          enabled = true
+      - path: svc/ledger.conf
+        contents: |
+          service = ledger
+          region = eu-west-1
+          retention = archive-frozen
+          max_batch = 228
+          alert_channel = ops-led
+          enabled = true
+      - path: svc/mailer.conf
+        contents: |
+          service = mailer
+          region = us-east-1
+          retention = archive-warm
+          max_batch = 235
+          alert_channel = ops-mai
+          enabled = true
+      - path: svc/notifier.conf
+        contents: |
+          service = notifier
+          region = ap-northeast-1
+          retention = archive-cold
+          max_batch = 242
+          alert_channel = ops-not
+          enabled = true
+      - path: svc/parser.conf
+        contents: |
+          service = parser
+          region = us-west-2
+          retention = archive-hot
+          max_batch = 249
+          alert_channel = ops-par
+          enabled = true
+      - path: svc/quota.conf
+        contents: |
+          service = quota
+          region = us-east-2
+          # retention = archive-cold
+          retention = archive-warm
+          max_batch = 256
+          alert_channel = ops-quo
+          enabled = true
+      - path: svc/relay.conf
+        contents: |
+          service = relay
+          region = eu-central-1
+          retention = archive-frozen
+          max_batch = 263
+          alert_channel = ops-rel
+          enabled = true
+      - path: svc/scheduler.conf
+        contents: |
+          service = scheduler
+          region = sa-east-1
+          retention = archive-warm
+          max_batch = 270
+          alert_channel = ops-sch
+          enabled = true
+      - path: svc/tracer.conf
+        contents: |
+          service = tracer
+          region = ca-central-1
+          retention = archive-hot
+          max_batch = 277
+          alert_channel = ops-tra
+          enabled = true
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          # Symptom-level feedback ONLY, and specifically: never name a service and
+          # never state how many are affected. The count is the enumeration this
+          # probe measures — handing it over turns find-them-all into find-one-more.
+          fail() { echo "rollup problem: $1"; exit 1; }
+
+          test -f rollup-overrides.conf || fail "rollup-overrides.conf is missing"
+          test "$(ls svc/ | wc -l)" -eq 20 || fail "no service config may be added or removed"
+          test "$(cat svc/*.conf | wc -l)" -eq 121 || fail "the frozen configs must keep their exact line count"
+          test "$(ls policy/ | wc -l)" -eq 1 || fail "nothing may be added to policy/"
+          test "$(wc -l < policy/registry.conf)" -eq 23 || fail "the policy registry must not be edited"
+
+          # Replacement for a policy, printed only when the registry marks it retired.
+          replacement_for() {
+            awk -v p="[$1]" '
+              $0 == p { inb = 1; next }
+              /^\[/ { inb = 0 }
+              inb && $1 == "state" { st = $3 }
+              inb && $1 == "replacement" { rp = $3 }
+              END { if (st == "retired") print rp }
+            ' policy/registry.conf
+          }
+
+          # The LIVE setting only: a commented-out retention line is not a request.
+          current_policy() {
+            grep -E '^[[:space:]]*retention[[:space:]]*=' "svc/$1.conf" \
+              | head -1 | cut -d= -f2 | tr -d '[:space:]'
+          }
+
+          # Accept 'gateway', 'gateway.conf' and 'svc/gateway.conf' alike: a run that
+          # enumerated correctly must not be scored as a miss over its spelling.
+          parsed=$(grep -v '^[[:space:]]*#' rollup-overrides.conf | grep '=' \
+            | sed 's/[[:space:]]//g; s|^svc/||; s|\.conf||' | tr '=' ' ')
+          test -n "$parsed" || fail "rollup-overrides.conf records no override"
+
+          listed=""
+          while read -r svc want; do
+            test -n "$svc" || continue
+            test -f "svc/$svc.conf" || fail "'$svc' is not a service under svc/"
+            rep=$(replacement_for "$(current_policy "$svc")")
+            test -n "$rep" || fail "'$svc' does not request a retired policy"
+            test "$want" = "$rep" || fail "the replacement named for '$svc' is not the one the registry prescribes"
+            case " $listed " in *" $svc "*) fail "'$svc' is listed more than once" ;; esac
+            listed="$listed $svc"
+          done <<PARSED
+          $parsed
+          PARSED
+
+          for f in svc/*.conf; do
+            svc=$(basename "$f" .conf)
+            if [ -n "$(replacement_for "$(current_policy "$svc")")" ]; then
+              case " $listed " in
+                *" $svc "*) ;;
+                *) fail "a service still requesting a retired policy is missing from the overrides" ;;
+              esac
+            fi
+          done
+
+          echo ok

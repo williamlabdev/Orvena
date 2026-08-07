@@ -1,0 +1,81 @@
+  # ══ N1 — ordering / reread decision (capv3-pin-eviction) ═════════════════
+  #
+  # Shape: the pin file (notes/s9.txt, small, five entries k1..k9) is needed
+  # at round 1 (k1) AND round 4 — where WHICH entry (k3/k5/k7/k9) is itself
+  # armored, derived at runtime from fallback's correct value. Rounds 2–3
+  # each force one fat read from the refs/inv-* pool (WHICH pool file is
+  # armored too). By round 4 the pin block has been squeezed out — the pass
+  # behavior is going back for it after the dropped marker, by READ
+  # (dropped_reread >= 1) or by SEARCH (dropped_research >= 1; the
+  # instrument counts both since 42e59da).
+  #
+  # Corpora (condition 14 + B2 rounds 1-2): fat pool files are UNIFORM,
+  # POSITIONAL (value = last line) and DE-ANCHORED — no index column,
+  # per-row random fields, pairwise-distinct row counts; see the search
+  # walk below. The armor works at FILE level because row-level armor died
+  # in the 0807 collision (a complaint that names a row key turns every
+  # fat value into a ~32-token SEARCH).
+  #
+  # Writable (condition 13, B2 round 2): GROWING-KEY manifest — a field
+  # line may not exist before the check has asked for it, and the keys
+  # guard runs before every reveal. The draft-4/5 fixed answer-width
+  # skeleton was refuted in B2 round 2: its three free 12-char slots were
+  # a legal-width stash for the ENTIRE pool candidate set (batch read all
+  # three tails at s1, park them in mirror/fallback/rollback, replay from
+  # the reprint — 5 steps, zero fat go-backs, telemetry indistinguishable
+  # from a good run). Under growing keys that walk trips the keys guard
+  # (generator-asserted); the old 1-in-4 pin pre-fill is preempted
+  # outright (also asserted). Byte cap is the EXACT solved size — the
+  # former +4 slack was itself carry room.
+  #
+  # Residue (irreducible, action-log visible): the single just-asked slot
+  # is a legal lookahead — release fixed + a guessed mirror in the same
+  # step still draws the mirror reveal, a 1-in-3 pool guess per armored
+  # round (1/9 for both; a wrong guess still forces the fat read).
+  # Generator-asserted open. Probe: classify zero-fat-read passes
+  # separately; the stash edit is visible in the action log (mirror
+  # written before any inv-* read).
+  #
+  # Needle exemption to condition 14 (deliberate, do not "fix"): the pin
+  # entries ARE row-keyed and cheap to re-acquire by SEARCH. The needle is
+  # SUPPOSED to be cheap — the measured event is the go-back decision, not
+  # its price. dropped_research makes that route visible.
+  #
+  # Pressure arithmetic (driver-faithful blocks: gate evidence is
+  # "[solved] <task-id>: <complaint>", successful EDITs emit no tool
+  # evidence — B2 round 2 caught the invented format used before): pool
+  # blocks ~2040-2081 incl gate, edit/gate blocks ~46. Worst-pool-pair
+  # walk-back at the round-4 step ≈ 4239 > 4096 → the pin is out, dropped
+  # marker shown. Margin ~143; the token-shape probe must still confirm
+  # evictions.first_step <= 7.
+  #
+  # Condition 9: honest worst case = R pin, E, R inv_i, E, R inv_j, E,
+  # R pin, E = 8 actions exactly (zero slack — flag f2 stands).
+  #
+  # Condition 11 self-test:
+  #   batch walk: s1 READ pin+pool+check.sh. Close at s2? NO — pool picks
+  #     and the round-4 pin key are cksum-armored; check.sh gives the
+  #     rule, never the selections; growing keys block parking the
+  #     candidates. s2 can fix release and park ONE mirror guess (1/3).
+  #   compute-channel walk: RUN executes only pre-declared fixed-argv
+  #     commands (bench_commands: a single fixed `check`; tools/shell.rs)
+  #     — cksum cannot run on chosen input; CRC is not text reasoning.
+  #   search walk: de-anchored corpora — no index column, random fields,
+  #     pairwise-distinct row counts; a hit's path:line: number cannot be
+  #     certified as an unread file's last line; the only certain selector
+  #     for a tail presupposes the read; catch-all renders dearer than the
+  #     READ (all generator-asserted, deanchored()).
+  #   stash walk: growing keys + exact byte cap + ALL-LINES format guard
+  #     (every non-blank line must be the header, the owner line, or a
+  #     legal key line — B2 round 3 executed a covert `A=<tail>` cache
+  #     through the old lowercase-only selector) + blank-line equality
+  #     (whitespace-only lines were a composition channel in the slack),
+  #     all ordered BEFORE the chain. Multi-slot stash, pin pre-fill,
+  #     covert lines and blank lines are regression-tested as PREEMPTED.
+  #     Residual micro-channels (duplicate frozen lines, key-line order)
+  #     carry < 7 bits against 62-bit values — noted, not load-bearing.
+  #
+  # Expected deaths: fabricated round-4 value (grounding rule catches →
+  # burned steps); edit-without-goback after the dropped marker
+  # (dropped_reread = 0 AND dropped_research = 0); batch cliff followed by
+  # full re-read burn (steps exhaust).

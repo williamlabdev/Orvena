@@ -5,9 +5,25 @@
 # default: if the key for your provider is missing, `orvena doctor` tells you.
 
 provider:
-  kind: anthropic          # anthropic | openai | openrouter | ollama | offline
+  kind: anthropic          # anthropic | openai | openrouter | ollama | openai_compat | offline
   model: claude-opus-4-8   # a model your chosen provider serves
-  # base_url:              # optional endpoint override
+  # base_url:              # optional endpoint override; REQUIRED for openai_compat
+  # api_key_env:           # env var holding the key, e.g. GROQ_API_KEY. Honored by
+  #                        # openai | openrouter | openai_compat only. On
+  #                        # openai_compat, omitting it means NO auth header is
+  #                        # sent (not "auth optional") — right for a local vLLM
+  #                        # or llama.cpp server, wrong for a hosted endpoint.
+  #                        # A misspelled field name here is a hard error, not
+  #                        # ignored — so a typo can't silently drop your auth.
+  # sampling:              # optional; omitted means INHERITED, not "the defaults":
+  #   temperature: 0.6     # nothing is sent and the backend decides. For a local
+  #   top_p: 0.95          # Ollama that is the model's Modelfile — a file this
+  #   top_k: 20            # config cannot see, so two runs a month apart may not
+  #   # seed: 42           # be the same experiment. Set these to take control;
+  #                        # benchmark reports print which of the two states a run
+  #                        # was in. A fixed `seed` makes `bench --repeat` measure
+  #                        # nothing (every repeat returns the same sample), and
+  #                        # `anthropic` rejects it outright rather than drop it.
 
 # Governance tier (discipline scales with risk):
 #   light       — scope lock & gates are advisory: an in-root scope-lock or gate
@@ -21,4 +37,39 @@ tier: light
 default_role: developer
 
 # Upper bound on loop attempts (bounded autonomy).
-max_steps: 3
+max_steps: 8
+
+# OS-level sandbox for every command Orvena spawns — the `<<<RUN>>>` commands and
+# each gate's `verify` (ADR-003). This is the OS-enforced floor UNDER `intent`:
+# `intent` decides whether the model may *trigger* a command; the sandbox decides
+# what a triggered command can *do*. A command that claims read_only but tries to
+# write outside this project or open the network is stopped by the OS, not merely
+# trusted.
+#
+# Platform support in this release: macOS (via `sandbox-exec`) and Linux (via
+# Landlock + seccomp) are enforced. Windows has no native backend and reports
+# "unavailable", as does a Linux kernel without Landlock — both then follow
+# `on_unavailable` below.
+sandbox:
+  enabled: true
+
+  # network: deny | allow. `deny` blocks outbound connections from spawned
+  # children. NOTE: the first `cargo build` / `npm install` needs the network to
+  # fetch dependencies — set `allow`, or vendor your deps, for commands that must
+  # reach a registry. Offline-by-default is intentional (reproducible + no exfil).
+  network: deny
+
+  # filesystem: root_write | strict.
+  #   root_write — writable = this project directory (+ system temp). Zero
+  #                friction: builds/tests write `target/`, `node_modules/`, etc.
+  #   strict     — writable = only `strict_writable` below (+ system temp).
+  filesystem: root_write
+  # strict_writable:            # used only when filesystem: strict
+  #   - target
+  #   - node_modules
+
+  # on_unavailable: fail_closed | warn — what to do when the OS sandbox mechanism
+  # is not available on this host (e.g. Windows, or a kernel without Landlock).
+  # Omit to derive from `tier`: engineering → fail_closed (refuse to run children
+  # unconfined), light → warn (run unconfined, but record the degradation).
+  # on_unavailable: fail_closed

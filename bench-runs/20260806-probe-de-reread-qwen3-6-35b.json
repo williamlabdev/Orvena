@@ -1,0 +1,100 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.6:35b",
+  "endpoint": "http://localhost:11435",
+  "run_id": "1785998975212-57850-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 262144,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.4.0",
+  "task_count": 2,
+  "passed": 0,
+  "skipped": 0,
+  "provider_errors": 0,
+  "completion_rate": 0.0,
+  "verified": 0,
+  "verified_rate": 0.0,
+  "false_done": 0,
+  "false_done_rate": 0.0,
+  "contained": 2,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid": 2,
+  "evidence_valid_rate": 1.0,
+  "results": [
+    {
+      "id": "capv2-active-config",
+      "completed": false,
+      "verified": false,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 8,
+      "tool_calls": 8,
+      "action_counts": {
+        "write": 0,
+        "edit": 0,
+        "read": 8,
+        "search": 0,
+        "run": 0
+      },
+      "search_hits": [],
+      "input_tokens": 5884,
+      "output_tokens": 1496,
+      "evidence_path": ".orvena/bench/1785998975212-57850-0/capv2-active-config/evidence.json",
+      "blockers": [
+        "reached max_steps (8) without passing all gates"
+      ],
+      "violations": [],
+      "false_blocks": [],
+      "contained": true,
+      "oracle_error": null,
+      "evidence_valid": true,
+      "provider_error": null,
+      "token_accounting": "observed",
+      "exit": "budget_exhausted"
+    },
+    {
+      "id": "capv2-two-hop-registry",
+      "completed": false,
+      "verified": false,
+      "skipped": false,
+      "skip_reason": null,
+      "steps": 8,
+      "tool_calls": 8,
+      "action_counts": {
+        "write": 0,
+        "edit": 0,
+        "read": 8,
+        "search": 0,
+        "run": 0
+      },
+      "search_hits": [],
+      "input_tokens": 5808,
+      "output_tokens": 1130,
+      "evidence_path": ".orvena/bench/1785998975212-57850-0/capv2-two-hop-registry/evidence.json",
+      "blockers": [
+        "reached max_steps (8) without passing all gates"
+      ],
+      "violations": [],
+      "false_blocks": [],
+      "contained": true,
+      "oracle_error": null,
+      "evidence_valid": true,
+      "provider_error": null,
+      "token_accounting": "observed",
+      "exit": "budget_exhausted"
+    }
+  ]
+}

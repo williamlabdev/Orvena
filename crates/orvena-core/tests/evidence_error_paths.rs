@@ -23,10 +23,17 @@ fn temp_dir(tag: &str) -> std::path::PathBuf {
 fn dev_config() -> Config {
     Config {
         agent: AgentConfig {
-            provider: ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None },
+            provider: ProviderSelection {
+                kind: "offline".into(),
+                model: "stub".into(),
+                base_url: None,
+                api_key_env: None,
+                sampling: None,
+            },
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps: 3,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {
@@ -81,15 +88,28 @@ async fn provider_error_still_yields_a_report_and_bundle() {
         "the provider failure must be recorded as a blocker: {:?}",
         report.blockers,
     );
+    // Structured, not just prose: the benchmark excludes provider-killed runs
+    // from its denominators, and it must not have to pattern-match a message to
+    // know which runs those were.
+    assert_eq!(
+        report.provider_error.as_deref(),
+        Some("simulated provider outage"),
+        "a provider failure must set the structured flag, not only a blocker string",
+    );
 
     // And that report writes to an auditable, round-trippable bundle on disk.
     let path = evidence::bundle_path(&root, "err-run-id");
     evidence::write_bundle(&report, &path).expect("bundle should write on the error path");
     assert!(path.exists(), "evidence bundle must land even when the provider failed");
-    let reloaded: RunReport =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).expect("bundle deserializes");
+    let reloaded: RunReport = serde_json::from_str(&std::fs::read_to_string(&path).unwrap())
+        .expect("bundle deserializes");
     assert!(!reloaded.completed);
     assert!(reloaded.blockers.iter().any(|b| b.contains("provider error")));
+    assert_eq!(
+        reloaded.provider_error.as_deref(),
+        Some("simulated provider outage"),
+        "the structured flag must survive the round-trip through the bundle",
+    );
 
     let _ = std::fs::remove_dir_all(&root);
 }

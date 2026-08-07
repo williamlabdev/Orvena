@@ -28,6 +28,7 @@ fn dev_config(provider: ProviderSelection) -> Config {
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps: 3,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {
@@ -54,7 +55,13 @@ fn dev_config(provider: ProviderSelection) -> Config {
 #[tokio::test]
 async fn loop_writes_in_scope_and_passes_gate() {
     let root = temp_dir("happy");
-    let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let sel = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+        sampling: None,
+    };
     let config = dev_config(sel.clone());
     let agent = Agent::with_provider(config, &root, Box::new(Offline::new(&sel)));
 
@@ -77,7 +84,13 @@ async fn loop_writes_in_scope_and_passes_gate() {
 #[tokio::test]
 async fn write_outside_scope_is_blocked_in_engineering_tier() {
     let root = temp_dir("scope");
-    let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let sel = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+        sampling: None,
+    };
     let config = dev_config(sel.clone());
     let agent = Agent::with_provider(config, &root, Box::new(Offline::new(&sel)));
 

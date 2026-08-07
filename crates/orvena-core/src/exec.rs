@@ -13,6 +13,14 @@
 //! `wait-timeout` crate and drain the pipes on background threads (reading the
 //! pipes inline while waiting can deadlock if the child fills a pipe buffer).
 
+pub mod sandbox;
+#[cfg(target_os = "linux")]
+mod sandbox_linux;
+#[cfg(target_os = "macos")]
+mod sandbox_macos;
+
+pub use sandbox::{Sandbox, SandboxError, SandboxStatus};
+
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -45,50 +53,86 @@ impl CommandOutput {
 pub enum RunError {
     /// The child could not be spawned or waited on (e.g. program not found).
     Spawn(std::io::Error),
+    /// The OS sandbox refused to run the command (fail-closed) or could not build
+    /// its invocation. The command never ran — treated like a spawn failure by
+    /// callers, but named distinctly so evidence can say *why*.
+    Sandbox(SandboxError),
 }
 
 impl std::fmt::Display for RunError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RunError::Spawn(e) => write!(f, "{e}"),
+            RunError::Sandbox(e) => write!(f, "{e}"),
         }
     }
 }
 
-/// Runs commands in `cwd` under a shared `timeout`.
+/// Runs commands in `cwd` under a shared `timeout`, each child confined by
+/// `sandbox` (see [`sandbox`]). `new` leaves the sandbox `Disabled` (backward
+/// compatible); `with_sandbox` injects a resolved policy.
 pub struct CommandRunner {
     cwd: PathBuf,
     timeout: Duration,
+    sandbox: Sandbox,
+    env: Vec<(String, String)>,
 }
 
 impl CommandRunner {
+    /// Unconfined runner (the pre-slice-015 behavior). Existing callers and tests
+    /// that do not opt into a sandbox keep spawning children exactly as before.
     pub fn new(cwd: impl Into<PathBuf>, timeout: Duration) -> Self {
-        Self { cwd: cwd.into(), timeout }
+        Self { cwd: cwd.into(), timeout, sandbox: Sandbox::disabled(), env: Vec::new() }
+    }
+
+    /// Runner whose children are wrapped by `sandbox` (ADR-003).
+    pub fn with_sandbox(cwd: impl Into<PathBuf>, timeout: Duration, sandbox: Sandbox) -> Self {
+        Self { cwd: cwd.into(), timeout, sandbox, env: Vec::new() }
+    }
+
+    /// Add environment variables to every child this runner spawns (on top of the
+    /// inherited environment). Used by [`crate::adapter`] to point a wrapped
+    /// external agent at its model endpoint and to keep its scratch files out of
+    /// the workdir; the gate and RUN paths do not set any.
+    pub fn with_env(mut self, env: Vec<(String, String)>) -> Self {
+        self.env = env;
+        self
     }
 
     /// Run a fixed argv directly, with no shell interpretation. `argv[0]` is the
     /// program; the rest are literal arguments.
     pub fn run_argv(&self, argv: &[String]) -> Result<CommandOutput, RunError> {
-        let Some((program, rest)) = argv.split_first() else {
+        if argv.is_empty() {
             // Config validation rejects empty argv before we get here; guard anyway.
             return Err(RunError::Spawn(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "empty argv",
             )));
-        };
-        let mut cmd = Command::new(program);
-        cmd.args(rest);
-        self.spawn_and_wait(cmd)
+        }
+        self.spawn_and_wait(argv.to_vec())
     }
 
     /// Run a human-authored command string via `sh -c` (the gate path).
     pub fn run_shell(&self, cmd_str: &str) -> Result<CommandOutput, RunError> {
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg(cmd_str);
-        self.spawn_and_wait(cmd)
+        self.spawn_and_wait(vec!["sh".to_string(), "-c".to_string(), cmd_str.to_string()])
     }
 
-    fn spawn_and_wait(&self, mut cmd: Command) -> Result<CommandOutput, RunError> {
+    /// Prepend the sandbox argv prefix (if any) to the base command, then spawn.
+    /// On macOS the prefix is `sandbox-exec -p <profile>`, which execs the target
+    /// argv directly — so the base command's argv is passed through literally
+    /// (no shell), preserving the RUN tool's injection-free property.
+    fn spawn_and_wait(&self, base_argv: Vec<String>) -> Result<CommandOutput, RunError> {
+        let prefix = self.sandbox.argv_prefix().map_err(RunError::Sandbox)?;
+        let mut argv = prefix;
+        argv.extend(base_argv);
+        let (program, rest) = argv.split_first().ok_or_else(|| {
+            RunError::Spawn(std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty argv"))
+        })?;
+        let mut cmd = Command::new(program);
+        cmd.args(rest);
+        for (k, v) in &self.env {
+            cmd.env(k, v);
+        }
         cmd.current_dir(&self.cwd)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -110,16 +154,16 @@ impl CommandRunner {
             buf
         });
 
-        let (exit_code, timed_out) = match child.wait_timeout(self.timeout).map_err(RunError::Spawn)?
-        {
-            Some(status) => (status.code(), false),
-            None => {
-                // Outran the timeout: kill and reap so the drain threads can finish.
-                let _ = child.kill();
-                let _ = child.wait();
-                (None, true)
-            }
-        };
+        let (exit_code, timed_out) =
+            match child.wait_timeout(self.timeout).map_err(RunError::Spawn)? {
+                Some(status) => (status.code(), false),
+                None => {
+                    // Outran the timeout: kill and reap so the drain threads can finish.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    (None, true)
+                }
+            };
 
         let stdout = out_handle.join().unwrap_or_default();
         let stderr = err_handle.join().unwrap_or_default();

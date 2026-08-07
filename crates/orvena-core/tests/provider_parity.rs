@@ -27,6 +27,21 @@
 //! ANTHROPIC_API_KEY=sk-... ORVENA_PARITY_PROVIDER=anthropic \
 //!   ORVENA_PARITY_MODEL=claude-opus-4-8 \
 //!   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
+//!
+//! # Generic OpenAI-compatible endpoint (self-hosted OSS server or a hosted
+//! # open-weight aggregator) — e.g. Ollama's own OpenAI-compat endpoint,
+//! # no key needed:
+//! ORVENA_PARITY_PROVIDER=openai_compat ORVENA_PARITY_MODEL=qwen3:14b \
+//!   ORVENA_PARITY_BASE_URL=http://localhost:11434/v1 \
+//!   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
+//!
+//! # ...or a keyed endpoint (vLLM behind auth, Groq, Together, ...): set
+//! # ORVENA_PARITY_API_KEY_ENV to the env var holding the key.
+//! GROQ_API_KEY=gsk_... ORVENA_PARITY_PROVIDER=openai_compat \
+//!   ORVENA_PARITY_MODEL=llama-3.3-70b-versatile \
+//!   ORVENA_PARITY_BASE_URL=https://api.groq.com/openai/v1 \
+//!   ORVENA_PARITY_API_KEY_ENV=GROQ_API_KEY \
+//!   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 //! ```
 
 use orvena_core::config::agent::{AgentConfig, ProviderSelection, Tier};
@@ -60,15 +75,23 @@ async fn provider_satisfies_the_parity_contract() {
     let model = std::env::var("ORVENA_PARITY_MODEL")
         .expect("ORVENA_PARITY_MODEL must name a model the provider serves");
     let base_url = std::env::var("ORVENA_PARITY_BASE_URL").ok();
+    let api_key_env = std::env::var("ORVENA_PARITY_API_KEY_ENV").ok();
     eprintln!("parity: running the golden task against '{kind}' / '{model}'");
 
     let root = temp_dir(&kind);
     let config = Config {
         agent: AgentConfig {
-            provider: ProviderSelection { kind: kind.clone(), model, base_url },
+            provider: ProviderSelection {
+                kind: kind.clone(),
+                model,
+                base_url,
+                api_key_env,
+                sampling: None,
+            },
             tier: Tier::Light,
             default_role: "developer".into(),
             max_steps: MAX_STEPS,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {
@@ -127,8 +150,7 @@ async fn provider_satisfies_the_parity_contract() {
             report.gate_outcomes
         );
     } else {
-        let unmet =
-            report.gate_outcomes.iter().any(|g| !g.passed) || !report.blockers.is_empty();
+        let unmet = report.gate_outcomes.iter().any(|g| !g.passed) || !report.blockers.is_empty();
         assert!(unmet, "not completed ⇒ a gate failed or a blocker was recorded");
     }
 
@@ -138,11 +160,29 @@ async fn provider_satisfies_the_parity_contract() {
     // Contract 4 — evidence by default: the bundle exports and round-trips.
     let path = evidence::bundle_path(&root, "parity");
     evidence::write_bundle(&report, &path).expect("evidence bundle writes");
-    let reloaded: RunReport =
-        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).expect("bundle deserializes");
+    let reloaded: RunReport = serde_json::from_str(&std::fs::read_to_string(&path).unwrap())
+        .expect("bundle deserializes");
     assert_eq!(reloaded.completed, report.completed);
     assert_eq!(reloaded.gate_outcomes.len(), report.gate_outcomes.len());
     assert_eq!(reloaded.task, report.task);
+
+    // Keep the bundle when asked, so a parity claim can rest on a committed
+    // artifact instead of a number retyped into a table. `docs/benchmark-results/`
+    // already holds raw JSON for the published benchmark figures; parity had no
+    // equivalent, which left "somebody actually ran it" resting on self-report.
+    if let Ok(out) = std::env::var("ORVENA_PARITY_EVIDENCE_OUT") {
+        let out = std::path::PathBuf::from(out);
+        if let Some(parent) = out.parent() {
+            std::fs::create_dir_all(parent).expect("evidence output directory");
+        }
+        std::fs::copy(&path, &out).expect("evidence bundle copies to ORVENA_PARITY_EVIDENCE_OUT");
+        // Absolute, because `cargo test` runs with the cwd at the *package*
+        // root (`crates/orvena-core`), not the workspace root — a relative path
+        // here lands somewhere the caller did not expect. Prefer an absolute
+        // `ORVENA_PARITY_EVIDENCE_OUT`.
+        let shown = std::fs::canonicalize(&out).unwrap_or(out);
+        eprintln!("parity[{kind}]: evidence bundle written to {}", shown.display());
+    }
 
     let _ = std::fs::remove_dir_all(&root);
 }

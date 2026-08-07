@@ -7,6 +7,7 @@ pub mod run;
 pub mod status;
 
 use anyhow::{bail, Result};
+use orvena_core::config::agent::ProviderSelection;
 use orvena_core::provider::registry::{self, Readiness};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -57,16 +58,24 @@ pub fn is_initialized(dir: &Path) -> bool {
 /// network-free check (a missing key, or an unknown kind) — reused from the
 /// registry so `run`, `bench`, and `doctor` never drift. Shared by `run` and
 /// `bench`.
-pub fn preflight_provider(kind: &str) -> Result<()> {
-    match registry::readiness(kind) {
+pub fn preflight_provider(sel: &ProviderSelection) -> Result<()> {
+    let kind = &sel.kind;
+    match registry::readiness(sel) {
         Readiness::Ready => Ok(()),
         Readiness::MissingKey(key) => bail!(
             "provider '{kind}' is not ready — {key} is not set.\n  \
              • add it to .env (see .env.example), then `orvena doctor` to verify; or\n  \
              • see the loop run right now with no key: `orvena run --provider offline \"<task>\"`"
         ),
+        Readiness::MissingBaseUrl => bail!(
+            "provider '{kind}' is not ready — base_url is not set.\n  \
+             • this kind has no default endpoint: add `base_url:` under `provider:` in \
+             .orvena/orvena.yaml\n  \
+             • e.g. a local server: base_url: http://localhost:8000/v1"
+        ),
         Readiness::Unknown => bail!(
-            "provider '{kind}' is unknown — choose anthropic | openai | openrouter | ollama | offline\n  \
+            "provider '{kind}' is unknown — choose anthropic | openai | openrouter | ollama | \
+             openai_compat | offline\n  \
              (edit .orvena/orvena.yaml, or pass `--provider <kind>`)."
         ),
     }
@@ -81,10 +90,7 @@ pub fn preflight_provider(kind: &str) -> Result<()> {
 /// ADR-002. Shared by `run` and `bench`.
 pub fn run_timestamp() -> String {
     static SEQ: AtomicU64 = AtomicU64::new(0);
-    let ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
+    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     format!("{ms}-{}-{seq}", std::process::id())
 }

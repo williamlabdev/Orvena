@@ -1,0 +1,10 @@
+chunk=native-qwen3-14b-chunkA
+agent=native
+model=qwen3:14b
+repeat=3
+commit=22a86cd
+worktree=dirty
+started=2026-08-03T00:03:14+0800
+finished=2026-08-03T01:13:57+0800
+elapsed_secs=4243
+exit=0

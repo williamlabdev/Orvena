@@ -192,7 +192,7 @@ We decided to choose **Option C — 宣告式命令 allow-list** because:
 
 ## References
 
-- [SLICE-grep-tool.md](../../SLICE-grep-tool.md) — 「⛔ 相關但被擋住:shell 工具」一節
+- [SLICE-grep-tool.md](../slices/SLICE-grep-tool.md) — 「⛔ 相關但被擋住:shell 工具」一節
 - [MVP-SCOPE.md](../../MVP-SCOPE.md)
 - `crates/orvena-core/src/governance/gate.rs` — 既有 `GateRunner`(統一對象)
 - `crates/orvena-core/src/tools/grep.rs` — role-gated 唯讀工具的參照實作

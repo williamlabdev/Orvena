@@ -1,0 +1,506 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "endpoint": null,
+  "run_id": "1786028525767-43574-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 40960,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.5.0",
+  "repeat": 3,
+  "task_count": 2,
+  "ran": 2,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 0.5,
+  "solved_any": 1,
+  "verified_rate": 0.5,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 5.5,
+  "budget_exhaustion_rate": 0.5,
+  "mean_total_tokens": 11673.667,
+  "search_use_rate": 0.0,
+  "search_yield_rate": null,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv2-two-hop-stale",
+      "runs": 3,
+      "solved": 3,
+      "skipped": false,
+      "pass_rate": 1.0,
+      "exhaustion_rate": 0.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 2927,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 1,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 3219,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 2,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 3,
+          "total_tokens": 3204,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "search": "no_search"
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 3,
+          "failed": 0
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    },
+    {
+      "id": "capv2-converge-three",
+      "runs": 3,
+      "solved": 0,
+      "skipped": false,
+      "pass_rate": 0.0,
+      "exhaustion_rate": 1.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 20983,
+          "action_counts": {
+            "write": 1,
+            "edit": 9,
+            "read": 0,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 1,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 19912,
+          "action_counts": {
+            "write": 1,
+            "edit": 8,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "search": "no_search"
+        },
+        {
+          "rep": 2,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 19797,
+          "action_counts": {
+            "write": 2,
+            "edit": 6,
+            "read": 0,
+            "search": 0,
+            "run": 2
+          },
+          "search_hits": [],
+          "search": "no_search"
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 0,
+          "failed": 3
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786028525767-43574-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 2,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.5,
+      "verified": 1,
+      "verified_rate": 0.5,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-two-hop-stale",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 2133,
+          "output_tokens": 794,
+          "evidence_path": ".orvena/bench/1786028525767-43574-0-rep0/capv2-two-hop-stale/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "capv2-converge-three",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 11,
+          "action_counts": {
+            "write": 1,
+            "edit": 9,
+            "read": 0,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 6295,
+          "output_tokens": 14688,
+          "evidence_path": ".orvena/bench/1786028525767-43574-0-rep0/capv2-converge-three/evidence.json",
+          "blockers": [
+            "EDIT 'alerts.conf': the text to replace was not found — READ the file and anchor on its exact current content",
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786028525767-43574-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 2,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.5,
+      "verified": 1,
+      "verified_rate": 0.5,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-two-hop-stale",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 4,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 2133,
+          "output_tokens": 1086,
+          "evidence_path": ".orvena/bench/1786028525767-43574-0-rep1/capv2-two-hop-stale/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "capv2-converge-three",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 11,
+          "action_counts": {
+            "write": 1,
+            "edit": 8,
+            "read": 1,
+            "search": 0,
+            "run": 1
+          },
+          "search_hits": [],
+          "input_tokens": 6121,
+          "output_tokens": 13791,
+          "evidence_path": ".orvena/bench/1786028525767-43574-0-rep1/capv2-converge-three/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1786028525767-43574-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 2,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.5,
+      "verified": 1,
+      "verified_rate": 0.5,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 2,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 2,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv2-two-hop-stale",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 3,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 2133,
+          "output_tokens": 1071,
+          "evidence_path": ".orvena/bench/1786028525767-43574-0-rep2/capv2-two-hop-stale/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        },
+        {
+          "id": "capv2-converge-three",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 10,
+          "action_counts": {
+            "write": 2,
+            "edit": 6,
+            "read": 0,
+            "search": 0,
+            "run": 2
+          },
+          "search_hits": [],
+          "input_tokens": 6240,
+          "output_tokens": 13557,
+          "evidence_path": ".orvena/bench/1786028525767-43574-0-rep2/capv2-converge-three/evidence.json",
+          "blockers": [
+            "EDIT 'alerts.conf': the text to replace was not found — READ the file and anchor on its exact current content",
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    }
+  ]
+}

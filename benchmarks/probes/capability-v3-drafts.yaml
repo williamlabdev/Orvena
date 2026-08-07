@@ -1,0 +1,1648 @@
+# Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
+#
+# Status: DRAFT-6 (0807) — pre-probe, pre-freeze. Design:
+# SLICE-032 (ratified 0807, four rulings). These are the N1/N3/N4 shapes
+# from the type table; N2's shape is separately locked by ruling iii
+# (header-signal probe, 6/6) and is not drafted here. Numbers from these
+# tasks never enter any official account; the probe protocol below must
+# pass before any freeze talk.
+#
+# PROVENANCE — the 0807 draft collision and its ruling:
+# Two sessions drafted v3 in parallel. draft-4 (0eba93c: armor chain,
+# anti-stash width guards, reviewed by verifier x2) and the alt draft
+# (9b91b4b: uniform/positional corpora, span sentinel). Each refuted one
+# load-bearing claim of the other:
+#   * draft-4's hole: complaints named row keys and rows led with them —
+#     `SEARCH <key>` fetches any fat value for ~32 tokens vs a ~2000-token
+#     READ; the window pressure all three tasks stand on evaporates.
+#   * alt's hole: tests/check.sh is readable corpus; with a plaintext
+#     field↔source map its condition-11 case collapses, and its N4 format
+#     gate (unbounded [0-9]+) admits a min·max concat stash through the
+#     writable-reprint channel — the sentinel walks in 6 actions.
+# Ruling (0807 late): merge with draft-4 as the base, the alt corpus form
+# swapped in, N4 recast as the span sentinel. draft-5 was that merge; two
+# zero-context B2 rounds then each refuted a load-bearing piece of it —
+# round 1 the slot-index anchor, round 2 the fixed-width skeleton itself,
+# N4's unarmored file set, and the invented gate format in the window
+# arithmetic. draft-6 carries the fixes; see the adversarial trail below.
+# Of draft-4's mechanisms, what survives in draft-6 is the armor chain,
+# the guard-before-reveal ordering principle, and the mechanical
+# verification harness; the writable construction is now the alt draft's
+# condition-13 growing-key form (the fixed skeleton did not survive
+# review).
+#
+# What every task here shares (mechanism dossier, verified in code 0807):
+#
+# * Sequential first-problem-only check (H pattern): reveal k+1 exists only
+#   after fix k — real state dependency, per design condition 11.
+# * UNIFORM / POSITIONAL CORPORA (condition 14, from the alt draft): fat
+#   records are fixed-shape, every record ends in a same-shape value, and
+#   the operative value is the file's LAST line, and the records are
+#   DE-ANCHORED (fresh-eyes round 3): no index column, per-row fields
+#   random, sibling row counts pairwise distinct. SEARCH matches content
+#   and content does not encode position; a hit's path:line: number
+#   cannot be certified as an unread file's last line; the only certain
+#   selector for a tail is the tail itself, which presupposes the read;
+#   a catch-all sweep renders dearer than the READ (all four properties
+#   asserted by the generator's deanchored() regression; MAX_HITS=200
+#   additionally caps multi-file sweeps). N1's pin file is the deliberate
+#   exemption (see its block: the needle is SUPPOSED to be cheap to
+#   re-acquire; the go-back is the measurement).
+# * ARMOR CHAIN (from draft-4, now file-level): which pool file (N1, N3)
+#   or which pin key (N1 round 4) settles round k+1 is derived from the
+#   CORRECT value of field k via `cksum` at runtime. Why: condition 11's
+#   literal self-test kills every plaintext-mapping design — reading
+#   check.sh reveals the full map, and the step-1 giant block is still the
+#   newest block at step 2 (newest-block exemption), so a one-shot full
+#   write closes at step 2 with zero window pressure (v2-H has exactly
+#   this property). With the armor the map is not mentally recoverable
+#   (CRC is not text reasoning) and no compute channel exists: RUN
+#   executes only pre-declared fixed-argv commands (.orvena/commands.yaml,
+#   tools/shell.rs). Keys are unknowable until each reveal, and reveals
+#   only follow real fixes. Honest walkers never see the armor: each
+#   complaint names the file/key in plaintext at runtime.
+# * Anti-stash construction (B2 round 2 replaced draft-4's fixed
+#   skeleton): writable contents print into the prompt each step
+#   (context.rs:56-73) outside the 4096 evidence budget — a free,
+#   never-evicted scratchpad unless the task closes it. Fixed
+#   answer-width placeholder slots do NOT close it: every not-yet-checked
+#   field is a legal-width carry cell (N3's matrix term rode lane_b;
+#   N1's whole pool candidate set rode its three free slots — 5 steps,
+#   zero fat go-backs, telemetry indistinguishable from a good run).
+#   draft-6 uses GROWING-KEY writables (condition 13's original form):
+#   a key line may not exist before the check has asked for it, the keys
+#   guard + per-line width regex + EXACT byte cap all run BEFORE the
+#   chain, so stash and progress stay mutually exclusive. The lookahead
+#   left open is the single just-asked slot (N1: a 1-in-3 pool guess per
+#   armored round, action-log visible, generator-asserted). N3 makes the
+#   carried term 6-digit against {4}-gated lanes (it fits no cell); N4
+#   keeps the {1,4} width gate against the (min,max) pair-carry.
+# * Complaints POINT at the source and never quote the expected literal
+#   (L-forensics 0807: quoted literals in feedback became the wrong
+#   answer; freshness traps are a DIFFERENT axis and must not contaminate
+#   these).
+# * Fat refs are deliberately under the READ/RUN truncation edge (100
+#   lines / 8KB, cap_run_output), so one READ returns the whole file
+#   untruncated: N1 pool 97-99 lines / ~8KB ≈ 1990-2030 tok; N3/N4 refs
+#   81-84 lines / ~6.9-7.1KB ≈ 1720-1790 tok (counts pairwise distinct
+#   per family — part of the de-anchoring).
+# * Adversarial review trail: draft-1→4 (verifier x2: print-budget
+#   self-blinding refuted; RUN-simulator channel nonexistent; live stash
+#   walk through draft-3's cap → answer-width placeholders + solved+4
+#   caps, stash walk now a generator regression test). draft-4→5 (the
+#   collision review above; the SEARCH-cost bypass and the concat stash
+#   are both closed and both regression-tested). draft-5 round 3 (the
+#   ruled B2 zero-context attack): REFUTED the first draft-5 — the
+#   slot-#### index column was itself a cross-file positional anchor
+#   (read one sibling, SEARCH the known last index in the others,
+#   17-60x cheaper than the READ; the same class of hole the collision
+#   killed draft-4 over, in new clothes). Fixed by de-anchoring (above)
+#   + the deanchored() generator regression + explicit >=1000 value
+#   invariants (leading-zero shell hazard flagged in the same round).
+#   Residue: N1's 1-in-4 single-candidate pre-fill guess is irreducible;
+#   N4's residual walks are documented in its block and asserted by the
+#   generator. draft-5 round 2 (second zero-context attack, after the
+#   de-anchoring): REFUTED three more pieces — (a) N4's unarmored file
+#   set: file names are prompt-visible (file_inventory), the check is
+#   stateless and tests the final span first, the s1 giant is
+#   newest-exempt → read all four, write the global span at s2, sentinel
+#   green in two steps (fixed: armored 6-file set, picks cksum-revealed
+#   stage by stage); (b) the fixed-width skeleton as a carry channel (see
+#   the anti-stash bullet; fixed: growing keys, exact caps, 6-digit N3
+#   tails); (c) the window arithmetic's gate format was invented — real
+#   gate evidence is "[solved] <task-id>: <complaint>" (driver.rs:481-485)
+#   and successful EDITs emit no tool evidence (fixed: driver-faithful
+#   reconstruction). draft-6 round 3 (third zero-context attack):
+#   REFUTED the round-2 fix itself on N1/N3 — the guard selector
+#   `sed -n '/^[a-z]/p'` was blind to any line not starting with a
+#   lowercase letter, so a covert `A=<value>` line rode the intermediate
+#   byte-cap slack (cap = final size; early rounds leave 14-70 free
+#   bytes) and cached the pool tails / the matrix term after all
+#   (executed to `ok` by the reviewer). N4 survived on its own pattern —
+#   any-non-blank-line selector + zero per-round slack. Fixed by
+#   adopting exactly that: EVERY non-blank line must match the enumerated
+#   grammar (header / frozen line / key line), and non-blank line count
+#   must equal total line count (whitespace-only lines were a residual
+#   composition channel inside the slack). Same round: window arithmetic
+#   corrected for per-block step headers and the batch block's single
+#   gate line. The armor chain has survived all three rounds.
+# * All seeds, armor selections and complaint sequences are generated and
+#   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
+#   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order
+#   asserted exact, final check asserted `ok`, window arithmetic asserted
+#   against the agent estimator (ceil(chars/4)), corpus uniformity
+#   asserted, stash/carry/keys/shortcut walks regression-tested.
+#
+# Telemetry: death classification uses the SLICE-032 instrument
+# (evictions / dropped_reread / dropped_research / window_peak_tokens).
+# The 0807 instrument gap is CLOSED (42e59da): dropped_research counts
+# SEARCH re-acquisition of an evicted path, so a go-back by the route the
+# READ truncation note recommends no longer scores as invention.
+#
+# Probe protocol before any freeze (SLICE-032 calibration section):
+#   (i)  token-shape probe: real run per task; require window_peak_tokens
+#        near 4096 and evictions.first_step > 0 for N1/N3 (pressure
+#        real); if no eviction shows, fatten refs toward the truncation
+#        edge (N1 is already at 99 lines — the remaining slack is bytes,
+#        not lines).
+#   (ii) behavior probe: small n, both cells; death signatures must land
+#        in the type-table classes. Per-task watch items in the blocks.
+#
+# Open flags for ruling:
+#   f1. Three zero-context B2 rounds are done; each refuted structural
+#       pieces (all fixed in place) while the armor chain itself survived
+#       every round — round 2 explicitly recommended ruling it "confirmed
+#       information structure" for N1/N3 and extending it to N4, which
+#       draft-6 does. The round-3 guard fix passed its confirmation
+#       attack (BSD + GNU sed); remaining pre-probe item: the trailing
+#       no-newline whitespace micro-channel (a few bits, close for
+#       hygiene with a last-byte-is-newline guard).
+#   f2. N1's honest worst case is exactly 8 actions — zero slack; one
+#       exploratory read costs the run. That IS the read-restraint axis,
+#       but the behavior probe must confirm it doesn't just measure
+#       step-arithmetic luck.
+#   f3. RESOLVED by the span shape: N4 operative evidence = 1.74x 4096,
+#       inside the ruled 1.5–2x band.
+#   f4. N4's residual walks (final-first close — now requiring the
+#       armored picks; disciplined single-slot extreme tracking) are
+#       accepted-and-documented rather than closed —
+#       closing them is impossible while the check stays stateless and the
+#       answer stays a span. Rule: accept with action-log verification
+#       duty, or order a different aggregate.
+
+tasks:
+  # ══ N1 — ordering / reread decision (capv3-pin-eviction) ═════════════════
+  #
+  # Shape: the pin file (notes/s9.txt, small, five entries k1..k9) is needed
+  # at round 1 (k1) AND round 4 — where WHICH entry (k3/k5/k7/k9) is itself
+  # armored, derived at runtime from fallback's correct value. Rounds 2–3
+  # each force one fat read from the refs/inv-* pool (WHICH pool file is
+  # armored too). By round 4 the pin block has been squeezed out — the pass
+  # behavior is going back for it after the dropped marker, by READ
+  # (dropped_reread >= 1) or by SEARCH (dropped_research >= 1; the
+  # instrument counts both since 42e59da).
+  #
+  # Corpora (condition 14 + B2 rounds 1-2): fat pool files are UNIFORM,
+  # POSITIONAL (value = last line) and DE-ANCHORED — no index column,
+  # per-row random fields, pairwise-distinct row counts; see the search
+  # walk below. The armor works at FILE level because row-level armor died
+  # in the 0807 collision (a complaint that names a row key turns every
+  # fat value into a ~32-token SEARCH).
+  #
+  # Writable (condition 13, B2 round 2): GROWING-KEY manifest — a field
+  # line may not exist before the check has asked for it, and the keys
+  # guard runs before every reveal. The draft-4/5 fixed answer-width
+  # skeleton was refuted in B2 round 2: its three free 12-char slots were
+  # a legal-width stash for the ENTIRE pool candidate set (batch read all
+  # three tails at s1, park them in mirror/fallback/rollback, replay from
+  # the reprint — 5 steps, zero fat go-backs, telemetry indistinguishable
+  # from a good run). Under growing keys that walk trips the keys guard
+  # (generator-asserted); the old 1-in-4 pin pre-fill is preempted
+  # outright (also asserted). Byte cap is the EXACT solved size — the
+  # former +4 slack was itself carry room.
+  #
+  # Residue (irreducible, action-log visible): the single just-asked slot
+  # is a legal lookahead — release fixed + a guessed mirror in the same
+  # step still draws the mirror reveal, a 1-in-3 pool guess per armored
+  # round (1/9 for both; a wrong guess still forces the fat read).
+  # Generator-asserted open. Probe: classify zero-fat-read passes
+  # separately; the stash edit is visible in the action log (mirror
+  # written before any inv-* read).
+  #
+  # Needle exemption to condition 14 (deliberate, do not "fix"): the pin
+  # entries ARE row-keyed and cheap to re-acquire by SEARCH. The needle is
+  # SUPPOSED to be cheap — the measured event is the go-back decision, not
+  # its price. dropped_research makes that route visible.
+  #
+  # Pressure arithmetic (driver-faithful blocks: gate evidence is
+  # "[solved] <task-id>: <complaint>", successful EDITs emit no tool
+  # evidence — B2 round 2 caught the invented format used before): pool
+  # blocks ~2040-2081 incl gate, edit/gate blocks ~46. Worst-pool-pair
+  # walk-back at the round-4 step ≈ 4239 > 4096 → the pin is out, dropped
+  # marker shown. Margin ~143; the token-shape probe must still confirm
+  # evictions.first_step <= 7.
+  #
+  # Condition 9: honest worst case = R pin, E, R inv_i, E, R inv_j, E,
+  # R pin, E = 8 actions exactly (zero slack — flag f2 stands).
+  #
+  # Condition 11 self-test:
+  #   batch walk: s1 READ pin+pool+check.sh. Close at s2? NO — pool picks
+  #     and the round-4 pin key are cksum-armored; check.sh gives the
+  #     rule, never the selections; growing keys block parking the
+  #     candidates. s2 can fix release and park ONE mirror guess (1/3).
+  #   compute-channel walk: RUN executes only pre-declared fixed-argv
+  #     commands (bench_commands: a single fixed `check`; tools/shell.rs)
+  #     — cksum cannot run on chosen input; CRC is not text reasoning.
+  #   search walk: de-anchored corpora — no index column, random fields,
+  #     pairwise-distinct row counts; a hit's path:line: number cannot be
+  #     certified as an unread file's last line; the only certain selector
+  #     for a tail presupposes the read; catch-all renders dearer than the
+  #     READ (all generator-asserted, deanchored()).
+  #   stash walk: growing keys + exact byte cap + ALL-LINES format guard
+  #     (every non-blank line must be the header, the owner line, or a
+  #     legal key line — B2 round 3 executed a covert `A=<tail>` cache
+  #     through the old lowercase-only selector) + blank-line equality
+  #     (whitespace-only lines were a composition channel in the slack),
+  #     all ordered BEFORE the chain. Multi-slot stash, pin pre-fill,
+  #     covert lines and blank lines are regression-tested as PREEMPTED.
+  #     Residual micro-channels (duplicate frozen lines, key-line order)
+  #     carry < 7 bits against 62-bit values — noted, not load-bearing.
+  #
+  # Expected deaths: fabricated round-4 value (grounding rule catches →
+  # burned steps); edit-without-goback after the dropped marker
+  # (dropped_reread = 0 AND dropped_research = 0); batch cliff followed by
+  # full re-read burn (steps exhaust).
+
+  - id: capv3-pin-eviction
+    instruction: "tests/check.sh rejects deploy.conf but reports only the FIRST problem each time it runs, asking for one field at a time. Reference data lives under notes/ and refs/ (read-only). Fix deploy.conf until the check passes. The file may hold only the fields the check has already asked for; lines it does not complain about must stay unchanged."
+    writes: [deploy.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: deploy.conf
+        contents: |
+          # staging deploy manifest
+          owner = platform
+      - path: notes/s9.txt
+        contents: |
+          # staging pins — rotation 2026-08
+          k1 fybg557hnwwm
+          k3 ygwju7cl6rq0
+          k5 nennup57wxp7
+          k7 necfaoe2lkp8
+          k9 qh5nlcmgp2d0
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=deploy.conf
+          fail() { echo "deploy problem: $1"; exit 1; }
+          test "$(wc -c < "$f" | tr -d ' ')" -le 136 || fail "deploy.conf must stay within 136 bytes"
+          grep -qxF '# staging deploy manifest' "$f" || fail "an unrelated line changed: header"
+          grep -qxF 'owner = platform' "$f" || fail "an unrelated line changed: owner"
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# staging deploy manifest|owner = platform|(release|mirror|fallback|rollback) = [a-z0-9]{12})$' \
+            && fail "every line must be the header, the owner line, or '<field> = <12-character value>' — nothing else may live in this file"
+          test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \
+            || fail "blank lines may not live in this file"
+          get() { sed -n "s/^$1 = //p" "$f"; }
+          keys=$(sed -n 's/^\([a-z]*\) = .*/\1/p' "$f" | grep -v '^owner$' | sort | tr '\n' ' ')
+          want=$(awk '$1=="k1"{print $2}' notes/s9.txt)
+          if [ "$(get release)" != "$want" ]; then
+            case "$keys" in ""|"release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, nothing else" ;; esac
+            fail "release must equal the k1 entry in notes/s9.txt (that file is the source of record; add the line if it is not there)"
+          fi
+          n=$(printf %s "$(get release)" | cksum | awk '{print $1 % 3 + 1}')
+          want=$(tail -n 1 "refs/inv-$n.txt" | awk '{print $NF}')
+          if [ "$(get mirror)" != "$want" ]; then
+            case "$keys" in "release "|"mirror release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release and mirror, nothing else" ;; esac
+            fail "mirror must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
+          fi
+          n=$(printf %s "$(get mirror)" | cksum | awk '{print $1 % 3 + 1}')
+          want=$(tail -n 1 "refs/inv-$n.txt" | awk '{print $NF}')
+          if [ "$(get fallback)" != "$want" ]; then
+            case "$keys" in "mirror release "|"fallback mirror release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, mirror and fallback, nothing else" ;; esac
+            fail "fallback must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
+          fi
+          n=$(printf %s "$(get fallback)" | cksum | awk '{print $1 % 4}')
+          key=k$((2 * n + 3))
+          want=$(awk -v k="$key" '$1==k{print $2}' notes/s9.txt)
+          if [ "$(get rollback)" != "$want" ]; then
+            case "$keys" in "fallback mirror release "|"fallback mirror release rollback ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, mirror, fallback and rollback, nothing else" ;; esac
+            fail "rollback must equal the $key entry in notes/s9.txt (that file is the source of record; add the line if it is not there)"
+          fi
+          echo ok
+      - path: refs/inv-1.txt
+        contents: |
+          us-east-1   hold   paused  c716f6  carried-forward           c90f83  nlvrenr9bd3v
+          eu-west-1   seal   ready   f374fd  carried-forward           a6bc85  ym5gv0qb3hn2
+          us-east-2   seal   paused  2726f6  capacity-pending          7c4469  4mxw6qwqu3s4
+          eu-west-2   drain  sealed  47f1b6  rotation-verified         4fdbd7  kv4vxkhuxhds
+          sa-east-1   drain  ready   70ab12  no-exception              ba007b  ofutkb49ti6t
+          ap-south-1  seal   armed   6acfe0  carried-forward           4a33ab  38ui8ya8e4e2
+          us-east-1   drain  paused  d11ee1  capacity-pending          767aeb  xkdvfcb6y23j
+          ap-south-1  hold   ready   a3450c  seal-acknowledged         8e4661  z3hmlmqbyzfe
+          eu-west-2   seal   paused  219754  no-exception              14f2eb  9mxd312unuma
+          sa-east-1   seal   paused  5a03cf  carried-forward           55cc69  pp9gt4j18u2l
+          us-east-1   warm   armed   16deb7  rotation-verified         81cd7d  0rctbmrof0gv
+          ap-south-1  seal   armed   ece3e4  drain-scheduled           faceea  1ssot77du9vr
+          us-east-1   hold   armed   ac408a  drain-scheduled           f78a07  l1vjhc71ord6
+          us-east-2   seal   ready   be727e  rotation-verified         91b430  9ew24wdz45dp
+          eu-west-1   hold   ready   e60692  no-exception              746e80  3a7hmuqzalkd
+          us-east-1   warm   paused  8d88c2  seal-acknowledged         6cc3dd  5vaq333c257g
+          ap-south-1  hold   paused  255789  seal-acknowledged         4a0633  kv8ly8aiztvg
+          us-east-1   warm   ready   91ebd7  seal-acknowledged         b3a807  z8se3twihz32
+          us-east-2   seal   paused  80ffc4  entitlement-audit         459689  r4vpxjhh4t6t
+          ap-south-1  seal   paused  be5eac  carried-forward           7b94dc  dzzxvo5nsrze
+          us-east-2   hold   armed   e843cc  seal-acknowledged         521a18  rkjse8q6sfgn
+          eu-west-2   seal   armed   45c853  drain-scheduled           c8b815  wsnkl6nbndqd
+          us-east-1   warm   armed   2606b7  rotation-verified         a43416  ourk0gmjjkf7
+          eu-west-2   hold   paused  9e3632  capacity-pending          945a74  v4ym7abc6okx
+          ap-south-1  seal   armed   737440  warm-pool-nightly         bbc03a  haskfqbt85tx
+          us-east-2   warm   sealed  e607e3  capacity-pending          97972d  9qfevx4m6asq
+          us-east-2   seal   sealed  1adf7a  carried-forward           b6854e  yl8bbhgokjz1
+          us-east-1   warm   armed   b3b6b1  capacity-pending          21994b  elc2w0saxm1i
+          us-east-2   drain  sealed  14ccf5  seal-acknowledged         dd52bb  16xmcysvyuhj
+          sa-east-1   warm   armed   97fc3f  entitlement-audit         e4dbea  c5744rlcnp6g
+          us-east-2   hold   armed   18f7a5  carried-forward           bd4724  krfktvo020wb
+          eu-west-1   warm   paused  3c3dd4  no-exception              b4ecbf  u6r12cfs1vas
+          us-east-1   warm   sealed  7f993a  carried-forward           8b10f0  rsp5l4dmctnp
+          eu-west-2   seal   sealed  d481db  entitlement-audit         1591a9  yt3o423qza96
+          sa-east-1   drain  sealed  f36e52  capacity-pending          2107fd  5choufbm2lxi
+          eu-west-2   drain  ready   bc3c88  capacity-pending          8463bf  s8eic8rsscye
+          us-east-1   drain  ready   bbeb6d  seal-acknowledged         e91dc5  e8pk34s8g5dt
+          sa-east-1   drain  armed   f11065  seal-acknowledged         1e171b  ouhhsy8jrqlj
+          eu-west-1   drain  paused  66c054  rotation-verified         100f0f  u93hw5aieo2d
+          eu-west-2   seal   ready   17179d  no-exception              cbdc85  woiwivhf1yts
+          us-east-2   seal   ready   7b635b  carried-forward           3d4365  mhxm9vyyv0q7
+          eu-west-1   seal   paused  967e65  rotation-verified         c6a6e2  mukb6dmckh0j
+          eu-west-2   hold   sealed  77bb60  seal-acknowledged         6a6524  ql0p2m090ujy
+          ap-south-1  hold   sealed  48963e  drain-scheduled           6049e1  t0wjcljgrcrt
+          ap-south-1  seal   ready   398b8a  entitlement-audit         d412b7  bmdip70fbhme
+          ap-south-1  drain  ready   8ed0f8  capacity-pending          9399c7  vcxnjepxzzji
+          eu-west-1   drain  paused  119851  seal-acknowledged         1e1393  ol6lnucxuoiu
+          us-east-2   seal   ready   787312  no-exception              f0a8e3  j257aq1gnx2c
+          eu-west-1   seal   ready   501987  carried-forward           a129d3  oxxuhgtw1qbj
+          us-east-2   hold   ready   f51988  carried-forward           e6a671  ly1s04c7dtpb
+          us-east-1   hold   armed   e8423c  no-exception              a34daa  kc4d5f5ov5wl
+          sa-east-1   hold   ready   160705  no-exception              d17fda  ar4v3jy8ktq6
+          ap-south-1  seal   armed   90fadf  capacity-pending          21e0d5  838o2qletx75
+          us-east-2   seal   ready   5019c7  rotation-verified         fe544c  o870a58m8458
+          ap-south-1  seal   armed   7fc771  no-exception              87eeda  p3igkh5xptcs
+          us-east-1   seal   paused  76ad6f  seal-acknowledged         8bf7df  24kp3rwq5wtw
+          eu-west-1   seal   armed   70d1f0  seal-acknowledged         b20b2e  1olrw9cqij8m
+          us-east-1   warm   ready   7ff1c6  carried-forward           c13bfb  hhhbhaefqmea
+          us-east-2   seal   armed   d8d7dc  rotation-verified         463713  lk1vzm6fawe3
+          us-east-1   drain  paused  2d4058  no-exception              7f8197  bj144f2ejzw2
+          sa-east-1   warm   armed   53da52  drain-scheduled           8439f6  rbov665lqz1i
+          us-east-2   hold   paused  93669b  capacity-pending          3191b1  f1qy43hcb0pe
+          sa-east-1   hold   sealed  38efd9  entitlement-audit         246332  t8t83mwz1iss
+          eu-west-2   warm   armed   c49583  no-exception              2b365b  wtdhnrierj6h
+          us-east-2   hold   paused  2df2fd  rotation-verified         9b4a84  jg83liernokt
+          sa-east-1   drain  armed   2b80b5  capacity-pending          9a8131  en4urtce0q3c
+          us-east-1   seal   armed   aae4cf  entitlement-audit         2141ff  ub3gbbub5maj
+          sa-east-1   seal   paused  8899b3  drain-scheduled           5f3f3a  bp3o2tkajg6p
+          sa-east-1   seal   armed   2812d3  carried-forward           a12800  7wed5th3elm4
+          eu-west-2   warm   paused  b28ec8  seal-acknowledged         f9977c  wdilujy4cwpt
+          eu-west-1   drain  sealed  a1ebe4  no-exception              9783ae  pryjqkb0a70n
+          ap-south-1  seal   sealed  3a1938  warm-pool-nightly         1d0859  dw7tkwy3sviq
+          sa-east-1   warm   sealed  7c49b0  carried-forward           57702c  u5xjet4ai0r1
+          sa-east-1   seal   armed   4af92f  seal-acknowledged         5b0db6  1ttwntgntxrn
+          eu-west-2   warm   ready   877940  rotation-verified         405b14  t7ku1hrpl6yx
+          us-east-1   warm   ready   85b54c  warm-pool-nightly         4d2b4b  m7nvybbvfjsr
+          us-east-1   seal   paused  5e6dde  drain-scheduled           cb3caa  29b12r7xqe2o
+          us-east-2   seal   ready   c879c2  warm-pool-nightly         fd8e70  pfa52rqi6o43
+          us-east-1   seal   paused  aff47c  carried-forward           a713c6  797rdohg3lgm
+          us-east-1   hold   paused  c8051a  carried-forward           1f4688  cfxbwk2wnwtc
+          eu-west-2   hold   ready   5d0127  drain-scheduled           ac1c21  q86z6mrhk9ed
+          ap-south-1  hold   armed   bfdeb6  drain-scheduled           665c69  lutplaq0ql9t
+          sa-east-1   drain  paused  406750  seal-acknowledged         d8102e  4uhvs66lkns3
+          eu-west-2   seal   armed   6ac4c3  carried-forward           3e6517  opw3jmgs5ikk
+          ap-south-1  seal   sealed  80731c  carried-forward           857995  f42vcccvgmt3
+          sa-east-1   hold   paused  7a990c  carried-forward           80ecce  nncfyhqcgpqp
+          eu-west-1   seal   sealed  e226dc  seal-acknowledged         5a3816  q2oc9gyq6cov
+          eu-west-1   hold   paused  86087b  capacity-pending          65f0b9  lv0k852n66yk
+          eu-west-1   hold   paused  a605be  no-exception              37bab2  ry9883ux47hp
+          ap-south-1  drain  ready   4db5b9  warm-pool-nightly         fa26d6  vjcydzvfh3nq
+          ap-south-1  warm   sealed  68b635  seal-acknowledged         a248a7  1tqhrzdm7zoa
+          eu-west-2   seal   sealed  746a40  capacity-pending          eddecc  hrvx19prmcol
+          sa-east-1   warm   paused  844384  seal-acknowledged         b9b5ba  7ruc5cxwcbj7
+          ap-south-1  drain  ready   a71fe0  warm-pool-nightly         9805d3  t2ix6379zyeg
+          us-east-2   warm   paused  47af67  warm-pool-nightly         c4abae  en87m7e0efoc
+          sa-east-1   drain  ready   72773d  capacity-pending          5f53c7  9f3dlrfv2cve
+          us-east-1   drain  armed   8e7e9e  seal-acknowledged         243679  sf8wflq9a2cw
+          us-east-2   drain  armed   bd807e  carried-forward           2404d9  ur77uynm14ad
+          us-east-1   drain  sealed  17bec9  rotation-verified         d6be42  jc4y97y1n3p2
+      - path: refs/inv-2.txt
+        contents: |
+          sa-east-1   drain  paused  bda7de  drain-scheduled           537979  r8frm5dforhe
+          eu-west-2   seal   ready   a03904  entitlement-audit         f554ff  psyuzr6swncl
+          sa-east-1   drain  ready   4dd4c0  warm-pool-nightly         bb895a  so6vrqkvhiu2
+          us-east-1   seal   ready   5e857a  carried-forward           8c6a33  s36gh58ksgr2
+          eu-west-2   hold   ready   d8afe5  carried-forward           239c5d  wws0lijypg3f
+          us-east-2   seal   paused  3e240e  rotation-verified         d08373  fgv5hxsnjqa2
+          eu-west-2   drain  armed   8144fc  drain-scheduled           6caad7  dvpzhggewvs2
+          us-east-2   warm   ready   3346ba  carried-forward           56036d  ub3tvyvlm7ig
+          ap-south-1  seal   armed   cbe2b8  seal-acknowledged         b18555  efdav7pld809
+          us-east-1   drain  sealed  5a0cee  warm-pool-nightly         54798e  0e8nmd6h8gek
+          eu-west-1   hold   armed   449b6f  warm-pool-nightly         24baf3  6v4efjfz2oto
+          eu-west-1   seal   ready   bdbdd1  carried-forward           10d9e2  wv0ciymq47fx
+          us-east-1   warm   sealed  9235b5  seal-acknowledged         17981b  vxgly5xauqzi
+          us-east-2   drain  paused  c92915  rotation-verified         4eef23  7jd3vlso3h67
+          ap-south-1  warm   sealed  3238ad  carried-forward           f8991a  4nu9mxs6rm2u
+          eu-west-1   warm   sealed  c8372b  seal-acknowledged         21d4da  5zwzcm1tgsd7
+          eu-west-2   drain  paused  770bea  capacity-pending          b0d722  kfx1lvjmnuc5
+          eu-west-2   seal   armed   1e7fc8  no-exception              f667e5  euaeg4fwsf6q
+          us-east-1   warm   sealed  b433aa  seal-acknowledged         3ae363  iq0o0cdn2giy
+          us-east-2   drain  ready   e3e1c0  capacity-pending          4d152c  lzaej71cqqrn
+          eu-west-1   seal   paused  a86283  rotation-verified         5b86f7  uxuytbaozc56
+          us-east-1   hold   paused  f0c14a  rotation-verified         16e9f0  q0at8qdqdd8s
+          ap-south-1  warm   sealed  80846f  drain-scheduled           7d3af9  iktqj85irg50
+          us-east-2   warm   paused  b514a2  warm-pool-nightly         3352ee  dqdedqzq91er
+          sa-east-1   drain  armed   c1da84  no-exception              5446d1  tk8t4oh8uq26
+          us-east-2   seal   armed   efac86  warm-pool-nightly         e6eef4  lhr4t5l2gqom
+          us-east-2   seal   ready   d32e66  entitlement-audit         eda4e7  wjdbvhko1p6m
+          eu-west-1   warm   paused  313464  capacity-pending          7eebbd  s4o9aubylc0w
+          us-east-2   warm   sealed  275270  entitlement-audit         f716ab  37qkcbg9b8v3
+          eu-west-1   drain  paused  da4189  entitlement-audit         bde0f4  368ztvdhgxb5
+          eu-west-1   hold   paused  9c4863  entitlement-audit         a2ce9e  p9jww8eiu1ii
+          ap-south-1  seal   paused  abbdcd  drain-scheduled           700a73  0bftpk9hpuqg
+          us-east-1   hold   armed   b38997  carried-forward           a0c39f  u15cdkdyjoq0
+          eu-west-1   warm   ready   93590d  carried-forward           dce7a4  zbhrhqmgc3aw
+          eu-west-1   seal   sealed  37962d  warm-pool-nightly         df2e04  otxpmdvvc9nj
+          us-east-1   warm   ready   329512  capacity-pending          245520  izxjo47z88os
+          sa-east-1   drain  armed   831dc8  seal-acknowledged         4d9413  uwh9ckzvut5c
+          sa-east-1   seal   armed   7ef3bb  capacity-pending          75bed1  1hvvz9v81lxp
+          sa-east-1   drain  sealed  7d2ec4  carried-forward           aff709  egymiwoqgnn0
+          us-east-1   warm   ready   eadc69  capacity-pending          c26685  n02xmvcoi9sm
+          us-east-2   drain  sealed  f8ab01  seal-acknowledged         36798c  d71il1tt04a7
+          ap-south-1  hold   paused  f32b67  warm-pool-nightly         9d50e5  vgtfusis965u
+          us-east-2   seal   sealed  2d305b  carried-forward           edb775  akwjr3u039oi
+          eu-west-1   hold   paused  6223dd  no-exception              8b8f2d  882d06py59us
+          eu-west-1   drain  ready   ef432f  seal-acknowledged         c89e50  9hoqxdzincxg
+          eu-west-1   drain  ready   31e39e  capacity-pending          17fa79  2ae871ai9fjx
+          ap-south-1  drain  paused  afdd78  drain-scheduled           6c35f3  b8ay2w3ybu8u
+          us-east-2   seal   armed   91b8c9  rotation-verified         d02dcb  idxxzsfj37op
+          eu-west-2   seal   armed   f47c9a  warm-pool-nightly         1c62d0  a8r4r40m0r9l
+          eu-west-2   hold   paused  67f21b  drain-scheduled           7c3668  an0m1nje3gpa
+          us-east-1   warm   armed   552281  capacity-pending          1400d9  yoarspsg9e2r
+          us-east-2   hold   sealed  1ca978  seal-acknowledged         984474  6502pdkqhe21
+          eu-west-1   drain  sealed  722bb1  rotation-verified         60b265  1m9q9mnxwl9v
+          eu-west-2   drain  armed   704727  carried-forward           8b67f6  ew6cd6ivaaik
+          ap-south-1  seal   ready   54830c  seal-acknowledged         79626a  s4t3jw0a0k9n
+          eu-west-1   warm   paused  bb1da5  drain-scheduled           64d608  y6pkfsf5jy2m
+          ap-south-1  hold   armed   fef522  no-exception              f44fb9  mic2w02m3107
+          sa-east-1   warm   paused  a13936  warm-pool-nightly         60a6e1  s3gk9wbwui9v
+          eu-west-2   hold   paused  cfb62f  entitlement-audit         c034c1  vzf35bxglepc
+          eu-west-2   seal   armed   7100e9  drain-scheduled           5fcc27  cxbwfoloykvm
+          sa-east-1   hold   armed   6cfec8  capacity-pending          874542  zbqtdbroc36o
+          us-east-2   seal   sealed  8aaa4f  no-exception              47bd21  buy7p4inmdbf
+          us-east-2   warm   ready   d7936b  drain-scheduled           c5227f  xvl3uucnh667
+          us-east-2   drain  ready   ceba1d  drain-scheduled           3f8549  9m1l4zzm6jae
+          sa-east-1   seal   paused  b6fef3  warm-pool-nightly         83ab29  opkswcfy28xg
+          ap-south-1  seal   sealed  281fe0  warm-pool-nightly         2cd2d4  wumq1gyi5669
+          us-east-1   warm   armed   cd1011  entitlement-audit         297f93  ipvlxtqfndj2
+          eu-west-1   hold   sealed  7ab6ce  carried-forward           f8d092  dd4nrf5as6w0
+          eu-west-1   warm   paused  611d65  entitlement-audit         ff97e7  olqfdczdu1e7
+          us-east-1   drain  paused  8e678a  drain-scheduled           f807ab  yx9ntxatljc4
+          ap-south-1  drain  ready   eb4cee  carried-forward           eb3fd8  krvdz4ukadxv
+          us-east-1   seal   armed   a12de4  no-exception              57b340  8xw0ao1ja309
+          ap-south-1  drain  sealed  1c146a  entitlement-audit         321553  ldmb1it0antk
+          ap-south-1  seal   paused  abce26  capacity-pending          e87d27  tdnq4ymaf03p
+          sa-east-1   drain  armed   6e20a0  warm-pool-nightly         4cc53a  ckkgef0ja9lr
+          sa-east-1   warm   ready   985516  carried-forward           e491e8  gkueakbqvscx
+          eu-west-2   seal   ready   693cf5  rotation-verified         dc5f12  1fusdehryiug
+          ap-south-1  hold   paused  f06263  seal-acknowledged         ea573f  yz0ju97ec3nz
+          ap-south-1  hold   ready   72a61e  warm-pool-nightly         efdb6c  3jy41r8a0po6
+          eu-west-1   drain  ready   88a564  entitlement-audit         58703d  z10yd6xowprd
+          ap-south-1  seal   paused  342fb8  no-exception              80498d  js1ydvh5gxwi
+          ap-south-1  hold   paused  3fcb4d  seal-acknowledged         436e03  nnzdiy0jctma
+          eu-west-1   hold   ready   7fdb9f  carried-forward           7c8210  8r8len6rvdfi
+          eu-west-2   hold   ready   5eeae5  no-exception              126dd9  8i6vuqpknoqz
+          eu-west-1   drain  ready   ba87cd  seal-acknowledged         a48ea0  e1po3x4w2uxz
+          us-east-1   hold   armed   faf379  carried-forward           cc5ce3  thxjdmvaemhd
+          ap-south-1  seal   sealed  7d07b1  warm-pool-nightly         fc2f89  1ou34phqi2k9
+          eu-west-2   hold   sealed  8235b0  no-exception              ac8a2d  671lkfkcorgs
+          sa-east-1   warm   paused  e7781c  no-exception              2b839d  jbjgbfzvfxog
+          eu-west-2   seal   sealed  5c2dfd  capacity-pending          49d732  obujuy2qnv7g
+          ap-south-1  drain  paused  2b8263  no-exception              fb0975  cs17y41v8poi
+          sa-east-1   seal   armed   25ab57  carried-forward           527b7c  8qz4vw3b235w
+          us-east-1   warm   ready   68493f  rotation-verified         953da1  6ssrncb6wd2t
+          ap-south-1  seal   sealed  17ad07  carried-forward           c6836b  sg6158njzkhb
+          us-east-2   drain  ready   2a80aa  rotation-verified         fe0ee2  wf8ngurlsu32
+          us-east-2   warm   armed   98ae7b  rotation-verified         8156c3  snyj939600wk
+          us-east-1   warm   sealed  4c0773  warm-pool-nightly         427bb9  r67w86w4mbfb
+          eu-west-2   warm   sealed  bcd32b  drain-scheduled           dd7ae0  96qon0ouj1ao
+      - path: refs/inv-3.txt
+        contents: |
+          ap-south-1  seal   armed   1905e7  entitlement-audit         cb28b1  kjf7dcogaeqa
+          us-east-2   hold   paused  772f87  drain-scheduled           90949a  bsipxfq45icm
+          eu-west-2   seal   paused  a766fc  seal-acknowledged         81775d  diic2iukemhv
+          eu-west-1   warm   armed   ec97d3  drain-scheduled           1cda58  g78kjt4luwmp
+          sa-east-1   seal   sealed  7df41f  drain-scheduled           c6f35d  uqxhymgw0gsg
+          us-east-2   drain  armed   315afe  drain-scheduled           ae1753  xkr0is0y5v54
+          ap-south-1  drain  sealed  dc8625  carried-forward           c96b8b  ckp636dnw6h7
+          sa-east-1   drain  ready   2fbfdd  capacity-pending          490e19  6gjn7wlwgnqn
+          sa-east-1   hold   ready   15f46e  capacity-pending          a61419  2uup5gb0g8dr
+          us-east-2   drain  armed   fba127  rotation-verified         207df9  qmct9v6qbr1y
+          eu-west-2   seal   sealed  4143ad  drain-scheduled           8b5354  s3d264cmyv7g
+          eu-west-1   warm   sealed  41c5c8  entitlement-audit         3b7ae0  fi58m0cxjj2d
+          eu-west-2   drain  sealed  da1405  rotation-verified         3c66a9  vu7k4s67e6pw
+          eu-west-1   warm   paused  97cc40  carried-forward           a883ca  75loj8ooks4h
+          eu-west-2   hold   paused  49ef1e  warm-pool-nightly         f89754  9chtl4vnn9vt
+          eu-west-2   hold   paused  6577a5  drain-scheduled           4d7d51  orv1o4z7xnn4
+          us-east-2   seal   sealed  511555  seal-acknowledged         586b58  c9eybcy56nsl
+          eu-west-2   warm   ready   27d075  seal-acknowledged         889631  4n5667hml0vc
+          sa-east-1   drain  sealed  c79133  capacity-pending          134b20  lplc9iieu0bx
+          us-east-2   hold   paused  b43381  entitlement-audit         f41e06  yzns7wsaqefn
+          eu-west-2   warm   ready   ce0a34  capacity-pending          4a048b  p2lomrdvkgh4
+          sa-east-1   seal   ready   1657b9  carried-forward           b88e5a  rp8v5ue4guzf
+          ap-south-1  hold   paused  79ecb1  entitlement-audit         4b71a3  eqbuacd1xsnj
+          eu-west-2   warm   paused  651ddf  drain-scheduled           f1fcda  qg4rr63ci0ox
+          eu-west-1   drain  ready   1b9bb8  warm-pool-nightly         81b659  hmow5gfa722o
+          sa-east-1   warm   armed   c9d25c  entitlement-audit         d3edae  qmnkorgblu4e
+          us-east-1   warm   armed   7b9483  drain-scheduled           b2317e  sxcddx5fv709
+          ap-south-1  hold   sealed  a57bb5  rotation-verified         ad1739  9qa0s8oy6isx
+          ap-south-1  hold   paused  8bde46  rotation-verified         419228  iync6irey16f
+          sa-east-1   drain  sealed  1031f8  capacity-pending          31a75c  78dfewikh0ck
+          eu-west-2   hold   armed   ab93a8  seal-acknowledged         5e652f  6rw5l7lvif8r
+          us-east-2   warm   armed   84e452  rotation-verified         ee3db6  xz80375oy8tn
+          eu-west-2   drain  armed   93308a  warm-pool-nightly         6897d7  66uyatzw7n6r
+          eu-west-2   warm   ready   f871f4  entitlement-audit         b3c881  fr3gm6kn6x0u
+          ap-south-1  hold   ready   d0e6f8  entitlement-audit         3db6ea  n508phjiuqb3
+          eu-west-2   warm   sealed  8f7f5a  warm-pool-nightly         e7efad  qcd6z1h3rmj5
+          us-east-1   warm   paused  4b4512  warm-pool-nightly         b3dc2b  x60dphluvbf6
+          eu-west-1   drain  sealed  728dd8  entitlement-audit         62191b  qbrqb0z1jr3b
+          sa-east-1   drain  ready   2bdc62  rotation-verified         94f769  rmf4bj5tv2xj
+          ap-south-1  seal   armed   bd3905  carried-forward           da51cc  gnrxjws12240
+          us-east-2   warm   paused  9d038b  drain-scheduled           c228bb  7038nzf2vthf
+          us-east-2   hold   armed   923eed  rotation-verified         659344  7v3nsa6v12t5
+          sa-east-1   seal   paused  b373d0  no-exception              b30f4c  tjic9k0na92k
+          eu-west-1   seal   ready   14a69c  carried-forward           9fc8f6  wkdkex1bxvlk
+          ap-south-1  seal   paused  e7050d  carried-forward           7d1556  hnleeg4zymns
+          us-east-1   warm   paused  1cb35f  no-exception              22a419  v17v4wlzv8vl
+          us-east-1   warm   sealed  820db4  warm-pool-nightly         e75016  hkhq8ywfw8b4
+          eu-west-1   seal   sealed  efff26  warm-pool-nightly         4b7bd7  g6pnm73d3hts
+          eu-west-1   hold   armed   65c60f  entitlement-audit         b96143  0a5g5qnjwr25
+          us-east-1   warm   paused  b62a9f  no-exception              746073  k4is5u2ch0er
+          ap-south-1  hold   sealed  dd6a7d  capacity-pending          ee6f8d  ac7yix5ekutv
+          eu-west-2   hold   ready   81383f  rotation-verified         8ae8a4  p5ilvjb6tdqo
+          ap-south-1  hold   paused  db1d76  rotation-verified         2aa2d5  b2d229m1ioou
+          ap-south-1  drain  sealed  71303a  capacity-pending          cd89a0  12m0xgauufyw
+          sa-east-1   warm   ready   75fdf7  no-exception              5e04e6  hv2hytid88al
+          us-east-2   drain  paused  e8e829  drain-scheduled           8c6178  6nch9xwz5n67
+          us-east-1   drain  armed   794b0f  warm-pool-nightly         afd494  95xlkslo2iae
+          us-east-2   hold   paused  a148f0  entitlement-audit         d10bd1  di97lbuac73e
+          us-east-2   hold   sealed  94078a  entitlement-audit         fcca28  ggsqssfotn5g
+          eu-west-2   drain  paused  501581  warm-pool-nightly         2fe4ee  r9yxmly2rcfg
+          us-east-1   hold   ready   214343  seal-acknowledged         c2d403  efnctq6i4cpz
+          eu-west-1   hold   ready   efc225  capacity-pending          b4855b  ovzxvt8vx869
+          us-east-2   warm   sealed  73964b  warm-pool-nightly         78b2bd  frmsu0wrhezi
+          eu-west-1   warm   paused  e2350b  rotation-verified         9b3cca  uj92f0lfk7cv
+          ap-south-1  hold   ready   49fbca  no-exception              5f2ca3  gsumex18drrh
+          us-east-2   drain  paused  dfb602  drain-scheduled           c45c3d  s0eb6f9o0zb9
+          eu-west-2   warm   sealed  615f98  entitlement-audit         3ea462  rm9okzzig77d
+          eu-west-2   drain  paused  2bc78e  drain-scheduled           1017ef  1yf4eznzn40k
+          us-east-1   hold   armed   159ed7  carried-forward           6ea210  q8aomo3abjts
+          ap-south-1  seal   paused  83fd06  entitlement-audit         86fc92  yr10b8a7jb34
+          eu-west-1   hold   paused  2dfce6  seal-acknowledged         9695c6  zkpyz566qlce
+          eu-west-1   hold   ready   5a2af7  rotation-verified         d666dc  uxxwqsx2cy6h
+          us-east-2   hold   armed   cc44a9  no-exception              8ecb9d  irnvlhb5saq9
+          eu-west-2   seal   paused  d8c45c  carried-forward           4b1636  8855zcp2t7u4
+          us-east-1   seal   armed   873552  rotation-verified         57b886  jo8pfi1nqe88
+          us-east-1   warm   paused  9f408c  warm-pool-nightly         bdcc06  gt9ddekikix7
+          sa-east-1   hold   ready   c152e9  entitlement-audit         5999a5  d56d7tlf5rma
+          us-east-2   drain  sealed  40605a  capacity-pending          a064da  4y6ueb705o2q
+          us-east-1   warm   ready   2fc1e8  drain-scheduled           de361e  aflkkkvjum8q
+          eu-west-1   warm   paused  f2f70a  entitlement-audit         9e3ecb  wal0v8c3vklf
+          sa-east-1   hold   armed   b5559a  drain-scheduled           d16104  51v81s1bb4b6
+          ap-south-1  hold   paused  f5ec47  rotation-verified         fd697d  nlj4yawklyp8
+          us-east-2   hold   paused  6e7e37  rotation-verified         1e07f1  1n3qixtg962p
+          eu-west-1   hold   sealed  fc218a  entitlement-audit         d6c4e4  bgdysnx3y6xf
+          sa-east-1   drain  sealed  904cc5  no-exception              aad114  p3ycgwf18tzp
+          us-east-1   seal   sealed  121080  drain-scheduled           f45d2c  jxvxka6pcb8n
+          eu-west-2   hold   sealed  50b9fc  seal-acknowledged         f7213a  f3pcjfxz1ge7
+          sa-east-1   hold   ready   fe74b2  warm-pool-nightly         c8ee80  a8gxe37tupa4
+          ap-south-1  warm   sealed  e3b1bd  drain-scheduled           f34306  s8epg1k8ir74
+          us-east-1   hold   sealed  fbcd58  rotation-verified         cd9154  trye8tfgjuji
+          eu-west-1   seal   ready   bbf964  rotation-verified         8e6479  rgj5kooag9en
+          us-east-2   drain  sealed  843c6a  rotation-verified         324176  nmotbn1haop0
+          sa-east-1   drain  sealed  75a994  carried-forward           926178  6hocbv50k9bd
+          sa-east-1   warm   paused  1380f4  warm-pool-nightly         a3717c  o9joln0k0oy3
+          eu-west-1   warm   armed   f42b5f  seal-acknowledged         c3a980  k8v3we1s9aw8
+          us-east-2   seal   armed   4dc88c  drain-scheduled           21ece7  amfi1x6edz22
+          us-east-1   drain  ready   72eb93  capacity-pending          49d410  munmuub5pclt
+
+  # ══ N3 — convergence + fat state (capv3-converge-fatref) ═════════════════
+  #
+  # Shape: H deepened. Each lane is a SUBTRACTION — the value ending a pool
+  # file's last line minus the value ending refs/matrix.txt's last line —
+  # so the matrix term is re-needed in EVERY round, and the round's other
+  # fat read evicts it (asserted for both armor outcomes: m+p1+edit fits;
+  # +p_j exceeds; the re-read round fits again). Round 2's pool file is
+  # armored: p2 vs p3 selected by cksum(lane_a's correct value) at runtime.
+  #
+  # CARRY-PROOF WIDTHS (B2 round 2): tails are 6-DIGIT, lanes are
+  # {4}-gated 4-digit differences. Round 2's real need is the matrix term
+  # m0, and in the draft-4/5 fixed skeleton the lane_b cell was a
+  # legal-width carry for it (park m0 at round 1, replay from the reprint,
+  # never re-read anything fat — deterministic, 5 actions). With 6-digit
+  # tails the term fits NO writable cell; the generator regression parks
+  # m0 in lane_b and asserts a guard preempts the reveal. The writable is
+  # growing-key (condition 13) with an EXACT byte cap, same as N1.
+  # Note the algebra escape is intentionally left open and is NOT a hole:
+  # want_b = (b - v1) + lane_a, so a model may re-read p1 instead of
+  # matrix — either way it re-reads something fat, which is the construct.
+  #
+  # Why the answer is not searchable at all: lane values exist in NO file —
+  # they are differences; the terms are positional in de-anchored corpora
+  # (no index column, random fields, pairwise-distinct row counts —
+  # deanchored() asserts; see N1 for the B2 round-1 story).
+  #
+  # Arithmetic watch item (probe, not a flag): a lane is a 6-digit
+  # subtraction done by the model. A slip and an invented value both die
+  # as wrong-value complaints; the behavior probe must separate them from
+  # the action log (a slip follows fresh reads of both terms — both tails
+  # in-window at the edit; invention edits with a term missing).
+  #
+  # Condition 9: honest walk = R matrix, R p1, E, R p_j, R matrix, E = 6
+  # actions, slack 2.
+  #
+  # Condition 11 self-test:
+  #   batch walk: s1 READ matrix+p1+p2+p3+check.sh (> 4096, dropped whole
+  #     once anything lands after it). Close at s2? NO — the round-2 pool
+  #     file hangs off lane_a's correct value via cksum; s2 can fix lane_a
+  #     (terms readable in the giant newest block) and park ONE lane_b
+  #     guess — but a useful guess needs tail(p_j) with j unknown (1/2)
+  #     AND the subtraction done in advance; by s3 the giant is evicted.
+  #   compute-channel walk: none — RUN is fixed-argv only; cksum cannot
+  #     run on chosen input.
+  #   search walk: both terms are last-line positional in de-anchored
+  #     corpora; a difference appears in no file at all.
+  #   stash walk: growing keys + {4} width gate + exact cap + ALL-LINES
+  #     format guard + blank-line equality (B2 round 3: a covert `A=<m0>`
+  #     line rode the old lowercase-only selector inside the 14-byte
+  #     slack), all before the lane checks — the m0 carry and the covert
+  #     line are regression-tested as PREEMPTED.
+  #
+  # Expected deaths: the 0.5.0 H-14b family signature — edit streak with
+  # zero go-backs ("still editing" is not "re-reading"), budget_exhausted;
+  # dropped_reread + dropped_research together separate ordering-death
+  # from reread-death (SEARCH recovery no longer reads as invention).
+
+  - id: capv3-converge-fatref
+    instruction: "tests/check.sh rejects limits.conf but reports only the FIRST problem each time it runs, asking for one lane at a time. Reference data lives under refs/ (read-only). Fix limits.conf until the check passes. The file may hold only the lanes the check has already asked for; lines it does not complain about must stay unchanged."
+    writes: [limits.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: limits.conf
+        contents: |
+          # capacity limits — planner input
+          guard = fixed
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=limits.conf
+          fail() { echo "limits problem: $1"; exit 1; }
+          test "$(wc -c < "$f" | tr -d ' ')" -le 78 || fail "limits.conf must stay within 78 bytes"
+          grep -qxF '# capacity limits — planner input' "$f" || fail "an unrelated line changed: header"
+          grep -qxF 'guard = fixed' "$f" || fail "an unrelated line changed: guard"
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# capacity limits — planner input|guard = fixed|lane_[ab] = [0-9]{4})$' \
+            && fail "every line must be the header, the guard line, or 'lane_<x> = <4-digit number>' — nothing else may live in this file"
+          test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \
+            || fail "blank lines may not live in this file"
+          get() { sed -n "s/^$1 = //p" "$f"; }
+          keys=$(sed -n 's/^\(lane_[a-z]*\) = .*/\1/p' "$f" | sort | tr '\n' ' ')
+          m=$(tail -n 1 refs/matrix.txt | awk '{print $NF}')
+          a=$(tail -n 1 refs/p1.txt | awk '{print $NF}')
+          if [ "$(get lane_a)" != "$((a - m))" ]; then
+            case "$keys" in ""|"lane_a ") ;; *) fail "limits may hold only the lanes asked for so far — that is lane_a, nothing else" ;; esac
+            fail "lane_a must equal the value ending the LAST line of refs/p1.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)"
+          fi
+          n=$(printf %s "$(get lane_a)" | cksum | awk '{print $1 % 2 + 2}')
+          b=$(tail -n 1 "refs/p$n.txt" | awk '{print $NF}')
+          if [ "$(get lane_b)" != "$((b - m))" ]; then
+            case "$keys" in "lane_a "|"lane_a lane_b ") ;; *) fail "limits may hold only the lanes asked for so far — that is lane_a and lane_b, nothing else" ;; esac
+            fail "lane_b must equal the value ending the LAST line of refs/p$n.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)"
+          fi
+          echo ok
+      - path: refs/matrix.txt
+        contents: |
+          sa-east-1   drain  sealed  fc2e02  drain-scheduled        5z7yc7rusk23  f0ac87  426817
+          eu-west-2   drain  ready   7628a8  drain-scheduled        b8q6654wz4py  8f2ecc  579902
+          us-east-2   seal   ready   e1dafb  capacity-pending       3r4uhowvf9jy  706fa5  453910
+          us-east-1   drain  paused  5f99c0  entitlement-audit      wr7mtegw8vgu  ff0dbe  343898
+          ap-south-1  seal   armed   f3fc28  no-exception           dfop6muea7y0  d1377d  901334
+          sa-east-1   seal   ready   70787a  rotation-verified      nx6vwivjlenk  2e9c46  796743
+          sa-east-1   seal   paused  a4e758  carried-forward        xedzwgdggsyu  e3680b  725181
+          us-east-2   drain  ready   5bdf6e  entitlement-audit      s3vskecm4jzb  e01ddf  877407
+          eu-west-2   drain  sealed  178d78  entitlement-audit      rt0pry7smpnr  ef44a0  122513
+          eu-west-1   warm   ready   ac8cc9  capacity-pending       fn996kagzhrc  750de3  524193
+          eu-west-1   warm   paused  118b1b  drain-scheduled        ngtfdh0r0z1u  90a83a  853495
+          ap-south-1  hold   ready   21a2a3  capacity-pending       olp8qmuk7o1b  606a24  669253
+          ap-south-1  warm   sealed  21acfa  entitlement-audit      k1cqvkkc5pmj  35a92d  943842
+          us-east-1   drain  armed   665840  carried-forward        cowyqpponzh2  3e5c60  773831
+          us-east-2   drain  paused  59a39f  entitlement-audit      xr07m7fabtjx  6e104c  514645
+          us-east-1   warm   armed   fc0bd8  seal-acknowledged      ed4bejx2wljy  9fd17d  907750
+          eu-west-2   hold   ready   40b141  carried-forward        9djjso1aqvsj  cc60e6  409938
+          eu-west-1   hold   ready   a3cc82  entitlement-audit      x2jwl5os0le4  a54c91  113790
+          us-east-1   warm   paused  c5710b  seal-acknowledged      lg3k6w07uldj  b5c270  599571
+          eu-west-1   warm   paused  65804e  drain-scheduled        dsijxppngvj6  e078cc  824410
+          us-east-1   seal   paused  fa2868  no-exception           0m2162wqw3zn  f27811  205092
+          sa-east-1   drain  sealed  1b4c9a  entitlement-audit      akd0cn9ik4iu  a95470  339454
+          us-east-1   hold   sealed  22b4ca  carried-forward        yo0diupwq3ek  f99152  464804
+          us-east-1   warm   paused  4d0b40  seal-acknowledged      d3egdrbvzsd1  cadf0c  480239
+          us-east-2   drain  ready   5c66bd  rotation-verified      q4h7yf41yt5u  d1dae7  917946
+          eu-west-2   drain  armed   1d7fb5  rotation-verified      x43hkz7eth0p  7c1992  664485
+          us-east-2   hold   sealed  ab2fa2  no-exception           gb564m6thmtn  a608c0  581070
+          ap-south-1  warm   paused  219951  capacity-pending       egeqzs8exh8z  cec9f6  915833
+          ap-south-1  seal   sealed  13b1bf  capacity-pending       rlz6z5smj7vj  c9bdc6  679286
+          sa-east-1   drain  ready   a8d3c6  capacity-pending       1dqujwqsfzst  4c34bf  379449
+          us-east-1   warm   armed   9466ff  seal-acknowledged      xd9i1xfh96nh  41a7cb  770420
+          ap-south-1  drain  ready   a5d227  seal-acknowledged      mlvzwpxfb31d  9725d9  837686
+          us-east-1   hold   ready   d42238  drain-scheduled        1ya787a2yjh1  15b786  973488
+          us-east-2   drain  sealed  34e417  entitlement-audit      ken3luwljw6e  3d6a5e  453031
+          ap-south-1  seal   paused  e5f013  rotation-verified      spvwyw408etg  1a1fcd  487307
+          us-east-1   drain  armed   e6d092  no-exception           r283p3ga3lcw  51a0ac  711888
+          us-east-1   warm   ready   6ab6f1  drain-scheduled        ski4ksih92ei  88c083  496130
+          ap-south-1  seal   paused  537e5a  warm-pool-nightly      oaxiws9amxzl  687c40  289237
+          sa-east-1   drain  paused  65cd0d  warm-pool-nightly      hn5mwldye5fm  c30537  566272
+          us-east-2   warm   ready   f4ef2f  entitlement-audit      wdgvph6gld4y  51a537  980845
+          eu-west-1   seal   armed   c3a411  warm-pool-nightly      9ctl24kp1diy  3e6c45  322880
+          sa-east-1   hold   armed   88ddfe  warm-pool-nightly      kte2rbbczuip  1f68b4  279659
+          us-east-1   warm   armed   b1b953  drain-scheduled        zx4jy1wlj6n2  34f700  593104
+          eu-west-2   warm   ready   c57bba  drain-scheduled        5vfzryfw5885  f29f28  865056
+          us-east-1   seal   armed   2de9d2  rotation-verified      zjs5ms7acw3a  a57e46  678041
+          ap-south-1  hold   ready   fb66de  rotation-verified      44c1z88kidn9  715cb5  619640
+          sa-east-1   hold   sealed  584c9b  seal-acknowledged      5we9i5zbzo2d  837220  412290
+          ap-south-1  seal   armed   a982a5  no-exception           cq7dtyr2z7w6  d7fc36  808218
+          ap-south-1  warm   sealed  245c5d  carried-forward        v6p6wiwv8k0g  ca4ac0  260101
+          sa-east-1   seal   sealed  24001d  no-exception           juhgfy0emlh9  b7b5a0  412417
+          ap-south-1  seal   sealed  69a588  no-exception           729hyr9bjsqs  23cb59  793066
+          ap-south-1  warm   armed   d87dc6  capacity-pending       xibfr636r13h  501622  791256
+          eu-west-2   warm   sealed  bc8b6b  drain-scheduled        xqk24raau6rp  687801  637947
+          sa-east-1   seal   paused  52e4b6  capacity-pending       mo1qhxu7d3if  94752a  147064
+          ap-south-1  drain  sealed  519abf  drain-scheduled        qxp8m1rjrl7h  ae2588  568691
+          eu-west-2   drain  sealed  8d3576  carried-forward        vpsor1evy7cm  9ad6f5  223547
+          ap-south-1  seal   sealed  9120dc  rotation-verified      fau025faon10  c40437  801435
+          ap-south-1  warm   paused  78a8ee  no-exception           xqdi5w0u8akq  bdf987  437175
+          eu-west-2   seal   paused  99a989  warm-pool-nightly      0iozp7umdi9u  72e7bc  707607
+          sa-east-1   seal   sealed  e9ec23  no-exception           ckafd1enyh21  2d26f0  238102
+          us-east-2   drain  ready   5d532b  drain-scheduled        te59de68jpyg  f8c209  438231
+          us-east-1   warm   sealed  e31a61  entitlement-audit      n2brkyrgoshh  ca6cdb  748958
+          sa-east-1   warm   ready   4c0a68  drain-scheduled        7oppn3da3dfv  8169cd  404890
+          us-east-1   hold   armed   3ec4b6  warm-pool-nightly      g2i1gcaj8lhl  f631f5  421377
+          ap-south-1  warm   sealed  ba64a4  capacity-pending       ty2xqzf3i4fu  971dde  432347
+          us-east-1   warm   sealed  5adf0d  capacity-pending       7sijk4q29c90  43483f  773902
+          us-east-1   seal   sealed  609d27  seal-acknowledged      jwstqduedrxl  ae5729  436544
+          sa-east-1   hold   armed   f4fbd8  rotation-verified      5sc5kw0pxyz7  701968  174336
+          eu-west-2   hold   ready   6bdc86  seal-acknowledged      1oz6wkouv7tf  ba2654  121129
+          us-east-2   warm   armed   6176f4  carried-forward        32r478ft906g  88a596  881547
+          ap-south-1  seal   armed   c0e699  no-exception           rr9g5jjpm1n4  af9c59  930616
+          ap-south-1  seal   paused  720b58  no-exception           hrm6dl8fg2n4  c243bb  240037
+          eu-west-1   hold   sealed  10e0bf  capacity-pending       uph76lrlh164  272014  126121
+          sa-east-1   hold   paused  1d0255  no-exception           kjoqcj92yth6  b69990  835066
+          eu-west-2   warm   armed   c5368f  capacity-pending       8y96ruys02pt  d0616d  838520
+          sa-east-1   seal   armed   38c216  entitlement-audit      1v1q0dlg2hxx  2b54ce  711730
+          eu-west-1   warm   sealed  ea7bc0  warm-pool-nightly      m7ilwiksqeri  729559  105553
+          us-east-1   hold   ready   27f23e  capacity-pending       d2m8914w4yh6  fc8877  960017
+          us-east-2   seal   ready   3822f9  drain-scheduled        9m6z10rg4a4g  8b6108  321202
+          us-east-2   hold   ready   3ef4a4  carried-forward        2fbiyzzzv8yg  9dce00  759626
+          us-east-1   drain  armed   ac8628  rotation-verified      4js1ig2dzgyj  19f04e  388281
+          sa-east-1   drain  ready   b83cb3  capacity-pending       he39yt0v193b  5633a7  761059
+          eu-west-2   hold   paused  d57598  carried-forward        2goblh68th9y  8ed168  716147
+          eu-west-1   seal   ready   a9e108  warm-pool-nightly      oihmiicygr1u  c3786c  146327
+      - path: refs/p1.txt
+        contents: |
+          eu-west-1   hold   armed   1ac33f  warm-pool-nightly      i3i8b1c2weng  41971f  831690
+          eu-west-2   hold   armed   3f39bf  warm-pool-nightly      tghwb4bb6e1r  a213c8  264448
+          eu-west-1   drain  ready   b2d7f2  entitlement-audit      28uewdhxdrhk  53a7e0  613115
+          us-east-1   hold   sealed  208494  no-exception           wm8bkd6v5sy6  91f6eb  979729
+          sa-east-1   hold   sealed  3728af  capacity-pending       xzzj9hvdrdss  df33d7  681810
+          sa-east-1   drain  paused  3c011a  no-exception           g586wgfa3rrs  dc1636  307917
+          eu-west-1   seal   ready   b33b5d  entitlement-audit      icow25kpn5aq  1e3c1e  577697
+          sa-east-1   hold   paused  a3a178  rotation-verified      n6vwmr2rgcvr  c0772b  613647
+          us-east-2   seal   armed   ed9f9b  warm-pool-nightly      ha40tku4tgqd  ec6885  566854
+          eu-west-2   drain  ready   de5ace  drain-scheduled        bbostclo4hw4  4e54a3  541890
+          eu-west-1   seal   armed   1be00f  entitlement-audit      hn5u2dabb6qt  b63b11  364460
+          sa-east-1   hold   paused  e6278b  entitlement-audit      49q5oes9xs5z  25bba5  727717
+          us-east-1   seal   ready   97d980  drain-scheduled        yge3mked33bi  d5d216  161343
+          sa-east-1   drain  sealed  f3e2aa  capacity-pending       0d6mfw99nmxd  6af97c  868447
+          eu-west-2   hold   paused  6fe70e  no-exception           iuweespqjku3  264ee4  100935
+          us-east-1   drain  paused  d3d1f0  warm-pool-nightly      rbpahgc3sb2l  10dd81  463112
+          sa-east-1   warm   armed   7fefc7  no-exception           0kx40byt4f5i  e3a415  500420
+          ap-south-1  hold   armed   176710  rotation-verified      4fn0ailj3wwp  8585fc  832971
+          eu-west-2   drain  armed   6e8c6c  drain-scheduled        8jvwn40ze3n8  ecddd9  123206
+          us-east-2   seal   paused  eda3ab  rotation-verified      lng9yz4twsmd  63f95b  141877
+          eu-west-2   warm   sealed  ea369a  capacity-pending       38uwut1p2q3k  cecc0b  360333
+          sa-east-1   hold   ready   e2201d  seal-acknowledged      56nlk3sawlmj  2ea453  291644
+          us-east-1   warm   sealed  1e6967  drain-scheduled        p89e3hg3iddh  eb492c  197997
+          eu-west-1   drain  armed   24fa82  rotation-verified      uub52oa3d0a6  5c4afb  485995
+          sa-east-1   seal   ready   c85b54  entitlement-audit      6o0dc470gcby  835935  457949
+          us-east-1   hold   armed   577de3  warm-pool-nightly      c3ynyfpsoeiq  ccbfc8  385531
+          ap-south-1  drain  ready   d31193  carried-forward        26wq11uoww9e  3f3654  222389
+          sa-east-1   hold   armed   15052b  seal-acknowledged      vglnng5f0uhf  d02916  999943
+          us-east-1   drain  paused  72336e  drain-scheduled        guc1b1zj40n8  58426e  150738
+          ap-south-1  hold   armed   15d2d4  no-exception           x3z5xd13y29h  a7002a  473750
+          eu-west-1   warm   paused  605515  warm-pool-nightly      avtmumj6ilcd  8a6e0e  769256
+          ap-south-1  warm   paused  fbcc31  seal-acknowledged      sxmed4nnsxt7  91e766  767016
+          ap-south-1  warm   sealed  368435  warm-pool-nightly      fqxj184ppe0s  8b2bc9  623374
+          eu-west-1   warm   ready   9a1a98  carried-forward        w19clgkonchb  c38945  935618
+          eu-west-2   hold   ready   dadfe6  seal-acknowledged      4a4mw9ikpipc  f96962  272616
+          us-east-1   drain  sealed  d2c1db  capacity-pending       6z3ufxtgbw2o  b789ec  879153
+          eu-west-2   hold   armed   15bacf  rotation-verified      s4y1hkw4nciq  b9b7ba  789321
+          eu-west-1   warm   sealed  4e6b7d  seal-acknowledged      0k856d77dfki  9f13e9  123366
+          ap-south-1  hold   sealed  9372ca  drain-scheduled        vsnwsv5xub4y  a1e093  545515
+          eu-west-2   warm   armed   2df780  rotation-verified      u3hydm0jqz8z  877ad7  457492
+          us-east-1   seal   ready   854ab4  no-exception           pkwudscv7ji3  3a76c2  729917
+          ap-south-1  drain  paused  c51a0e  rotation-verified      l1ovthsiw2pk  4b7a8c  163115
+          sa-east-1   seal   ready   17fb22  drain-scheduled        wtxy92kkg0ty  1fcc7a  442972
+          sa-east-1   warm   armed   120273  drain-scheduled        hjenho5x5rk5  908836  648987
+          us-east-2   hold   paused  df8fe9  seal-acknowledged      277hqrmabvfb  8e9987  895715
+          us-east-2   warm   sealed  429a77  warm-pool-nightly      2rmod04pliss  5dc5b6  914117
+          eu-west-1   seal   paused  4b99d2  carried-forward        w7wdnhgoytt4  9448b5  387879
+          ap-south-1  drain  armed   4f724e  drain-scheduled        4bqdg9zliojt  a9a4a9  448374
+          sa-east-1   seal   sealed  85950a  entitlement-audit      db7mgeow2fzk  ed5ff5  185607
+          sa-east-1   seal   paused  df4ab4  carried-forward        flntyq31z672  6d9fa4  263490
+          eu-west-2   drain  paused  d62f58  seal-acknowledged      6fi28ax6yl7k  d1dfb2  932963
+          ap-south-1  warm   paused  e307c9  carried-forward        53kg38h90uhc  e2d53d  745360
+          us-east-2   seal   ready   7dbfd0  rotation-verified      gx8lmrhto5pc  f0d39a  506775
+          eu-west-2   warm   ready   1038dd  carried-forward        gsfrmbbygmx1  7dc8ba  585098
+          ap-south-1  seal   ready   5906c7  drain-scheduled        76t4wnc89az4  8e8e22  602873
+          us-east-1   hold   armed   db86ab  rotation-verified      3jt07mq8t4tj  cd5f11  233973
+          sa-east-1   seal   armed   3acbc9  entitlement-audit      xzcw78ldgmgq  bc4917  707586
+          us-east-1   drain  paused  5c7e92  seal-acknowledged      d8amgglrk75f  8b7b8f  966379
+          us-east-2   hold   armed   2e43ee  rotation-verified      h070a0z7xgyx  e8cde4  500283
+          ap-south-1  seal   armed   48e8ce  entitlement-audit      blnog4l99ez6  a79989  832545
+          eu-west-2   hold   paused  83dc3a  drain-scheduled        z6rnmqpdrf9n  58f4ad  845266
+          ap-south-1  warm   sealed  386cac  drain-scheduled        o5l9vni3ovbt  d481a8  113392
+          us-east-2   seal   ready   eb2f31  capacity-pending       3823ctx0xnfe  a2e96d  973561
+          us-east-1   drain  ready   e2fbe7  warm-pool-nightly      4eh2cga1wlz2  9334f9  906906
+          eu-west-2   hold   ready   e75a75  carried-forward        28duo18chyoz  68022b  487213
+          sa-east-1   hold   ready   e696da  seal-acknowledged      uqx5xsfzf603  8a2d43  557194
+          sa-east-1   drain  ready   c6e90e  carried-forward        22yu2v85e7m1  822ea9  640482
+          eu-west-2   seal   ready   d34951  carried-forward        1gubjkfli8da  d2b7f5  899326
+          sa-east-1   hold   sealed  c98567  warm-pool-nightly      1e0am3p3j61r  b92319  318222
+          eu-west-2   warm   ready   bce783  no-exception           l3gh2xlgur76  6d854e  874969
+          sa-east-1   drain  sealed  c406f6  no-exception           dyzcacf8mhu5  c3bbd3  990642
+          us-east-2   seal   armed   46546b  carried-forward        v655qs3afrqx  cbcf02  499470
+          eu-west-2   hold   ready   10fc0d  warm-pool-nightly      4uedpxsz31l7  8d2464  309469
+          eu-west-2   drain  sealed  f0ef80  seal-acknowledged      2pqn8nxusp3m  6150a5  192890
+          eu-west-2   hold   armed   f146a2  seal-acknowledged      5cgz2k8r5568  5b2237  662926
+          ap-south-1  hold   ready   e9f5ae  capacity-pending       9jjprwas8ewd  1cb191  306395
+          eu-west-1   drain  ready   4ff349  carried-forward        hrcc9cnpzhhq  fb5340  976776
+          eu-west-1   drain  armed   94796b  carried-forward        gbv44qxzujog  bcade7  113027
+          eu-west-2   warm   paused  ab5be6  rotation-verified      nla8qqanu0dp  5f2e9c  150965
+          eu-west-1   drain  sealed  14e6c5  warm-pool-nightly      9192h0rz7dwz  37a413  463980
+          eu-west-2   warm   paused  26ed50  rotation-verified      i3bkakrofnl3  208ea6  368131
+          eu-west-2   warm   sealed  73d8d7  capacity-pending       1a0k1ix37wgf  d38cc3  225921
+          eu-west-2   drain  sealed  bd7e63  entitlement-audit      fx4mpst0estw  63c309  150519
+      - path: refs/p2.txt
+        contents: |
+          ap-south-1  drain  armed   b3d9fe  no-exception           v2pqsaq3bxu3  632e6d  351355
+          eu-west-2   warm   paused  b9f321  warm-pool-nightly      tcvkbjgzf285  63fb1a  766568
+          sa-east-1   warm   ready   8289b9  entitlement-audit      q96lyspm1fk0  9b0827  665320
+          eu-west-2   drain  paused  d92ef3  seal-acknowledged      fz75rvci9kav  68b5e3  562001
+          ap-south-1  warm   armed   89329c  entitlement-audit      0ijx3iz0uyrf  3c9862  933881
+          eu-west-1   drain  sealed  d00b2a  warm-pool-nightly      ddlfwelo2h3u  b51808  440079
+          eu-west-1   drain  ready   85090b  no-exception           mjrjrs863zzk  b27fd9  719809
+          us-east-2   seal   sealed  c02664  capacity-pending       prvevzya8qb5  5a5c68  753386
+          sa-east-1   hold   ready   154f8d  capacity-pending       hfym9tzajjkg  56edae  744015
+          us-east-1   drain  sealed  67dbf9  warm-pool-nightly      9j7ed76zm6jx  946570  422806
+          eu-west-2   hold   sealed  60ec28  carried-forward        9bj81aocgman  a7aebe  949100
+          us-east-2   hold   paused  4ccc61  capacity-pending       wcl1emubg23l  2e8422  313431
+          eu-west-1   drain  sealed  e29919  carried-forward        xbl2u6t3bg5a  94c111  845299
+          us-east-1   hold   paused  4c8172  entitlement-audit      cxm5jidftija  591ba5  263834
+          eu-west-2   seal   sealed  8b1825  seal-acknowledged      jzhqrhkej0gd  bad118  793149
+          eu-west-2   warm   ready   56155d  carried-forward        ssjd5vqpq6lg  2a2d10  823343
+          eu-west-2   seal   armed   1d1fff  drain-scheduled        iakx888vq5un  b02cfc  800783
+          us-east-2   seal   armed   2b357a  drain-scheduled        bfptq843bxc7  3de0bf  265630
+          us-east-1   drain  sealed  c60a5c  carried-forward        1h6d1tegtvbm  9ece1b  946819
+          sa-east-1   seal   paused  63b64a  entitlement-audit      3m9w7b0gfkqe  9c2e2c  140893
+          eu-west-1   warm   paused  ff9f05  entitlement-audit      evsyidr9w5y0  332a7c  734087
+          eu-west-1   warm   armed   6c6924  drain-scheduled        i0bas7sajqsm  3f1320  813213
+          ap-south-1  hold   ready   5b4366  capacity-pending       9vctw190g07q  3fb61b  724118
+          eu-west-1   drain  sealed  faf35e  warm-pool-nightly      r0c5liyi36am  ee9833  792382
+          us-east-2   hold   armed   48c9a8  seal-acknowledged      48vnwof17lsl  f84685  222131
+          sa-east-1   hold   paused  63a11c  entitlement-audit      metg2uzvkq9q  5270b3  712565
+          us-east-1   warm   armed   7bafba  no-exception           4lrpz85ko7nc  e7f1be  744798
+          eu-west-1   warm   ready   5933c4  no-exception           ep5u0341m0do  8e6cba  624139
+          sa-east-1   warm   armed   95e43b  drain-scheduled        hcxtslvdkyyl  c65a3d  809349
+          eu-west-2   warm   sealed  cb57b7  entitlement-audit      dqusxql55xsk  942881  356327
+          eu-west-1   drain  sealed  408cca  rotation-verified      gnr343p4amcc  2da1a4  575293
+          eu-west-2   seal   ready   3feeb5  drain-scheduled        9ksus5y7ivy6  5fed20  483566
+          us-east-2   seal   sealed  56d1c4  rotation-verified      o2baobo35rgw  8ae560  100305
+          us-east-2   hold   sealed  79fb50  entitlement-audit      m4rc28xencl4  682f78  828540
+          eu-west-1   hold   armed   e949c4  warm-pool-nightly      dpkzkvqh43vs  243a26  976527
+          eu-west-2   warm   sealed  fbab9d  no-exception           32jwe7h444qa  5eb5f3  132729
+          us-east-2   drain  paused  45a6ef  rotation-verified      7qjfp3gwoacs  2f8624  360160
+          us-east-1   warm   ready   1d0fe7  warm-pool-nightly      uh3g042hs2lt  709de7  183221
+          eu-west-2   drain  paused  ee1257  capacity-pending       s4rg4s59o3t7  4227ec  352837
+          eu-west-2   seal   ready   68283e  seal-acknowledged      ov99vty2nrbv  da6db1  106650
+          eu-west-2   drain  paused  5f1514  capacity-pending       piccebpplb7t  aa3e10  277652
+          eu-west-2   hold   armed   4cfc07  seal-acknowledged      lq8lqeirv66w  fcf08a  939309
+          eu-west-2   warm   armed   21646f  drain-scheduled        lein914idr7g  5fe8d6  422858
+          sa-east-1   drain  sealed  810f02  no-exception           7mhgonevr9oh  f2353f  455594
+          eu-west-1   hold   armed   c68551  no-exception           a0blt0unn293  ce373e  278335
+          ap-south-1  drain  ready   308991  rotation-verified      w7v1tzbtyj45  d68490  222534
+          eu-west-1   warm   paused  228ed5  seal-acknowledged      rrgwclkgen5m  72b21d  161709
+          us-east-1   drain  sealed  20549c  rotation-verified      609n651c3xmc  27b865  606627
+          sa-east-1   warm   armed   36f910  warm-pool-nightly      8a8xv2yfy042  63c273  435820
+          sa-east-1   warm   ready   25d221  capacity-pending       wposiktmnvlr  d56109  681361
+          us-east-2   drain  paused  bb7392  drain-scheduled        0b3kywawny9m  121346  763888
+          sa-east-1   seal   paused  38702c  rotation-verified      yc46ghkk7npi  47d9a3  558729
+          us-east-1   hold   paused  3e0671  seal-acknowledged      82hmikvrsiia  6433ab  144561
+          ap-south-1  warm   paused  672447  seal-acknowledged      jcuvsapop9qd  96aab3  729248
+          us-east-1   drain  sealed  ec7988  rotation-verified      6lyfzatdqem1  50a442  314325
+          eu-west-2   warm   armed   dd6efe  warm-pool-nightly      wt6zv233m3v4  3b06a7  120842
+          eu-west-1   drain  ready   29874f  drain-scheduled        qyuxp11m7xd3  8fc415  453859
+          eu-west-1   drain  sealed  9b81e8  rotation-verified      gv9rgixy73ut  4b69c3  960010
+          sa-east-1   warm   armed   764eb5  warm-pool-nightly      nzcsci5wdkl8  eb4d8e  400533
+          eu-west-2   hold   armed   a236ac  drain-scheduled        qgdu0dabwsrc  f79a2d  553984
+          us-east-1   hold   sealed  ba4ef9  seal-acknowledged      l9qv8vdm8g2y  c4fefb  660012
+          eu-west-2   drain  sealed  29d8c8  drain-scheduled        d4cyt1nd3efz  bec6bf  221008
+          eu-west-2   warm   ready   6ec339  carried-forward        tfnn847munhz  2d5d07  922244
+          eu-west-1   seal   armed   23bff5  warm-pool-nightly      brmi3nbvft9e  3d9cf8  925350
+          us-east-2   hold   ready   60992e  seal-acknowledged      eo26qys3hzw5  b388d3  817989
+          us-east-2   hold   sealed  133db3  no-exception           liifzmciqlqz  187d4b  392325
+          ap-south-1  warm   armed   be53ba  rotation-verified      x78t64a4u17d  e2950e  744757
+          eu-west-1   drain  armed   43b915  seal-acknowledged      gvc5jzvldvxg  8ae6df  657941
+          ap-south-1  seal   armed   87d7eb  carried-forward        4bhm4dsv7inq  db78db  475697
+          eu-west-1   seal   armed   2372f0  warm-pool-nightly      pe4nejn1kgot  7b94d8  868723
+          us-east-2   hold   ready   dd1df3  no-exception           864nkrhzd79d  4310a1  945176
+          us-east-1   warm   paused  103630  seal-acknowledged      09tjbb9f8ae8  7833c1  445958
+          eu-west-2   drain  armed   4ee65c  no-exception           frb77ir83w7i  13cb1b  132020
+          us-east-2   seal   armed   e8fb51  no-exception           stm7sbnmflgr  eba29f  795585
+          eu-west-2   seal   paused  a389bb  drain-scheduled        iyadjt3g60db  5a7447  865001
+          sa-east-1   warm   ready   53dd39  rotation-verified      4jhx6m9leyda  98c794  563681
+          eu-west-2   seal   ready   64d302  no-exception           2r0m8pzni5dm  4e3b6f  171148
+          us-east-2   drain  armed   270967  capacity-pending       1rujqp5tqqso  af53a2  930171
+          us-east-2   hold   ready   aab863  seal-acknowledged      vwrodd5ztdxb  1aff88  582824
+          eu-west-1   hold   paused  78b72e  warm-pool-nightly      6zmefd972hg3  59ee8f  100083
+          sa-east-1   hold   armed   1f2076  carried-forward        dq88r6kqnrj7  6e5274  684101
+          sa-east-1   hold   paused  9a1ddb  capacity-pending       mi8i5qvf0gf3  997123  336776
+      - path: refs/p3.txt
+        contents: |
+          eu-west-1   warm   armed   253a69  warm-pool-nightly      d23f5n9ht3j9  78e4f3  681133
+          ap-south-1  seal   ready   177922  entitlement-audit      7jpfztvcq47u  230ad2  924113
+          eu-west-1   seal   paused  cd85b9  rotation-verified      lt0tk2h7b5rj  d753dd  603670
+          eu-west-1   hold   paused  a94f68  entitlement-audit      nwo5fglpp312  8f6f3f  234227
+          eu-west-1   hold   paused  950069  no-exception           027jlyxc5glx  f4149b  453051
+          sa-east-1   seal   armed   8dac57  drain-scheduled        3ayjd835yqm6  5e0731  277241
+          us-east-1   seal   armed   5f4b34  drain-scheduled        9slze39siby2  d2844a  302030
+          sa-east-1   seal   paused  ce05c2  no-exception           f4z3alrfm21b  185b50  529555
+          sa-east-1   warm   paused  90da80  drain-scheduled        v3298p71upsm  adac4a  604036
+          eu-west-1   drain  ready   4c02c6  warm-pool-nightly      qk334sw20jio  7d403f  711224
+          us-east-1   seal   armed   325f1f  no-exception           qzc1c249k13k  301782  782589
+          us-east-2   seal   sealed  ac4a6a  warm-pool-nightly      g9az17lfml9e  59ec31  520730
+          eu-west-1   drain  sealed  a82281  seal-acknowledged      sem6z3ewx6ma  98097f  516393
+          us-east-2   drain  ready   d8fd04  no-exception           3l2uhu6kxhum  a7e782  819770
+          us-east-1   drain  ready   195afe  drain-scheduled        icaml1scyh3k  a1310b  124942
+          eu-west-2   drain  paused  16db95  capacity-pending       fcqiscurc6ss  4e7464  646873
+          eu-west-1   seal   paused  63d33d  seal-acknowledged      u1zeqgqbjrdt  a90e9c  598430
+          ap-south-1  warm   paused  b9aaee  no-exception           0vxvrrf7t4o5  1737b5  104616
+          sa-east-1   hold   ready   f069ae  no-exception           1s10vqk2yjdz  dfbc19  460262
+          us-east-2   hold   armed   ad77c1  capacity-pending       34joacv7css3  66f0b3  428917
+          sa-east-1   seal   paused  dc3d04  no-exception           47w3qn4xqbhe  af6c8f  758466
+          eu-west-2   drain  sealed  6fd89b  capacity-pending       2ul9w1ugakvn  e55fec  440888
+          us-east-2   drain  armed   a0368f  warm-pool-nightly      94hxhvuk71ao  79846b  331890
+          sa-east-1   drain  ready   d883b3  carried-forward        3wrywe0af9p9  ddf9bd  552946
+          us-east-1   hold   paused  8b5a4b  seal-acknowledged      gfxqve1098us  f0ac71  314035
+          sa-east-1   warm   armed   ce048b  carried-forward        0ts6wzf2hdnc  69b083  387583
+          us-east-1   drain  paused  7299b6  seal-acknowledged      1qoikz090ueq  16c629  258129
+          ap-south-1  hold   ready   fce51a  seal-acknowledged      avpa50l8vuiu  c10cf4  169636
+          eu-west-2   hold   armed   b9fc73  drain-scheduled        wytta6it76k0  4b7083  329306
+          ap-south-1  drain  paused  82040f  capacity-pending       ox08q4k0yyt3  ee52f4  455108
+          eu-west-2   drain  armed   56d9fe  capacity-pending       sca7rum910so  4ab4d7  144912
+          eu-west-2   hold   sealed  7deec5  drain-scheduled        3j89lnqqayku  9297f0  537315
+          eu-west-1   hold   paused  287179  capacity-pending       d0ziyq9xlzf2  dd4fe5  103958
+          us-east-1   drain  armed   1cb85c  warm-pool-nightly      44mwa9k0jlrn  380662  364698
+          eu-west-2   warm   sealed  ad8abd  drain-scheduled        arpx39hge6ll  aa58a7  857814
+          us-east-2   warm   paused  609180  carried-forward        uxjl2kmf4wt6  2498e8  960833
+          us-east-2   seal   paused  54a7de  rotation-verified      52eszynr8og0  f501a9  833813
+          sa-east-1   hold   paused  db1be4  warm-pool-nightly      tb8qkefo2a0e  e8e1b9  935495
+          us-east-1   warm   paused  8e1ef7  capacity-pending       qfppbp801125  77b7f6  365001
+          us-east-2   hold   paused  e823d9  seal-acknowledged      szqyv8guk1oi  208132  266272
+          us-east-2   drain  armed   65a4f2  drain-scheduled        4e42b1ukwbdk  50ae64  835179
+          eu-west-2   warm   paused  3ab2b2  warm-pool-nightly      d8lq6bmkg3qt  987cb3  311577
+          eu-west-1   drain  sealed  49efc7  rotation-verified      qlzfypy944fa  b1d3bf  178674
+          us-east-2   warm   armed   267209  warm-pool-nightly      hjhs36wjo4vi  3d32c7  275855
+          ap-south-1  hold   sealed  bf40a9  capacity-pending       3zk41ey33qej  7d8a31  472910
+          ap-south-1  drain  armed   3aca9c  rotation-verified      ir9p2abb19v8  6e11d1  363430
+          eu-west-1   seal   armed   31257e  seal-acknowledged      hw1fjjq6g1b9  4bdc89  459515
+          us-east-1   warm   armed   cb5ae2  seal-acknowledged      8harg1md2d50  108777  468877
+          ap-south-1  seal   sealed  237f2b  entitlement-audit      19e6kjftfror  35dda2  473477
+          us-east-1   drain  sealed  482ca3  seal-acknowledged      y23hnvblx5f4  b146b1  276609
+          us-east-1   seal   sealed  6854bb  carried-forward        d2l0t2h7z6m4  92e805  532418
+          eu-west-1   drain  ready   8a45cb  carried-forward        xan9doe5ik2d  fed3ed  120930
+          us-east-2   drain  ready   80d9a6  rotation-verified      808xuk3ts416  a1911e  449817
+          us-east-1   drain  armed   994f10  entitlement-audit      1fg23zs69yoz  54c679  269629
+          eu-west-1   drain  ready   2abb74  no-exception           ymutlihcndqx  ba6626  336842
+          eu-west-2   seal   paused  5fd517  warm-pool-nightly      cp2zchopkzuh  c8b405  758968
+          us-east-1   seal   armed   45e907  rotation-verified      cmysg4wrjgtn  f193cc  442086
+          us-east-1   drain  armed   2d604c  no-exception           ztgnnwsp15jq  66ecf1  620408
+          us-east-2   warm   sealed  23ae42  rotation-verified      wqwpew8n9top  79f7c8  768140
+          us-east-1   drain  ready   964a37  warm-pool-nightly      7005ll3yxdhc  d35cf8  255669
+          eu-west-1   warm   armed   9c8b52  warm-pool-nightly      4zyz6oa6lcz4  9650de  774428
+          eu-west-2   hold   ready   8f7e48  no-exception           rn5fxd3qbx6a  423db0  939072
+          eu-west-1   warm   ready   e2ee0b  entitlement-audit      6aycolcnwg7v  d0b5b1  491145
+          eu-west-1   drain  armed   b3c06b  warm-pool-nightly      k2z3kx9ylfxl  e27b17  946720
+          us-east-2   warm   paused  27f285  capacity-pending       0q18zsr69epv  37d191  466448
+          sa-east-1   hold   sealed  15a933  no-exception           e7uyaa7y7wnt  aaf7bf  125426
+          eu-west-1   warm   ready   4ceeee  carried-forward        3o29tzfhu428  f8d4cc  503522
+          us-east-1   warm   sealed  fa6c91  seal-acknowledged      8v1k9b4hdwio  398e6b  172537
+          ap-south-1  warm   ready   c95cc3  capacity-pending       spkqntz5ipc1  efd50b  134827
+          eu-west-1   seal   ready   780456  carried-forward        blg8n1b7s5al  3e1c51  866110
+          us-east-1   hold   armed   52bb9f  carried-forward        v08wzucpgak7  b5824a  296135
+          us-east-1   warm   armed   ac2783  capacity-pending       d6eg85ojw8fy  3adb1d  115409
+          us-east-1   seal   ready   a5f0f9  rotation-verified      z6mw46jezzre  4b857b  728620
+          us-east-2   hold   sealed  5e297e  rotation-verified      fsmx0z2uwk7b  286c2f  409945
+          us-east-2   hold   ready   7aeb97  entitlement-audit      3o5x5upmi3rm  9c7423  946231
+          us-east-2   warm   sealed  6bac74  no-exception           yjuv2ilu7pgl  fc4b25  251640
+          us-east-1   hold   sealed  36168f  no-exception           pu1iwt987qj4  dc4403  664248
+          us-east-1   seal   ready   588812  rotation-verified      cijzn2i3poni  9d793c  328894
+          us-east-2   seal   paused  5c913a  drain-scheduled        zsv4kiyj3v5n  cd158b  875604
+          eu-west-2   seal   paused  a3c05a  seal-acknowledged      tpv9cld0twkx  946cf9  397854
+          us-east-1   drain  sealed  2ee549  no-exception           3cx3zdyp5den  572a65  156120
+
+  # ══ N4 — sentinel (capv3-sentinel-span) ══════════════════════════════════
+  #
+  # Designed to read low/zero in BOTH cells on agent 0.5.0 and to flip red
+  # the moment the agent learns retention/summarization — v3's E, per
+  # ruling iv. Span shape from the alt draft (resolves flag f3: operative
+  # evidence = 4 blocks ≈ 1.74x 4096, inside the ruled 1.5–2x band), with
+  # an ARMORED FILE SET added in B2 round 2.
+  #
+  # Why the armor: round 2 refuted the unarmored set outright — all four
+  # file names are visible in the first prompt (file_inventory), the check
+  # is stateless and tests the final span first, and the step-1 giant
+  # block is newest-exempt: READ f1..f4 at s1, write the global span at
+  # s2, done in TWO steps with zero window pressure. The sentinel read
+  # green for the most natural strategy there is.
+  #
+  # Mechanism now: refs/f1..f6 exist; the span runs over f1, f2 plus TWO
+  # cksum-picked files revealed stage by stage (nB = f(span(f1,f2)),
+  # nC = f(stage-B span), nC != nB asserted). A batch reader holds six
+  # tails and still cannot compute the final span — it does not know which
+  # four files count. Decoy tails are chosen so every candidate stage-B
+  # span is distinct (guess floor 1/4, asserted); stage reveals name the
+  # picked files in plaintext for the honest walker.
+  #
+  # Carried value: a SPAN (largest minus smallest) — the running state is
+  # a (min,max) PAIR, and the single writable slot is {1,4}-width-gated
+  # (plus an exact byte cap), so it carries at most ONE 4-digit number.
+  # The alt draft's unbounded [0-9]+ admitted a min·max concat stash
+  # through the writable reprint; closed and regression-tested.
+  #
+  # RESIDUAL WALKS — documented and generator-asserted, not denied:
+  #   (i) final-first close: the stateless check still accepts a correct
+  #       final span written from nothing — but composing it now requires
+  #       knowing BOTH armored picks, i.e. walking the reveals (or a blind
+  #       tail-pair guess across 6 uniform files at ~3 actions per try).
+  #   (ii) stage-skip: a correct stage-B span draws the f_nC reveal
+  #       without stage A ever passing — knowledge of nB is still needed.
+  #   (iii) disciplined extreme-tracking with the single 4-digit carry +
+  #       eviction-aware ordering can pass in ~7 actions once the picks
+  #       are revealed. That IS elite window management — a green cell is
+  #       only a reading after action-log verification (which files read,
+  #       what interim values written).
+  #
+  # Expected 0.5.0 deaths (arithmetic, not luck):
+  #   JIT walk: every stage beyond A needs a term whose block is gone —
+  #     re-read loops burn steps (dropped_reread/research high);
+  #   batch walk: ~10.6k giant read is newest-exempt for one step, then
+  #     cliff-evicted whole; only stage A is computable from it, and the
+  #     stage-B pick is unknowable at that point.
+  #   Three operative blocks never coexist (asserted for every triple),
+  #   and stage C needs three tails at once unless an extreme is carried —
+  #   which the slot width fights.
+  #
+  # Condition 9: a retaining agent solves in 4 READ + 3 EDIT = 7 actions
+  # (reveals name the picked files; decoys are never read on the honest
+  # walk).
+  #
+  # Condition 11 self-test: batch close at s2 fails — only stage A is
+  # computable from the giant newest block; the picks are cksum-armored.
+  # No compute channel (RUN fixed-argv); no search shortcut (de-anchored
+  # positional tails, and the spans themselves appear in no file).
+  #
+  # Freeze note: reads 0/0 are only meaningful with the probe confirming
+  # window_peak_tokens near/over budget and the death shapes above; a zero
+  # from parse errors or provider faults is not a sentinel reading. A
+  # green is only a reading after action-log verification (residual iii).
+
+  - id: capv3-sentinel-span
+    instruction: "tests/check.sh rejects reading.conf but reports only the FIRST problem each time it runs, bringing one more read-only record under refs/ into play at a time. Each record ends with the value it contributes. Fix reading.conf until the check passes."
+    writes: [reading.conf]
+    verify: "sh tests/check.sh"
+    timeout_secs: 30
+    seed:
+      - path: reading.conf
+        contents: |
+          reading = 0
+      - path: tests/check.sh
+        contents: |
+          #!/bin/sh
+          f=reading.conf
+          fail() { echo "ledger problem: $1"; exit 1; }
+          test "$(wc -c < "$f" | tr -d ' ')" -le 15 || fail "reading.conf must stay within 15 bytes"
+          sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^reading = [0-9]{1,4}$' \
+            && fail "the file must hold one line, 'reading = <number, at most four digits>' — nothing else may live in it"
+          test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "1" \
+            || fail "the file must hold one line, 'reading = <number, at most four digits>' — nothing else may live in it"
+          v=$(sed -n 's/^reading = //p' "$f")
+          t() { tail -n 1 "refs/$1" | awk '{print $NF}'; }
+          span() { printf '%s\n' "$@" | sort -n | awk 'NR==1 { lo = $1 } { hi = $1 } END { print hi - lo }'; }
+          a=$(t f1.txt); b=$(t f2.txt)
+          sA=$(span "$a" "$b")
+          nB=$(printf %s "$sA" | cksum | awk '{print $1 % 4 + 3}')
+          c=$(t "f$nB.txt")
+          sB=$(span "$a" "$b" "$c")
+          nC=$(printf %s "$sB" | cksum | awk '{print $1 % 4 + 3}')
+          d=$(t "f$nC.txt")
+          test "$v" = "$(span "$a" "$b" "$c" "$d")" && { echo ok; exit 0; }
+          test "$v" = "$sB" \
+            && fail "reading must now also account for refs/f$nC.txt — largest minus smallest across f1, f2, f$nB and f$nC"
+          test "$v" = "$sA" \
+            && fail "reading must now also account for refs/f$nB.txt — largest minus smallest across f1, f2 and f$nB"
+          fail "reading must be the largest minus the smallest of the values ending refs/f1.txt and refs/f2.txt"
+      - path: refs/f1.txt
+        contents: |
+          ap-south-1  warm   paused  371fcb  no-exception           xwjq4v7rdxun  5492fb  5318
+          eu-west-2   drain  armed   4791a9  drain-scheduled        a9cbrqo05gn3  2dfd08  9730
+          eu-west-1   seal   paused  f50ef2  no-exception           lsmhnvgidhs2  599202  5818
+          eu-west-2   drain  sealed  e7ec1e  drain-scheduled        7lggfsdaz6s9  ec092a  1288
+          ap-south-1  warm   sealed  7ba712  entitlement-audit      cswzpa9646s8  f3ad54  9658
+          us-east-2   hold   armed   7d1e79  capacity-pending       lj8y771o6aaz  d7b166  2399
+          eu-west-1   warm   ready   87d783  seal-acknowledged      llrluv98s5yj  d0d806  9175
+          eu-west-2   seal   paused  88de29  carried-forward        mzpfktu9gtva  a032cd  7353
+          us-east-1   hold   sealed  62a11e  drain-scheduled        lbqrwtlj5tm6  b1fc7d  8205
+          sa-east-1   drain  sealed  89b48f  warm-pool-nightly      cvrh1pad2tl9  8dfcd7  2737
+          us-east-2   drain  paused  5b9d90  carried-forward        cbeok7uhav5i  9db342  9831
+          us-east-1   hold   sealed  7d01b5  drain-scheduled        mpbu70gez34z  ef862e  5891
+          eu-west-1   hold   armed   84727f  carried-forward        mvr074mu255n  c6f911  5089
+          sa-east-1   seal   ready   df038a  rotation-verified      hcazneqqyl81  8671f9  3630
+          eu-west-1   warm   ready   59b114  entitlement-audit      d3nsog87zxf0  4d14c5  9097
+          eu-west-2   seal   sealed  352cf5  drain-scheduled        yigi9mki8e8b  b20fc8  9565
+          sa-east-1   hold   armed   bab33f  capacity-pending       k7fazxmzppby  55fba0  4608
+          eu-west-1   warm   paused  39ba01  rotation-verified      g3uxaapkybr7  a1f7ce  3294
+          eu-west-2   drain  sealed  a7365c  rotation-verified      q9vhla6nazdj  f052da  7910
+          sa-east-1   warm   armed   b11a7a  drain-scheduled        2d1a9s2dm0v5  382d19  3228
+          ap-south-1  hold   sealed  11b469  warm-pool-nightly      4ytjw88xhafb  7282f8  8066
+          sa-east-1   drain  ready   2cf346  capacity-pending       vudou71i78sl  5dde07  1334
+          sa-east-1   hold   sealed  41a803  drain-scheduled        ypi46go940sn  331060  9090
+          eu-west-2   seal   ready   f79c9c  capacity-pending       k2xhjxswpuvj  b07204  8604
+          us-east-2   warm   sealed  3cf037  carried-forward        qcblgp3cns0h  643fdd  3106
+          us-east-1   seal   paused  86157d  seal-acknowledged      kjg2fmemtbrc  37e310  6748
+          us-east-1   drain  paused  703929  warm-pool-nightly      gjj9hn75vv9p  152bfe  2053
+          sa-east-1   drain  paused  71838c  carried-forward        slujg3phwddb  138a4d  9403
+          eu-west-2   hold   sealed  4df9ce  drain-scheduled        19poieo4eicb  cc2f63  2561
+          eu-west-1   warm   armed   53bd9d  warm-pool-nightly      84xbgmrhvf8n  3c5456  2803
+          eu-west-2   warm   armed   740969  no-exception           ix5yay2sbe23  68b395  4531
+          us-east-1   drain  armed   64b8ed  seal-acknowledged      qdkbfm7r5v3f  dca103  3602
+          eu-west-1   seal   armed   a329c7  rotation-verified      zbcou7ehky14  f0c69a  7538
+          us-east-2   hold   sealed  250c65  seal-acknowledged      5pfhmzkhebmt  97a577  3171
+          ap-south-1  seal   ready   aafedd  drain-scheduled        ej35huhakrvb  3f109e  7877
+          eu-west-2   drain  armed   4c52d2  seal-acknowledged      qyfg7i58gxpb  865e30  8862
+          eu-west-1   seal   armed   9f8a28  carried-forward        fublrhkxarls  4683e5  6227
+          us-east-1   seal   armed   81ca47  carried-forward        1byz5wagqf2v  46a452  5315
+          us-east-2   drain  ready   c62d51  seal-acknowledged      k8k3a74wmeu3  7cc5f9  1286
+          eu-west-1   warm   paused  e0c072  warm-pool-nightly      v6lqsxti7x4h  92a220  6152
+          eu-west-1   warm   ready   edde96  carried-forward        im07ywgt7toz  304503  2391
+          ap-south-1  seal   ready   aa434a  carried-forward        1mlnpj4jgzh2  a6f164  9450
+          eu-west-2   warm   ready   78343e  no-exception           bu1tsx011nkf  835509  3727
+          us-east-2   drain  armed   a29247  entitlement-audit      2nlvrfqt5u9k  455db8  5105
+          us-east-2   hold   paused  f7fb86  entitlement-audit      lus850674i09  fe195c  8078
+          us-east-1   seal   paused  efeb6a  no-exception           x7t0rfv67jxu  43bda2  3511
+          sa-east-1   warm   armed   c623ab  warm-pool-nightly      2e9k4csio4cw  4c2b11  8897
+          sa-east-1   drain  armed   87b071  no-exception           afkmzqg6l2n8  fd9afe  5705
+          ap-south-1  warm   ready   498590  rotation-verified      5jdodcfrhi0c  50414d  8797
+          eu-west-2   warm   paused  f125b8  warm-pool-nightly      7ltgyurayket  f7d4f1  3559
+          sa-east-1   warm   paused  81d216  seal-acknowledged      c0ntmx56idt4  1a41b4  6427
+          us-east-2   drain  ready   e733fb  entitlement-audit      97kd5h262ke7  36277e  8410
+          us-east-2   seal   armed   ed9511  warm-pool-nightly      abmv2wrsgipc  8b0fc4  5374
+          us-east-1   warm   ready   308efc  seal-acknowledged      agu5frprdna3  6d4ec1  1366
+          eu-west-1   hold   paused  7528c0  rotation-verified      if1nn5ryqciz  2fdecc  9499
+          eu-west-2   hold   sealed  e27540  seal-acknowledged      4n9rw5xwl5bw  7ff346  7636
+          us-east-2   hold   sealed  8fbc2e  capacity-pending       emr7t95dcjiz  208eab  1028
+          sa-east-1   drain  paused  9508e8  capacity-pending       5j9uefe04gso  7ba84f  1490
+          eu-west-1   drain  ready   37c875  rotation-verified      7ryumat2db0j  a148a0  3805
+          ap-south-1  seal   armed   cf0256  no-exception           mncbi120nonf  a369a3  6441
+          us-east-1   seal   armed   f159d6  entitlement-audit      zrvgnryednnc  9ef420  6520
+          us-east-1   drain  armed   809264  entitlement-audit      vby0iya1e7gc  77ca72  3179
+          us-east-2   hold   armed   e8168e  warm-pool-nightly      j6omewhn8y2g  ce27f0  3826
+          eu-west-1   warm   sealed  7b478d  drain-scheduled        o62rrr9fz4q6  6d3cea  6531
+          sa-east-1   hold   paused  6f5cc6  seal-acknowledged      mneubc6v5dir  296137  2353
+          sa-east-1   hold   paused  baab16  drain-scheduled        2omcwg8y3vxn  c0e518  5100
+          eu-west-1   seal   sealed  a4d61a  entitlement-audit      ym8fm22su7ow  67e196  2538
+          sa-east-1   drain  paused  ab0907  seal-acknowledged      z7xk8fvugord  5f780b  6826
+          ap-south-1  warm   armed   cc9b0b  drain-scheduled        uxydgyrq7qt0  bab3b1  7296
+          sa-east-1   drain  paused  9a131c  entitlement-audit      o6mnxktxtic7  8b7872  7148
+          us-east-2   drain  paused  26825a  entitlement-audit      1hsxsoa9osv4  cf3146  5996
+          us-east-2   drain  paused  d679a9  rotation-verified      k2gk46bbjijc  b2a482  9166
+          us-east-1   warm   paused  3c4a13  warm-pool-nightly      lpu9wvp67j0g  989ec8  6684
+          eu-west-1   drain  ready   6c902e  drain-scheduled        riq4y47s3yxy  8f60f9  4655
+          eu-west-1   seal   sealed  219546  entitlement-audit      npe93ks7wmdv  41161b  6473
+          eu-west-1   drain  ready   69b276  drain-scheduled        6d47uka831ta  324886  9076
+          eu-west-1   warm   armed   9e0051  rotation-verified      eifpcui09qsr  1b2ab4  6831
+          eu-west-1   seal   ready   89db14  carried-forward        te4vztv6z7he  d6c6f1  3798
+          us-east-2   hold   ready   9a7c9f  capacity-pending       frq2bs7l0gh6  5bf1ab  6983
+          eu-west-2   hold   armed   88446a  entitlement-audit      2vdulu0lf4vf  90809d  5020
+          eu-west-2   hold   armed   731aa4  drain-scheduled        lhmmnppadwtm  81c1ea  4843
+          us-east-2   drain  paused  9c717c  carried-forward        js728e4h67m0  a649aa  6754
+          ap-south-1  warm   armed   994b56  seal-acknowledged      sfj90ppd1s1b  49f157  3006
+          sa-east-1   drain  paused  de9486  capacity-pending       rcydlqb43jhg  db891d  5210
+      - path: refs/f2.txt
+        contents: |
+          sa-east-1   seal   armed   4b3f24  rotation-verified      knsrsrup4joz  114133  8600
+          us-east-1   seal   sealed  89c408  entitlement-audit      9ur89al1h8q1  5e18e8  6371
+          eu-west-1   seal   sealed  67733f  carried-forward        zpvylbn76e0z  1a9a49  2330
+          eu-west-1   hold   paused  d1289e  carried-forward        w43aq81e54z6  8f396e  8649
+          us-east-2   warm   ready   61bc86  seal-acknowledged      tspgt7mwwbbr  ebdd45  5234
+          eu-west-1   hold   armed   2be299  capacity-pending       fr18ip93vwjn  cd917d  7374
+          us-east-1   drain  ready   87927d  capacity-pending       mpduzfyvg0ct  e7829d  5482
+          us-east-2   drain  ready   89701d  drain-scheduled        troemac8gnpa  a602d7  8826
+          sa-east-1   drain  paused  3df631  warm-pool-nightly      cg2sx3s8wis1  971464  5867
+          us-east-2   drain  sealed  76ab1e  entitlement-audit      2pgsjkisfdji  5dbc30  2556
+          eu-west-1   hold   paused  d5485f  entitlement-audit      zoys0sostzfq  f5fe6a  5139
+          us-east-2   seal   armed   75b1c0  entitlement-audit      rzgl88dnpwsa  7517fd  5988
+          sa-east-1   hold   sealed  336ff3  seal-acknowledged      z5jbutxt3vt3  d51a21  9410
+          us-east-2   warm   ready   991c73  capacity-pending       6hnyiqm2wb0s  400eca  4562
+          ap-south-1  seal   armed   96481a  entitlement-audit      c30e6gp8okbr  b2189f  3611
+          eu-west-2   drain  armed   3d4947  rotation-verified      o6o574xh7r0t  a721b6  9107
+          eu-west-2   seal   ready   34afc5  carried-forward        b8lu9u8ewtsg  66a378  6552
+          eu-west-2   hold   ready   6c5ed2  carried-forward        f6hgl4n03gpj  6e2b57  6545
+          sa-east-1   warm   ready   ce0da9  carried-forward        ufy5a88k5aex  ac6ba3  9154
+          sa-east-1   hold   paused  c421be  entitlement-audit      7gjvrcnlxgbe  1110d2  9214
+          ap-south-1  hold   sealed  957de2  no-exception           uujbrun851jt  dfb5ce  1258
+          ap-south-1  hold   paused  ff3c96  no-exception           75avsokowef9  4d5bea  3251
+          us-east-2   seal   armed   a4757d  seal-acknowledged      833jezwyewfg  3c52fe  1682
+          eu-west-2   seal   ready   2bd8ae  seal-acknowledged      v9ijyin4349l  34e871  3717
+          ap-south-1  seal   ready   f30db5  entitlement-audit      vetidd1pmkn3  a7f5c5  6960
+          us-east-2   warm   sealed  d4eb52  rotation-verified      rpgpzinrdb8w  9a7d5b  4287
+          eu-west-2   seal   sealed  d45c47  warm-pool-nightly      r72tob8fom96  409023  5515
+          us-east-2   drain  sealed  44e1c9  carried-forward        p73bkgwkheox  3446e0  9424
+          us-east-1   warm   sealed  91249b  capacity-pending       1tkhoz38qb5b  ff7d21  4692
+          eu-west-2   drain  paused  8e8aa8  carried-forward        kuujhajui40a  c4ffee  5525
+          eu-west-2   drain  ready   c38079  entitlement-audit      zqislvewoaf4  dcf6f3  9670
+          ap-south-1  drain  paused  347502  rotation-verified      w81way1vsr5a  8b324d  5934
+          eu-west-2   warm   ready   6f99ce  capacity-pending       2gkoonilp65s  450e87  7908
+          ap-south-1  seal   paused  5cb6f8  seal-acknowledged      x5bo0yuf58uv  ba5416  7086
+          eu-west-1   hold   paused  78e38b  entitlement-audit      s8espzu3bdlb  5d4043  1332
+          us-east-1   warm   armed   f2cbcc  no-exception           4w2itdfx5roy  6520a3  4713
+          ap-south-1  drain  paused  9ee9ae  seal-acknowledged      0e9k4zps1fzs  e1053f  7972
+          us-east-2   seal   sealed  256837  carried-forward        uyyed1fomv3m  e77e26  7872
+          eu-west-2   hold   sealed  2498b4  rotation-verified      4ttnno6sxdym  72044a  1421
+          eu-west-2   warm   sealed  9d1525  rotation-verified      qtbdag1vm3qd  5c8b4b  3163
+          eu-west-2   seal   armed   54d737  warm-pool-nightly      8guhnjltozkx  d05966  2775
+          eu-west-1   warm   sealed  eb1a59  entitlement-audit      heoof4bdl7wi  15ebb6  5769
+          eu-west-1   hold   sealed  c5957b  warm-pool-nightly      pe5o8fj38ihm  7277fc  2713
+          ap-south-1  warm   armed   621b35  no-exception           bq36w2fpixjq  6e1c72  4049
+          ap-south-1  hold   sealed  5073c7  warm-pool-nightly      udphu8kxjknv  a34fcc  3740
+          us-east-2   hold   armed   94c3e5  no-exception           z9h7dcdpnma3  8656e3  1772
+          us-east-2   seal   armed   154fe1  entitlement-audit      rkbdbr8jfc96  4430df  9740
+          us-east-1   warm   sealed  8c3f80  carried-forward        hedbqtzo98ti  860864  9825
+          us-east-1   seal   paused  49f14b  capacity-pending       y9g609t7qgqv  b88b42  8356
+          eu-west-2   warm   armed   c3d5ee  no-exception           iw8dliv739rt  5730db  2909
+          us-east-2   seal   sealed  5d413f  entitlement-audit      k69jyc4yvqmi  44fede  4015
+          sa-east-1   seal   paused  355998  capacity-pending       1u6tls9hwww2  ff087c  4405
+          us-east-1   hold   sealed  a00ac0  seal-acknowledged      1xh4ddnxhh8g  825d80  8355
+          eu-west-1   hold   ready   b5e086  capacity-pending       xsbwa9eqv322  428495  8456
+          eu-west-2   seal   sealed  6c22e9  warm-pool-nightly      kphrxd51ut9s  f95216  5798
+          us-east-2   drain  armed   7974aa  carried-forward        hh7h9uup3qfq  669e7b  2625
+          eu-west-1   drain  ready   18b2ac  drain-scheduled        qyjgc0tnz08l  af9f94  5838
+          sa-east-1   warm   paused  4c55bf  no-exception           d138xqf7ihmv  951cf6  6681
+          us-east-2   warm   armed   a456d2  capacity-pending       jmihdef8fwtx  5e3e9d  9825
+          us-east-2   seal   armed   d08c98  seal-acknowledged      seeyzxx6qjrb  2401bc  4927
+          us-east-1   seal   sealed  fe2f13  seal-acknowledged      43y3am8yhlt9  a23a95  4128
+          eu-west-1   drain  ready   b8e55f  no-exception           0x910pdzr97w  fa71cc  8966
+          eu-west-2   hold   ready   6df531  no-exception           q4q5q19lfubt  bcebb0  6860
+          eu-west-2   drain  armed   69e1f6  no-exception           3l591hu9of46  e77655  5406
+          us-east-2   seal   sealed  8fc050  drain-scheduled        5rk3n3y27vf0  ceacdd  6200
+          ap-south-1  warm   sealed  fb5023  rotation-verified      8kkxefwivao1  65028c  1457
+          eu-west-2   drain  sealed  905147  entitlement-audit      bb9w2bszsy0e  ecdaf9  4457
+          eu-west-2   seal   ready   4cbb7d  capacity-pending       9pj7zsjun3mx  d9d669  2920
+          eu-west-2   warm   sealed  11fd5a  no-exception           zafe2s8o4n9e  8859f6  5997
+          sa-east-1   seal   sealed  87b2d4  carried-forward        by8kuv1id5pe  e6c1d0  6150
+          eu-west-1   warm   sealed  f21405  capacity-pending       2dhowu9f3sa9  314e57  5085
+          us-east-2   seal   ready   14b655  warm-pool-nightly      41zr4g2smgg1  7a8bdc  9762
+          us-east-2   hold   paused  3d607d  seal-acknowledged      s0xgk43n2jiu  8bd935  5706
+          us-east-2   warm   paused  607ce9  rotation-verified      6555ofg6u6fl  1535a3  8113
+          sa-east-1   warm   ready   b8cfe9  drain-scheduled        qlog52enzvgx  b66b8d  8387
+          sa-east-1   seal   sealed  d56bee  warm-pool-nightly      7lp1l28p9buz  fb16a5  5998
+          eu-west-2   drain  paused  855b36  rotation-verified      w3yc213demea  81795b  2976
+          us-east-2   seal   paused  b7cc0d  capacity-pending       qogd8q93ss7x  4cc0b9  2776
+          us-east-2   warm   paused  af01f7  capacity-pending       vpqb4u3gra51  3900ff  2590
+          eu-west-1   hold   armed   3cacd7  warm-pool-nightly      nbe7zofomydw  7778bf  3315
+          us-east-1   drain  ready   c5368f  seal-acknowledged      zhri6qgpjphq  1cd823  4436
+          ap-south-1  drain  paused  1f0b10  capacity-pending       h0kpvkqm9d01  71ad6e  8676
+          ap-south-1  drain  sealed  d46474  warm-pool-nightly      utd1gomph1gu  2f4691  1120
+      - path: refs/f3.txt
+        contents: |
+          eu-west-1   drain  ready   7e44cc  warm-pool-nightly      94zgd1bwkyc6  d0b023  5875
+          eu-west-1   drain  ready   61a4bf  drain-scheduled        mwqy3q8wohyp  e3d00f  5159
+          ap-south-1  drain  sealed  a0392c  seal-acknowledged      1iyb1f2plrhu  fd520e  5009
+          eu-west-1   drain  sealed  5270a4  carried-forward        7vivnn22ngq7  e3e980  5953
+          eu-west-2   hold   ready   79c981  seal-acknowledged      0kdwu2g98722  249c29  4244
+          ap-south-1  seal   paused  afbd42  entitlement-audit      4gf1nemeb5d5  8c86ad  9249
+          eu-west-1   warm   paused  139de7  seal-acknowledged      rlsusrup1zvk  9b7cb3  7334
+          us-east-1   warm   paused  c6c03e  carried-forward        busa7nwkf82e  454617  3798
+          eu-west-2   seal   armed   2e232a  entitlement-audit      hrl12ba34ijf  52f169  6193
+          eu-west-2   seal   ready   5b0ea8  warm-pool-nightly      jimbxixptmkf  98ff35  2023
+          ap-south-1  seal   sealed  1d9fa6  drain-scheduled        264o9mzeb69a  7c6ef3  5983
+          us-east-1   seal   sealed  d25716  warm-pool-nightly      5lnloz2oq5iy  d48e0a  4960
+          eu-west-1   drain  ready   d83f21  warm-pool-nightly      8e7gqw18qxi3  fe0f54  1522
+          us-east-2   warm   paused  13f62d  rotation-verified      nijjrvdc61jt  3a6a8e  6105
+          eu-west-1   warm   armed   a2bc09  seal-acknowledged      p97wujo8fmrq  8359c1  7373
+          sa-east-1   warm   paused  27e4a2  rotation-verified      cknbk2yuqkl0  3b8c71  6361
+          sa-east-1   warm   armed   78c6fa  capacity-pending       ob1oj4656sun  f115d1  2520
+          eu-west-2   seal   sealed  d02da4  no-exception           9kx0axzjdujf  f6e686  7331
+          eu-west-1   hold   armed   22de27  warm-pool-nightly      69kcp8djc7qo  f99da5  1822
+          eu-west-2   warm   paused  c5d1ba  no-exception           wxt074o89r3y  7727a0  9385
+          ap-south-1  warm   ready   c1dfa4  drain-scheduled        ag8501osinwd  a4d85c  6261
+          eu-west-1   seal   ready   680194  seal-acknowledged      l751u8k5u8by  9476f7  8059
+          us-east-2   warm   sealed  8e6bc6  seal-acknowledged      hkzw9vczs0kc  c0d5b0  1481
+          eu-west-2   hold   paused  800d94  capacity-pending       15335sumemuh  c68c31  7544
+          us-east-2   drain  paused  20793e  no-exception           9uzkynhgx65f  5b8d71  8824
+          eu-west-2   drain  sealed  8e6c2a  entitlement-audit      wpx2r1t0lvn2  86af9c  7506
+          eu-west-1   seal   paused  5141aa  carried-forward        yobdnxe0oy5m  231c48  9847
+          ap-south-1  hold   sealed  ac0dd1  entitlement-audit      xrwrevy2zrt6  a49835  4166
+          eu-west-1   hold   paused  334cdc  drain-scheduled        8v8paevc3mkh  555805  9570
+          us-east-1   warm   sealed  ba8641  rotation-verified      syq59norpd8x  88b089  8768
+          sa-east-1   drain  ready   8cb6a8  seal-acknowledged      0vq17l8w1002  420753  8973
+          us-east-1   warm   ready   2a2bad  rotation-verified      8tkpcfpefvcj  627352  9950
+          eu-west-2   drain  sealed  2eef70  seal-acknowledged      2f3msj3dk69y  cdb8e3  6260
+          sa-east-1   warm   ready   8f1dd8  no-exception           j36s5mvtrosc  daa22b  6750
+          us-east-2   hold   ready   20754a  capacity-pending       dtedm9p680u8  3c1a33  5956
+          ap-south-1  seal   armed   8669a9  drain-scheduled        h1qw9kuwy5dc  606b55  2532
+          eu-west-2   hold   paused  c586d4  entitlement-audit      j1ocjzzoypkc  806b44  9346
+          ap-south-1  drain  sealed  13c5fe  no-exception           4qsd9hs2ssxj  9c6264  7040
+          sa-east-1   drain  ready   dd19e5  capacity-pending       rzrdru52mggq  8a454f  2494
+          eu-west-2   warm   paused  e3cb0e  no-exception           w3hlezn9sswy  2b3caf  6873
+          ap-south-1  hold   paused  7a5ab1  rotation-verified      fz851fqosg6a  d731f8  5915
+          eu-west-2   seal   sealed  d9dc1a  carried-forward        9c6ijxq06byl  c5e471  9379
+          eu-west-1   drain  armed   103445  seal-acknowledged      psn0vvp6flo7  6258f1  9158
+          us-east-1   warm   sealed  84f252  seal-acknowledged      lga6c6e1l2or  42465c  1597
+          sa-east-1   warm   ready   412a29  warm-pool-nightly      2wx5maxqgwq1  7eec54  6282
+          eu-west-2   hold   sealed  1e561b  seal-acknowledged      0xyjmajjbhj4  d6ef0b  9431
+          eu-west-2   drain  sealed  ef35a8  seal-acknowledged      2d5dbjuler4g  ca56b7  6505
+          us-east-2   hold   armed   ca2e60  carried-forward        oqax1kb5fds2  a683d8  2046
+          eu-west-2   warm   ready   2f15d4  entitlement-audit      k8k4wxcnoyni  13a815  3164
+          us-east-1   warm   ready   7e3928  rotation-verified      ervtq8r0ns37  be69dc  9631
+          ap-south-1  seal   armed   72ff19  no-exception           b596j1qeibtf  9c33b0  3393
+          ap-south-1  seal   ready   a7ecda  carried-forward        rlt2it5955ka  640fbe  5826
+          eu-west-2   warm   sealed  c84c85  seal-acknowledged      zbhjy3201su2  ea51b0  8016
+          eu-west-1   seal   armed   8463a3  drain-scheduled        sx3kr279jcy2  84996f  1367
+          eu-west-1   seal   sealed  3e254b  entitlement-audit      28jcbn3c6m5a  8acab2  6186
+          sa-east-1   hold   armed   509e6d  warm-pool-nightly      jfx36u0fytz9  5b09ec  1402
+          ap-south-1  drain  ready   f4aa34  carried-forward        3ewzvgmdhyxf  28bdc8  3299
+          ap-south-1  seal   sealed  728485  carried-forward        0sqalrzl8jye  913654  2290
+          sa-east-1   drain  paused  21d948  warm-pool-nightly      z1r66xfegs5b  688a44  4979
+          ap-south-1  seal   ready   72a8f4  carried-forward        82l9gi3uh0k3  a5368c  4403
+          sa-east-1   seal   sealed  46575b  carried-forward        kcsua46g3lah  ccfb7d  8683
+          eu-west-2   hold   ready   89a1b9  carried-forward        5obdzbco1ksc  dbfd9d  9123
+          sa-east-1   seal   armed   6c78c5  capacity-pending       aj3wziqpqpgd  e1a830  4904
+          sa-east-1   drain  paused  33e9f4  warm-pool-nightly      g02j7f4mdqtx  32d056  8205
+          sa-east-1   seal   sealed  f60319  rotation-verified      xklml3du5x7k  c2b136  4922
+          us-east-2   drain  paused  b6eff6  carried-forward        oxy8dqh8tc4a  d05095  3887
+          eu-west-1   seal   paused  72c729  capacity-pending       2n7d3k66cxxf  c882fa  9105
+          eu-west-2   warm   paused  9ac1c9  warm-pool-nightly      inzgy306fcgp  1d337c  1017
+          ap-south-1  drain  sealed  61f3eb  warm-pool-nightly      dmybxhy82enk  9b5ac3  3358
+          sa-east-1   hold   paused  5605d6  seal-acknowledged      1zn2mf24s1rz  e8edce  8355
+          us-east-1   drain  armed   8b0e38  drain-scheduled        3mlztdlatsb1  bc4206  5424
+          us-east-1   drain  ready   4dcd25  warm-pool-nightly      p583vs1rg0li  c803b4  4158
+          eu-west-2   warm   armed   7f9068  drain-scheduled        1iqsjt0j18hg  46749b  6492
+          eu-west-1   drain  armed   a09fda  seal-acknowledged      gegl046qyifj  65519f  2581
+          us-east-2   hold   paused  b94245  carried-forward        alou6dnvio65  93254d  3523
+          eu-west-1   seal   paused  dd509a  seal-acknowledged      wky6g77osi60  3afdb1  8974
+          sa-east-1   seal   sealed  e1c9e2  warm-pool-nightly      x6usecq0u7ik  438242  5371
+          eu-west-2   hold   sealed  892f2e  drain-scheduled        ne9xy1208whn  cfa41c  3928
+          eu-west-1   hold   paused  f3a513  carried-forward        yv3x0ae4v5ni  a4775b  9702
+          sa-east-1   drain  sealed  d48eb6  warm-pool-nightly      2cydaxd1bpek  74e226  3020
+          us-east-1   warm   ready   1d4957  entitlement-audit      p678ap6ttlv6  6da8b9  3888
+          sa-east-1   seal   armed   91262f  capacity-pending       jcsnaees64ct  74a8e8  9016
+      - path: refs/f4.txt
+        contents: |
+          us-east-1   drain  armed   6e68a3  carried-forward        r9odm8ugm41o  e49e7e  7035
+          ap-south-1  seal   armed   e6fd8c  drain-scheduled        5kin4p1oq1a4  1c38ee  5190
+          us-east-2   hold   armed   4c56cf  entitlement-audit      tvrw08w5lt9y  901179  2368
+          eu-west-1   seal   ready   869678  seal-acknowledged      d34mjn7t2odb  26df7a  8269
+          ap-south-1  warm   paused  b44dcd  warm-pool-nightly      muz3lhrio0sm  edf025  2152
+          sa-east-1   drain  sealed  c8098e  capacity-pending       i9tpwcn90c3v  7a45db  9019
+          eu-west-1   warm   armed   922864  carried-forward        1or5ad480563  f0ddf5  4824
+          us-east-1   warm   ready   537e6c  rotation-verified      yeqsn6klrvhg  c901cf  2738
+          us-east-2   hold   paused  a36a3e  seal-acknowledged      jrt7hdf51plu  e2fc8e  4795
+          us-east-2   warm   paused  88a296  no-exception           u9fs85prxp10  17cf40  6520
+          us-east-2   warm   ready   8e7183  drain-scheduled        hfdrnfmmtaws  8451ec  3133
+          us-east-2   hold   paused  87c42d  drain-scheduled        rqeb00tztwwz  534214  5964
+          eu-west-2   warm   sealed  401db4  drain-scheduled        b0usan48e9vs  5febbd  4707
+          eu-west-2   warm   paused  ad997f  rotation-verified      qstvvg6kd3vl  f539cd  6258
+          us-east-1   seal   armed   d5c8c1  carried-forward        n13cyb2ur980  4685be  8399
+          eu-west-1   seal   paused  4d8167  drain-scheduled        8bv4wczp6knp  82babc  9811
+          us-east-1   drain  ready   fd73db  carried-forward        7pa3ec66diy2  d81f42  8432
+          sa-east-1   seal   sealed  756ef6  carried-forward        5pgv8zv487s9  f527c5  4664
+          us-east-2   hold   paused  5b0ac7  no-exception           d06jzluy0jfw  84bc00  7546
+          sa-east-1   seal   armed   bf50ee  rotation-verified      wuw0noivpkpg  76e5b9  6319
+          ap-south-1  hold   sealed  8e4821  capacity-pending       qqmapg7eozab  59d1fb  3515
+          eu-west-1   warm   ready   9fca72  capacity-pending       4l9tvef992gm  d331f2  9490
+          us-east-2   hold   sealed  162c98  rotation-verified      tfi8ltdwvvl4  2d3df7  1374
+          eu-west-1   warm   paused  c21a8c  no-exception           xdp6omi7hbch  6f0a78  3318
+          sa-east-1   hold   armed   299c8d  drain-scheduled        q1uqgvb3dd8i  f8f8ea  8862
+          eu-west-2   seal   sealed  c7d499  no-exception           4fl6ne40a7mj  88fda7  5517
+          us-east-2   warm   ready   4fe73d  no-exception           psgm5omb7um7  77d8f6  5215
+          eu-west-1   warm   armed   85adb9  carried-forward        77jght6tbbbb  5816ef  8635
+          eu-west-1   hold   sealed  3485f2  drain-scheduled        yh6cdtw62hcu  abc465  4180
+          sa-east-1   hold   sealed  481ce5  no-exception           v4jwgrdw1sun  a8d5a5  2217
+          us-east-1   seal   armed   b5172a  no-exception           3si3rd0e38ok  167d31  6511
+          sa-east-1   seal   sealed  836830  rotation-verified      2risj3vtv11y  9f7380  1472
+          ap-south-1  drain  ready   88f25b  entitlement-audit      5xw61xj6p487  80d31b  7414
+          sa-east-1   seal   paused  7853cf  seal-acknowledged      eydd32b2v2eg  cef978  7354
+          us-east-1   hold   armed   3b4b8e  entitlement-audit      4wc6t7li315z  6c2bd9  6488
+          ap-south-1  hold   paused  12def9  carried-forward        gmj5v4vteh40  85260b  6889
+          sa-east-1   warm   ready   b35254  rotation-verified      y214e6084wqa  f72f09  2535
+          eu-west-2   hold   ready   d3a278  entitlement-audit      tb6elesvq2rg  4fcf2f  6202
+          eu-west-1   seal   armed   77616c  carried-forward        uj8d8k6zwll3  3f04d9  5477
+          us-east-2   hold   ready   a8763d  warm-pool-nightly      1irkerwqww75  ed316f  8061
+          ap-south-1  drain  ready   3e7e30  seal-acknowledged      w2su5zbh8xfi  5e4ee5  4415
+          ap-south-1  warm   paused  74b82b  capacity-pending       f79a4w5alvn5  9f4427  4238
+          sa-east-1   hold   ready   ecb600  warm-pool-nightly      5mlj1zb7gtma  5b88cf  9175
+          eu-west-1   drain  sealed  49b26e  capacity-pending       eltlrxv5cypf  7f2e48  6988
+          eu-west-1   warm   armed   46c45e  warm-pool-nightly      3a5p4avcsrae  4cd6f3  2033
+          us-east-2   warm   sealed  659988  entitlement-audit      e1yk9smyqfwq  5bb91f  4603
+          eu-west-2   warm   sealed  45421d  rotation-verified      d1epith4xqvj  a732c8  2853
+          ap-south-1  seal   ready   c1f5a3  entitlement-audit      a7naj7rhpxw1  a5b816  7738
+          sa-east-1   hold   armed   ec4f49  rotation-verified      p86zqmmgpojt  efa014  9108
+          us-east-1   drain  paused  70dda5  capacity-pending       jbt3e8z1075s  92690f  5341
+          eu-west-1   hold   sealed  f2ee66  no-exception           w4ltqw2nvvgt  88d60e  7279
+          eu-west-1   warm   sealed  9030d6  seal-acknowledged      x03xl3h4qozp  158ef3  9102
+          ap-south-1  seal   paused  f2a19e  drain-scheduled        dims8o7v75fj  1304c4  8157
+          eu-west-2   hold   paused  c12522  no-exception           8vezug5uxcnz  3ac177  3654
+          eu-west-2   seal   paused  f4f916  capacity-pending       016dd1g9cm0s  a70dc3  9228
+          eu-west-2   warm   ready   b6b328  carried-forward        d3x75iljhlza  274949  6485
+          us-east-1   seal   paused  edd022  entitlement-audit      elxjv02t21bw  94c572  3894
+          us-east-2   seal   sealed  d039c8  capacity-pending       9rlcozrd03m6  5292ca  1997
+          ap-south-1  hold   paused  3dfd6b  entitlement-audit      rjyux3bflr8o  5a55c3  7957
+          eu-west-2   hold   ready   e78d6e  capacity-pending       93vhdb08o9yl  22880c  4674
+          us-east-1   drain  sealed  7ea720  capacity-pending       h0f700hryqli  d68e44  8811
+          us-east-1   warm   armed   e6771c  seal-acknowledged      2ppe8b6txwy8  d5464d  7904
+          eu-west-1   warm   sealed  2fba15  seal-acknowledged      397bxuyxry5l  73a0b9  2456
+          us-east-2   warm   ready   1ef808  no-exception           4b2rhxv8kf3m  f022c6  3461
+          ap-south-1  warm   ready   50f81f  carried-forward        v7zhuhedyumg  be5e2b  4676
+          eu-west-1   drain  sealed  7d3fca  capacity-pending       xes2abiizzj7  4d4060  4689
+          sa-east-1   drain  paused  d41126  drain-scheduled        nwfqik5eycxu  f83f18  1971
+          eu-west-1   warm   ready   2124a4  capacity-pending       6g5z27m3jqch  2abf6f  2756
+          sa-east-1   drain  sealed  6865d8  capacity-pending       69hdc9vmszdz  7614f2  2924
+          us-east-1   seal   armed   3243ae  carried-forward        eskrf80gpulb  74c80d  3775
+          sa-east-1   seal   sealed  5998a4  seal-acknowledged      4pykbxxjjikh  49c2b0  6347
+          ap-south-1  hold   ready   ce869d  seal-acknowledged      q0hxsvy1w9hp  1b0ec8  5902
+          sa-east-1   drain  armed   25f12a  carried-forward        478b9eo8wu0i  d44245  5940
+          eu-west-1   hold   armed   880cbd  drain-scheduled        sjmyufd420nt  1b0797  1964
+          ap-south-1  warm   paused  86a155  no-exception           rapjgwj2ekd7  49cff1  6987
+          ap-south-1  seal   ready   c0c356  capacity-pending       pld657v73z8i  99f9d5  7005
+          eu-west-2   hold   armed   958ca9  capacity-pending       ya70eyq1h1rz  7abbda  5746
+          sa-east-1   drain  sealed  6c2cfc  rotation-verified      umvo0uoskifo  671970  9767
+          sa-east-1   drain  armed   3054fc  warm-pool-nightly      zrj3jpjer58p  9314ce  6155
+          ap-south-1  drain  ready   2071a9  capacity-pending       7enzn97kwent  452999  2619
+          eu-west-2   hold   paused  fc732d  rotation-verified      dkin1onx95o8  541bea  9803
+      - path: refs/f5.txt
+        contents: |
+          us-east-2   seal   sealed  1d0587  drain-scheduled        omyypbp1hbbx  fb487c  4860
+          us-east-2   warm   ready   6ccaa9  rotation-verified      hc2yruw47aoh  3fbe88  2730
+          us-east-1   hold   armed   4796df  no-exception           5ggh1tayxn0s  6f068e  3037
+          ap-south-1  warm   sealed  967e13  warm-pool-nightly      jujlvfs4mfpc  42ce08  3713
+          eu-west-2   drain  ready   99a405  no-exception           uhlj6ekmhfyz  ded6af  8046
+          eu-west-1   warm   sealed  cdb723  seal-acknowledged      f2kqea80rz1z  3b4d44  6540
+          eu-west-2   drain  sealed  efd868  warm-pool-nightly      5vcmxer7dm8g  41068f  2332
+          us-east-2   hold   paused  ac98b8  warm-pool-nightly      f9xrdohzeox8  e6fa07  3696
+          sa-east-1   hold   paused  f3466e  seal-acknowledged      1r73bx6fsbq1  c2bafc  1173
+          ap-south-1  hold   paused  9fe37b  capacity-pending       fyd20hi4anpw  c970b2  2176
+          us-east-1   seal   ready   1b91c6  drain-scheduled        8onpc0uoxwep  fecbd4  8351
+          us-east-2   hold   armed   b2f0cf  warm-pool-nightly      nhg1bxhsk2t2  425c32  8264
+          us-east-1   hold   armed   a65966  capacity-pending       brfv441wwh1g  406788  2545
+          sa-east-1   warm   paused  53b575  capacity-pending       a47eouemhvf0  f61ba5  1033
+          ap-south-1  hold   ready   5ee8b4  carried-forward        1xndqdnb7bxh  a8db00  6102
+          us-east-1   warm   paused  f93610  warm-pool-nightly      kk3bq7ym8j6w  5c209b  2152
+          ap-south-1  hold   armed   cb156e  no-exception           rt2rulfk581e  fd9fc6  2599
+          sa-east-1   drain  sealed  4826ec  drain-scheduled        s63bdvipgdq0  b82f66  3823
+          ap-south-1  hold   ready   ad9fec  entitlement-audit      n3ucwofnqhph  90d5b3  2444
+          us-east-2   warm   sealed  ff5307  warm-pool-nightly      i7hywaf7wa0z  a69a26  2876
+          eu-west-2   warm   sealed  848364  warm-pool-nightly      8n7m7m0myrda  ac6e5d  5904
+          ap-south-1  drain  ready   24c029  drain-scheduled        mf5xc06y8ydq  a73558  8524
+          us-east-2   warm   armed   8a5cf2  capacity-pending       5zikraw2guly  8f7e71  5154
+          sa-east-1   drain  ready   42e010  capacity-pending       68r7b94npbbn  112aed  8520
+          ap-south-1  seal   paused  38592a  entitlement-audit      8of4i122pl33  84abda  1716
+          us-east-2   seal   sealed  963160  rotation-verified      0yi2we9ydrej  24b91f  2962
+          eu-west-2   warm   paused  667cfa  entitlement-audit      m71sdsajdne4  7c9188  2835
+          sa-east-1   drain  ready   b2728f  no-exception           u5pheuoqc0ho  9c9579  1562
+          us-east-2   drain  armed   53be73  drain-scheduled        gbn7cuommfby  7c2cf6  2737
+          us-east-1   drain  ready   7e06cd  capacity-pending       zv26x84vm1m6  51a857  3002
+          us-east-1   seal   paused  84fa98  carried-forward        x9uslk6unnqb  d45a85  7399
+          ap-south-1  seal   ready   546c3f  carried-forward        0svzeme7tl78  2bce45  9394
+          eu-west-1   warm   sealed  b53e80  warm-pool-nightly      whcnicaza471  79fe22  1446
+          eu-west-1   drain  ready   de29fd  entitlement-audit      mrsu43rkt57e  688201  1409
+          us-east-2   hold   paused  4d0255  seal-acknowledged      rin9czh0hf68  8fe07f  9683
+          eu-west-1   seal   sealed  f4decf  rotation-verified      r2hyo0hnqcgn  e13c2f  1290
+          sa-east-1   drain  paused  630efc  entitlement-audit      e6ufujpvyof4  f71829  2322
+          sa-east-1   hold   ready   2fe8ed  no-exception           udv0psf6oyfr  87e841  9736
+          us-east-1   seal   armed   4b8027  carried-forward        rbvzm1yxcvo7  e5d460  2576
+          sa-east-1   warm   ready   a1b9dd  seal-acknowledged      da9jzolg326t  d4f62d  6541
+          eu-west-1   hold   armed   f58290  carried-forward        8v06hvrnfpnd  9c239e  2561
+          sa-east-1   hold   ready   eaf393  drain-scheduled        xsbuc5psnmys  7adba5  8635
+          eu-west-2   hold   armed   86c8d8  rotation-verified      ltu2ci4n3i89  3e1323  9195
+          ap-south-1  seal   armed   b4bb2e  drain-scheduled        umpc42r9wnfg  7f9b46  7038
+          us-east-2   warm   armed   b23049  carried-forward        saygmwcll38d  ad7da8  8804
+          us-east-2   warm   ready   cc536b  rotation-verified      0tywl8blp6nr  393da6  7653
+          ap-south-1  warm   sealed  a95ba1  warm-pool-nightly      r3uyrbthsckt  4d12bb  9773
+          eu-west-1   seal   armed   95c8eb  drain-scheduled        96u1otq25fm2  9a9550  6954
+          eu-west-1   warm   ready   4e2e8f  rotation-verified      i5rspcw1qcf2  21b4be  4838
+          us-east-1   seal   paused  70e67b  entitlement-audit      665kyvtzlwbk  dc9e14  6913
+          ap-south-1  hold   ready   2ec7dd  capacity-pending       78ntgkakyg1c  1dc0c3  3406
+          eu-west-1   warm   paused  818bc0  entitlement-audit      lmkg3if2fxxk  2d2807  5987
+          us-east-2   hold   armed   552a29  capacity-pending       9zexq96bh5h0  8d3232  7927
+          ap-south-1  hold   armed   35ce9d  warm-pool-nightly      sswh60hkl3h2  72b92a  8749
+          ap-south-1  warm   paused  55d00a  warm-pool-nightly      umuqzvsoghr9  883b48  1425
+          ap-south-1  hold   armed   5eaeb8  rotation-verified      gkyb7729k2gl  cf93a3  6549
+          us-east-1   drain  armed   82e585  entitlement-audit      jp6tmbjr240t  109814  9890
+          sa-east-1   warm   sealed  9bbbc1  capacity-pending       18a5w9gvahyi  c96839  7663
+          sa-east-1   warm   sealed  4154f6  rotation-verified      2uk7iomjiteu  22b424  5765
+          sa-east-1   hold   sealed  1379be  no-exception           26f37yi4gq1k  a047ec  5552
+          eu-west-1   warm   armed   1e1c33  entitlement-audit      8txhtlgbiku0  656a82  1496
+          eu-west-1   drain  sealed  65d906  carried-forward        gzvjx3q970ls  cc6c7d  8602
+          eu-west-1   seal   ready   2b076b  warm-pool-nightly      g32j3lk31wba  37317e  8327
+          eu-west-2   warm   armed   c93276  capacity-pending       v2fky3i3r3yq  43e623  5810
+          eu-west-2   drain  ready   34f3d7  carried-forward        3trqg5g2nik2  f9a3da  5522
+          eu-west-2   warm   sealed  cde6a3  rotation-verified      05bvqov4uh6j  13a958  1372
+          eu-west-1   warm   sealed  e8ca0e  entitlement-audit      yetn3y1tyh01  7b6ed9  2423
+          ap-south-1  hold   ready   20a746  carried-forward        4cmp7yqdkear  d159f5  9300
+          sa-east-1   seal   armed   aa69d3  carried-forward        h7hr7c316ohc  d0ebaf  3889
+          eu-west-1   warm   ready   136c9b  rotation-verified      dki23u9ju163  125de3  8251
+          eu-west-1   seal   ready   20eeb2  carried-forward        p8z3ijp3m8cw  3b6b91  1466
+          ap-south-1  drain  ready   addb57  entitlement-audit      heat14q104yl  2e1f05  8219
+          eu-west-1   warm   ready   a58229  warm-pool-nightly      r5oc7lzzb2rb  aad23d  2919
+          us-east-2   seal   sealed  ba6237  rotation-verified      azqlb1fghs72  be52de  3961
+          us-east-1   warm   sealed  16b194  no-exception           9nhuthn6rvrz  911eb5  3896
+          eu-west-2   seal   sealed  49d664  no-exception           np84t0zkwbtq  aa7b4d  3908
+          us-east-1   seal   sealed  e3f04b  drain-scheduled        7e3va8lagc7q  65332b  9857
+          us-east-1   drain  paused  eda3df  no-exception           4vhqdjq0g067  aa872f  2618
+          us-east-1   seal   ready   b63b7e  rotation-verified      r0xgo4fqcrnj  245f04  6849
+          ap-south-1  warm   sealed  abce3b  capacity-pending       mcxw2cnrx6vz  6333c4  8943
+      - path: refs/f6.txt
+        contents: |
+          ap-south-1  hold   ready   89cb94  seal-acknowledged      hmvlz00358av  fc32b3  8901
+          eu-west-1   warm   ready   bbe581  entitlement-audit      7ks7nulnqiyo  e4acb1  8733
+          ap-south-1  hold   ready   aecb22  entitlement-audit      07tjzx1r9l3f  d2c01a  7471
+          us-east-1   warm   sealed  5e143b  carried-forward        mlky6b167chb  c20495  4663
+          sa-east-1   warm   ready   bce98d  rotation-verified      lezymryqukpt  7cca56  9573
+          us-east-1   hold   ready   49ae37  drain-scheduled        hcofjbxvv26w  a31e3a  7143
+          sa-east-1   drain  sealed  ca487d  carried-forward        naimpmvuxkd6  d69bd7  5606
+          eu-west-2   drain  ready   d21d53  drain-scheduled        y1nx5534zb1t  55ba46  8896
+          us-east-2   hold   sealed  a3cb45  no-exception           1xixdh9mo491  92706f  4225
+          sa-east-1   warm   paused  b59482  entitlement-audit      j9i4m9np3zbw  9715ae  1768
+          eu-west-1   warm   armed   609f46  entitlement-audit      ktpgl1bpblx1  236a59  9015
+          eu-west-1   drain  sealed  59f391  no-exception           46orbm6ja4ba  d10841  1924
+          eu-west-2   seal   paused  a846f7  drain-scheduled        2bmct8esjphl  a4cc84  2013
+          ap-south-1  seal   armed   87e729  carried-forward        8ejj1sarjiab  998dae  6546
+          ap-south-1  hold   paused  dbba3f  carried-forward        nptffhpd2now  524b26  8082
+          eu-west-1   hold   paused  38c004  entitlement-audit      f6uhi5066y2p  601186  6814
+          eu-west-2   warm   paused  9c354b  rotation-verified      8fjwk2vkl7m2  1918cd  5133
+          eu-west-2   warm   armed   a918aa  carried-forward        c545i4ejlvth  88547e  4608
+          eu-west-2   warm   sealed  15d430  capacity-pending       s5m47nh87m9c  889897  9446
+          us-east-1   seal   paused  a7e92f  entitlement-audit      mdq8n98liord  2af12d  6599
+          sa-east-1   drain  ready   1d8b6a  rotation-verified      39t077gkkso7  5a1ece  2016
+          sa-east-1   hold   ready   44ac28  drain-scheduled        3nv1afnr2xzf  edbbca  1805
+          us-east-1   warm   sealed  6df7e3  no-exception           f8yccbyb7d68  fd8219  9732
+          ap-south-1  drain  armed   de3330  rotation-verified      meo4rwvxbbcy  96587e  7876
+          us-east-1   warm   armed   c68688  warm-pool-nightly      fpz54p0p7c5j  fc20a3  4973
+          us-east-1   warm   armed   465d3f  entitlement-audit      vtsvdzt9e2qk  9e2a5d  8049
+          us-east-2   seal   paused  98d15b  entitlement-audit      9xhdwu3phgts  d29a16  3363
+          us-east-2   seal   ready   6e5a70  no-exception           7mpsqa4yz47b  c6cb19  9305
+          eu-west-1   hold   paused  5d8ecc  drain-scheduled        lh4mkf7tvfnq  4197fa  7434
+          us-east-1   drain  ready   579ad6  no-exception           z3sn9zz2dqml  3b7f27  6793
+          eu-west-1   hold   ready   3bbf9f  drain-scheduled        hy9ikh4k0sru  c3cb2c  5871
+          us-east-1   drain  ready   68989e  entitlement-audit      x2ry7e644iot  3b5d59  3495
+          us-east-1   warm   ready   34be39  warm-pool-nightly      jonxnri2lp8h  790614  2115
+          ap-south-1  drain  ready   7ae2c7  entitlement-audit      itsyyh306szv  acb5a4  8667
+          eu-west-1   warm   sealed  cf0b8d  entitlement-audit      y8pxu1srm7vz  78d3c4  8363
+          ap-south-1  hold   sealed  64f1b7  carried-forward        eqvgc5krnu7b  fd1178  3668
+          us-east-2   hold   ready   e9bcf9  warm-pool-nightly      vk5svgy16cda  66ae3b  8279
+          us-east-1   warm   sealed  a46fb6  warm-pool-nightly      ns2nmgcnq464  444db1  1757
+          eu-west-2   hold   sealed  5a9c89  capacity-pending       1f9e36fsu5gc  1a4fc1  6012
+          sa-east-1   hold   ready   1b3cc7  rotation-verified      4kq9attpxy09  f828e2  8173
+          eu-west-1   drain  ready   4ef292  rotation-verified      u1msulbvc68a  fdfc3c  9605
+          eu-west-1   drain  ready   e2a805  seal-acknowledged      tdb7zpycjh9u  c334cf  1765
+          sa-east-1   warm   paused  3f39f6  warm-pool-nightly      wbvp9b35gqjc  1a66cb  6082
+          eu-west-2   drain  armed   3a5ae6  drain-scheduled        icosttgrctue  94a687  6284
+          eu-west-1   warm   ready   1467c8  seal-acknowledged      a06id55kb9mf  695e1c  5301
+          us-east-1   drain  armed   15a52c  entitlement-audit      lv1pf0sqbebo  3e7dd8  9393
+          eu-west-2   hold   armed   c16150  seal-acknowledged      ndi4dhkkwp19  ba774b  2345
+          sa-east-1   drain  sealed  4b6d2a  drain-scheduled        ilrfjvr5xlqk  c33b41  7840
+          sa-east-1   hold   paused  d85623  carried-forward        166pxsdxh0xu  9353b7  7108
+          eu-west-1   seal   sealed  7f7a3d  carried-forward        2s73ohsa170s  d1a319  3216
+          us-east-1   seal   ready   4d8ff4  capacity-pending       jlsmvgtj025o  7e76e5  4116
+          sa-east-1   seal   ready   97bb29  seal-acknowledged      rf6lbux22ju0  8c216f  7853
+          sa-east-1   warm   armed   623fa8  drain-scheduled        im9ex092s540  1bd97f  1067
+          eu-west-2   drain  paused  a82d51  drain-scheduled        cf5g248ebehb  f3d568  8283
+          us-east-2   hold   sealed  bd8f96  carried-forward        cmtnlcepsgr7  45a901  6860
+          sa-east-1   hold   ready   3953f5  seal-acknowledged      wefbyiwl6jyq  7a0e49  9479
+          eu-west-1   seal   armed   396e50  no-exception           akpqg4sjcqwl  d72235  5732
+          us-east-1   warm   ready   bb0086  entitlement-audit      726x3msjmyru  a7164b  9619
+          sa-east-1   hold   armed   2d1d1f  rotation-verified      nux1dt04pr0m  802519  5191
+          us-east-1   warm   ready   547629  warm-pool-nightly      ifh0xiqgiu8f  26d191  4650
+          ap-south-1  seal   ready   bfaae6  no-exception           u94n6k0fsyd2  30ab6a  2381
+          us-east-1   seal   ready   8b6959  no-exception           ls6nj2kkn14h  89f7b0  7941
+          us-east-2   warm   sealed  cf0049  warm-pool-nightly      kk0bdyzfn84v  48b032  2157
+          eu-west-2   seal   sealed  d261f1  no-exception           kp8ll1uk4dy5  8c0c94  3961
+          us-east-2   hold   sealed  4d9a7b  warm-pool-nightly      vxuj8opcsu6j  21874f  3044
+          eu-west-1   warm   sealed  5b7c6c  rotation-verified      2bedl8dzn5sr  3dde9c  4860
+          sa-east-1   seal   paused  4d2987  capacity-pending       o4b9eke3nej7  d67d26  1579
+          ap-south-1  drain  ready   d802b4  rotation-verified      qym9dtqt6i1g  b188d1  6524
+          eu-west-2   drain  paused  e71851  no-exception           xqdeb2x7z8eo  98fa3b  3887
+          eu-west-1   drain  sealed  420d69  capacity-pending       kfqsy4azsbp8  878edc  6078
+          sa-east-1   warm   sealed  305dfa  no-exception           j5g8da57nz99  d3b8ad  3192
+          us-east-1   drain  sealed  1bbf04  entitlement-audit      hh5asjq16zm1  f54727  6256
+          us-east-2   warm   ready   78d82d  seal-acknowledged      g7xkdp95m4oz  4e45a4  1331
+          sa-east-1   hold   ready   d7ebe4  no-exception           964im1hpk6e4  c970c3  3132
+          sa-east-1   drain  armed   ab5ace  warm-pool-nightly      zyiohdplfsly  56a5ef  2044
+          us-east-1   hold   paused  3bf576  seal-acknowledged      ksu0jhl9gdn1  bebeb1  7669
+          eu-west-2   seal   ready   3aad24  rotation-verified      9g8pjwzk0mjn  da7617  4392
+          eu-west-2   seal   armed   391363  drain-scheduled        ee6ecsjc193q  b05236  6660
+          us-east-2   seal   armed   6d4781  drain-scheduled        oop7516u80hu  a906d2  7450

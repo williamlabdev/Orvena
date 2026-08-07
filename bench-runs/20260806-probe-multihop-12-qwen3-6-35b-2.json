@@ -1,0 +1,743 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.6:35b",
+  "endpoint": null,
+  "run_id": "1785976123697-95167-0",
+  "provenance": {
+    "server_version": "ollama 0.32.5",
+    "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 262144,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.4.0",
+  "repeat": 10,
+  "task_count": 1,
+  "ran": 1,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 0.7,
+  "solved_any": 1,
+  "verified_rate": 0.7,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 5.4,
+  "budget_exhaustion_rate": 0.3,
+  "mean_total_tokens": 11626.5,
+  "search_use_rate": 0.5,
+  "search_yield_rate": 0.90909094,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "probe-multihop-12",
+      "runs": 10,
+      "solved": 7,
+      "skipped": false,
+      "pass_rate": 0.7
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 19,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 17,
+            "search": 1,
+            "run": 0
+          },
+          "search_hits": [
+            6
+          ],
+          "input_tokens": 7503,
+          "output_tokens": 34776,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep0/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 0,
+            "edit": 0,
+            "read": 4,
+            "search": 4,
+            "run": 0
+          },
+          "search_hits": [
+            0,
+            6,
+            6,
+            6
+          ],
+          "input_tokens": 6983,
+          "output_tokens": 8362,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep1/probe-multihop-12/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 16,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 15,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 4001,
+          "output_tokens": 2409,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep2/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep3",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 4,
+          "tool_calls": 16,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 15,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 4001,
+          "output_tokens": 2461,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep3/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep4",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 3,
+          "tool_calls": 15,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 14,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 3099,
+          "output_tokens": 1833,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep4/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep5",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 2,
+          "tool_calls": 15,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 14,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 2946,
+          "output_tokens": 2561,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep5/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep6",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 0,
+            "edit": 0,
+            "read": 5,
+            "search": 3,
+            "run": 0
+          },
+          "search_hits": [
+            4,
+            1,
+            6
+          ],
+          "input_tokens": 6972,
+          "output_tokens": 3934,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep6/probe-multihop-12/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep7",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 0,
+            "edit": 0,
+            "read": 6,
+            "search": 2,
+            "run": 0
+          },
+          "search_hits": [
+            4,
+            6
+          ],
+          "input_tokens": 7032,
+          "output_tokens": 2528,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep7/probe-multihop-12/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep8",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 7,
+          "tool_calls": 19,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 17,
+            "search": 1,
+            "run": 0
+          },
+          "search_hits": [
+            6
+          ],
+          "input_tokens": 6707,
+          "output_tokens": 4248,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep8/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.6:35b",
+      "endpoint": null,
+      "run_id": "1785976123697-95167-0-rep9",
+      "provenance": {
+        "server_version": "ollama 0.32.5",
+        "model_digest": "07d35212591fc27746f0a317c975a6d68754fb38e9053d82e25f06057af28522",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.4.0",
+      "task_count": 1,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 1.0,
+      "verified": 1,
+      "verified_rate": 1.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "probe-multihop-12",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 2,
+          "tool_calls": 14,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 13,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 2197,
+          "output_tokens": 1712,
+          "evidence_path": ".orvena/bench/1785976123697-95167-0-rep9/probe-multihop-12/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed"
+        }
+      ]
+    }
+  ]
+}

@@ -17,6 +17,7 @@ use orvena_core::config::context_budget::ContextBudgets;
 use orvena_core::config::gates::{Gate, Gatekeeper, Gates};
 use orvena_core::config::roles::{Role, Roles};
 use orvena_core::config::Config;
+use orvena_core::metrics::ExitReason;
 use orvena_core::provider::offline::Offline;
 use orvena_core::provider::{ChatRequest, ChatResponse, Provider};
 use orvena_core::{Agent, Result, Task};
@@ -45,10 +46,17 @@ fn automated(name: &str, condition: &str, verify: &str) -> Gate {
 fn config(gates: Gates, max_steps: u32) -> Config {
     Config {
         agent: AgentConfig {
-            provider: ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None },
+            provider: ProviderSelection {
+                kind: "offline".into(),
+                model: "stub".into(),
+                base_url: None,
+                api_key_env: None,
+                sampling: None,
+            },
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {
@@ -65,7 +73,13 @@ fn config(gates: Gates, max_steps: u32) -> Config {
 }
 
 fn offline_agent(root: &std::path::Path, config: Config) -> Agent {
-    let sel = ProviderSelection { kind: "offline".into(), model: "stub".into(), base_url: None };
+    let sel = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+        sampling: None,
+    };
     Agent::with_provider(config, root, Box::new(Offline::new(&sel)))
 }
 
@@ -129,8 +143,7 @@ async fn silent_verify_failure_still_drives_convergence() {
     let root = temp_dir("silent-converge");
     // `test -f done.txt` prints nothing when the file is missing — the exact
     // silent-failure shape that used to feed back an empty (useless) evidence.
-    let gates =
-        Gates { gates: vec![automated("done", "done.txt is present", "test -f done.txt")] };
+    let gates = Gates { gates: vec![automated("done", "done.txt is present", "test -f done.txt")] };
     let agent = Agent::with_provider(
         config(gates, 4),
         &root,
@@ -147,9 +160,18 @@ async fn silent_verify_failure_still_drives_convergence() {
         report.blockers
     );
     assert_eq!(report.steps, 2, "step 1 fails the silent gate, step 2 fixes it from the feedback");
-    assert!(report.blockers.is_empty(), "a converging run records no blocker: {:?}", report.blockers);
+    assert_eq!(report.exit, ExitReason::GatesPassed, "convergence is a typed exit, not prose");
+    assert_eq!(report.max_steps, 4, "the bundle records the budget the run was given");
+    assert!(
+        report.blockers.is_empty(),
+        "a converging run records no blocker: {:?}",
+        report.blockers
+    );
     assert!(root.join("done.txt").exists(), "the fix must come from the fed-back condition");
-    assert!(!root.join("wrong.txt").exists(), "the model should not have taken the no-feedback path");
+    assert!(
+        !root.join("wrong.txt").exists(),
+        "the model should not have taken the no-feedback path"
+    );
     let _ = std::fs::remove_dir_all(&root);
 }
 
@@ -172,6 +194,7 @@ async fn human_gate_stops_with_blocker() {
 
     assert!(!report.completed, "a human gate cannot be auto-confirmed");
     assert_eq!(report.steps, 1, "a human gate escalates on the first check, not at max_steps");
+    assert_eq!(report.exit, ExitReason::NeedsHuman);
     assert!(
         report.blockers.iter().any(|b| b.contains("human")),
         "the escalation is recorded as a blocker: {:?}",
@@ -186,10 +209,17 @@ async fn permanently_failing_gate_exhausts_max_steps() {
     let root = temp_dir("exhaust");
     let gates = Gates { gates: vec![automated("never", "an impossible condition", "false")] };
     let agent = offline_agent(&root, config(gates, 2));
-    let report = agent.run(Task::new("attempt the impossible", vec!["a.txt".into()])).await.unwrap();
+    let report =
+        agent.run(Task::new("attempt the impossible", vec!["a.txt".into()])).await.unwrap();
 
     assert!(!report.completed);
     assert_eq!(report.steps, 2, "the loop should use its full step budget");
+    assert_eq!(
+        report.exit,
+        ExitReason::BudgetExhausted,
+        "a right-censored run says so in structured data, not only in blocker prose"
+    );
+    assert_eq!(report.max_steps, 2);
     assert!(
         report.blockers.iter().any(|b| b.contains("reached max_steps")),
         "exhausting max_steps is recorded as a blocker: {:?}",

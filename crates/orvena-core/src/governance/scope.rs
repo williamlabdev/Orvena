@@ -11,6 +11,14 @@ pub struct Scope {
     /// Relative paths explicitly off-limits.
     pub excluded: Vec<String>,
     pub tier: Tier,
+    /// Benchmark-only ungoverned baseline (D2): every in-root path is writable,
+    /// regardless of the lists above. `allowed_modifications` is still carried
+    /// because the baseline sees the same files and the same contents as a
+    /// governed run — it is simply not told to stay inside them (the prompt's
+    /// obligation is dropped, the information is not: `context::scope_rules`).
+    /// Root escape (`..`, symlinks) is host protection, not governance, and is
+    /// NOT lifted. Unreachable from the CLI/config surface.
+    pub(crate) unrestricted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +33,13 @@ pub enum ScopeDecision {
 
 impl Scope {
     pub fn new(allowed_modifications: Vec<String>, excluded: Vec<String>, tier: Tier) -> Self {
-        Self { allowed_modifications, excluded, tier }
+        Self { allowed_modifications, excluded, tier, unrestricted: false }
+    }
+
+    /// Benchmark-only ungoverned baseline (D2): same lists (same prompt), no
+    /// enforcement. Crate-private so no product path can construct it.
+    pub(crate) fn unrestricted_baseline(allowed_modifications: Vec<String>, tier: Tier) -> Self {
+        Self { allowed_modifications, excluded: Vec::new(), tier, unrestricted: true }
     }
 
     /// Decide whether a relative path may be written.
@@ -34,9 +48,13 @@ impl Scope {
         // A path that climbs out of the root (`..`) is never writable, no matter
         // how its prefix matches the allow-list. The fs tool also hard-rejects
         // these at the write boundary; this keeps `decision` honest on its own so
-        // an escaping path is never reported as `Allow`.
+        // an escaping path is never reported as `Allow`. This holds even for the
+        // unrestricted baseline: root escape is host protection, not governance.
         if rel.split('/').any(|seg| seg == "..") {
             return ScopeDecision::ReadOnly;
+        }
+        if self.unrestricted {
+            return ScopeDecision::Allow;
         }
         if self.excluded.iter().any(|e| path_matches(&rel, e)) {
             return ScopeDecision::Excluded;
@@ -56,4 +74,34 @@ fn normalize(rel: &str) -> String {
 fn path_matches(rel: &str, entry: &str) -> bool {
     let entry = normalize(entry);
     rel == entry || rel.starts_with(&format!("{entry}/"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unrestricted_baseline_allows_unlisted_paths() {
+        let s = Scope::unrestricted_baseline(vec!["src/lib.rs".into()], Tier::Light);
+        assert_eq!(s.decision("src/lib.rs"), ScopeDecision::Allow);
+        assert_eq!(s.decision("tests/it.rs"), ScopeDecision::Allow, "baseline lifts the lists");
+        assert_eq!(s.decision("Cargo.toml"), ScopeDecision::Allow);
+    }
+
+    #[test]
+    fn unrestricted_baseline_still_blocks_root_escape() {
+        // Host protection is not governance: `..` never becomes writable, even
+        // in the bench-only ungoverned baseline.
+        let s = Scope::unrestricted_baseline(vec![], Tier::Light);
+        assert_eq!(s.decision("../outside.txt"), ScopeDecision::ReadOnly);
+        assert_eq!(s.decision("a/../../outside.txt"), ScopeDecision::ReadOnly);
+    }
+
+    #[test]
+    fn governed_scope_is_unchanged_by_the_new_field() {
+        let s = Scope::new(vec!["src".into()], vec!["src/gen".into()], Tier::Engineering);
+        assert_eq!(s.decision("src/lib.rs"), ScopeDecision::Allow);
+        assert_eq!(s.decision("src/gen/x.rs"), ScopeDecision::Excluded);
+        assert_eq!(s.decision("README.md"), ScopeDecision::ReadOnly);
+    }
 }

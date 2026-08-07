@@ -27,7 +27,7 @@ pub async fn run(task_text: String, write: Vec<String>, provider: Option<String>
 
     // Preflight: fail fast with actionable guidance rather than dead-ending on a
     // deep provider/network error — the first run must never get stuck on setup.
-    preflight_provider(&config.agent.provider.kind)?;
+    preflight_provider(&config.agent.provider)?;
 
     // Resolve a skill from the task text (engine ships in v0.1; content grows
     // one reviewed skill at a time).
@@ -88,7 +88,13 @@ fn print_report(report: &orvena_core::RunReport) {
     if !report.gate_outcomes.is_empty() {
         println!("gates:");
         for g in &report.gate_outcomes {
-            let mark = if g.passed { "pass" } else if g.needs_human { "human" } else { "fail" };
+            let mark = if g.passed {
+                "pass"
+            } else if g.needs_human {
+                "human"
+            } else {
+                "fail"
+            };
             println!("  - {:<20} {}", g.gate, mark);
         }
     }

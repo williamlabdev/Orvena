@@ -1,0 +1,24 @@
+{
+  "schema": "orvena-evidence-v1",
+  "provider": "openai_compat",
+  "model": "qwen3:14b",
+  "endpoint": "http://localhost:11434",
+  "task": "Create a file named hello.txt containing the single word: hello",
+  "completed": true,
+  "steps": 1,
+  "input_tokens": 263,
+  "output_tokens": 110,
+  "tool_calls": 1,
+  "gate_outcomes": [
+    {
+      "step": 1,
+      "gate": "hello-exists",
+      "passed": true,
+      "needs_human": false
+    }
+  ],
+  "blockers": [],
+  "scope_refusals": [],
+  "sandbox": "disabled",
+  "provider_error": null
+}

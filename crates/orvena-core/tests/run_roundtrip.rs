@@ -48,10 +48,13 @@ fn config(commands: Commands, gates: Gates) -> Config {
                 kind: "offline".into(),
                 model: "scripted".into(),
                 base_url: None,
+                api_key_env: None,
+                sampling: None,
             },
             tier: Tier::Engineering,
             default_role: "developer".into(),
             max_steps: 4,
+            sandbox: Default::default(),
         },
         roles: Roles {
             roles: vec![Role {
@@ -182,8 +185,7 @@ async fn failing_run_then_fix_then_passing_run_completes() {
     std::fs::write(root.join("marker.txt"), "TODO\n").unwrap();
     // `test` and the gate share the same condition: marker.txt must contain DONE.
     let check = "grep -q DONE marker.txt";
-    let commands =
-        Commands { commands: vec![cmd("test", &["sh", "-c", check], Intent::ReadOnly)] };
+    let commands = Commands { commands: vec![cmd("test", &["sh", "-c", check], Intent::ReadOnly)] };
     let gates = Gates {
         gates: vec![Gate {
             name: "marker-done".into(),

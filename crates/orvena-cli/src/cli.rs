@@ -16,7 +16,30 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Scaffold config into ./.orvena and choose a model provider.
-    Init,
+    ///
+    /// With no flags on an interactive terminal this prompts. Passing
+    /// `--provider` sets the provider outright and never prompts, which is what
+    /// scripts and provisioning jobs should use.
+    Init {
+        /// Set the provider without prompting:
+        /// anthropic|openai|openrouter|ollama|openai_compat|offline.
+        #[arg(long = "provider")]
+        provider: Option<String>,
+        /// Model id to write into the config (used with `--provider`).
+        #[arg(long = "model")]
+        model: Option<String>,
+        /// Endpoint override — required for `openai_compat`.
+        #[arg(long = "base-url")]
+        base_url: Option<String>,
+        /// Name of the environment variable holding the API key. Omit for a
+        /// provider that needs no key.
+        #[arg(long = "api-key-env")]
+        api_key_env: Option<String>,
+        /// Scaffold and print the next steps without prompting, even on a
+        /// terminal. Implied whenever we cannot safely read stdin.
+        #[arg(long = "non-interactive")]
+        non_interactive: bool,
+    },
     /// Run a coding task through one bounded loop.
     Run {
         /// The task instruction.
@@ -45,6 +68,24 @@ enum Command {
         /// model). Default 1 = single pass.
         #[arg(long = "repeat", default_value_t = 1)]
         repeat: u32,
+        /// Governance posture(s) to measure, comma-separated: off|light|engineering
+        /// (e.g. `--governance off,engineering` for the differential matrix).
+        /// `off` is a bench-only ungoverned baseline — it is not a product tier.
+        /// Default: light (the previous behavior).
+        #[arg(long = "governance")]
+        governance: Option<String>,
+        /// Which agent to measure: `native` (Orvena's own bounded loop, default)
+        /// or a wrapped third-party CLI agent — `aider`. A wrapped agent is
+        /// confined by the OS sandbox to the task's declared paths; Orvena
+        /// supplies the scope, the gate, and the evidence, the agent supplies
+        /// the loop.
+        #[arg(long = "agent", default_value = "native")]
+        agent: String,
+        /// Ignore the task set's `frozen:` selection and run every task on
+        /// file, alternates included (calibration / recalibration runs).
+        /// Numbers from such a run are NOT the set's official reading.
+        #[arg(long = "all-tasks", default_value_t = false)]
+        all_tasks: bool,
     },
     /// Preflight: provider readiness, config validity.
     Doctor,
@@ -56,10 +97,15 @@ enum Command {
 pub async fn run() -> i32 {
     let cli = Cli::parse();
     let result = match cli.command {
-        Command::Init => commands::init::run(),
+        Command::Init { provider, model, base_url, api_key_env, non_interactive } => {
+            commands::init::run(
+                commands::init::ProviderArgs { kind: provider, model, base_url, api_key_env },
+                non_interactive,
+            )
+        }
         Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
-        Command::Bench { provider, tasks, out, repeat } => {
-            commands::bench::run(provider, tasks, out, repeat).await
+        Command::Bench { provider, tasks, out, repeat, governance, agent, all_tasks } => {
+            commands::bench::run(provider, tasks, out, repeat, governance, agent, all_tasks).await
         }
         Command::Doctor => commands::doctor::run(),
         Command::Status => commands::status::run(),

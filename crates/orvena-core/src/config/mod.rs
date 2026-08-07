@@ -8,12 +8,14 @@ pub mod commands;
 pub mod context_budget;
 pub mod gates;
 pub mod roles;
+pub mod sandbox;
 
 pub use agent::{AgentConfig, ProviderSelection, Tier};
 pub use commands::{Command, Commands, Intent};
 pub use context_budget::{ContextBudget, ContextBudgets};
 pub use gates::{Gate, Gatekeeper, Gates};
 pub use roles::{Role, Roles};
+pub use sandbox::SandboxConfig;
 
 use crate::error::{Error, Result};
 use serde::de::DeserializeOwned;
@@ -59,6 +61,7 @@ impl Config {
             return Err(Error::Config("max_steps must be >= 1".into()));
         }
         self.commands.validate()?;
+        self.agent.sandbox.validate()?;
         Ok(())
     }
 }

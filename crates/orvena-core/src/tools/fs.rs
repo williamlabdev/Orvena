@@ -21,13 +21,17 @@ impl<'a> FsTool<'a> {
 
     pub fn read(&self, rel: &str) -> Result<String> {
         self.require_tool("fs.read")?;
-        Ok(std::fs::read_to_string(self.root.join(rel))?)
+        // Contained like writes since slice-020 exposed READ to the model: a
+        // `../` or through-symlink path would otherwise read outside the root —
+        // reads don't mutate, but exfiltrating file contents into the model's
+        // context is an escape all the same.
+        Ok(std::fs::read_to_string(self.resolve_in_root(rel)?)?)
     }
 
     /// Read a file, returning `None` if it does not exist yet (for new files).
     pub fn read_opt(&self, rel: &str) -> Result<Option<String>> {
         self.require_tool("fs.read")?;
-        let p = self.root.join(rel);
+        let p = self.resolve_in_root(rel)?;
         if !p.exists() {
             return Ok(None);
         }
@@ -35,18 +39,19 @@ impl<'a> FsTool<'a> {
     }
 
     /// Resolve `rel` to a target path guaranteed to stay within the project root,
-    /// or reject it. This is a hard boundary enforced *regardless of tier*: a
-    /// write that escapes the root is never acceptable, even in advisory `light`.
-    /// Parity with `grep.rs`: reject absolute paths and any `..` component; and,
-    /// beyond grep, resolve symlinks — the nearest existing ancestor must
-    /// canonicalize to within the canonicalized root, so a symlink inside the
-    /// root cannot redirect a write outside it.
+    /// or reject it. This is a hard boundary enforced *regardless of tier*: an
+    /// access that escapes the root is never acceptable, even in advisory
+    /// `light` — for writes since always, for reads since READ became a model
+    /// action (slice-020). Parity with `grep.rs`: reject absolute paths and any
+    /// `..` component; and, beyond grep, resolve symlinks — the nearest existing
+    /// ancestor must canonicalize to within the canonicalized root, so a symlink
+    /// inside the root cannot redirect an access outside it.
     fn resolve_in_root(&self, rel: &str) -> Result<PathBuf> {
         let rel_path = Path::new(rel);
         if rel_path.is_absolute()
             || rel_path.components().any(|c| matches!(c, Component::ParentDir))
         {
-            return Err(Error::Scope(format!("write path '{rel}' escapes the project root")));
+            return Err(Error::Scope(format!("path '{rel}' escapes the project root")));
         }
         let target = self.root.join(rel_path);
         let root_canon = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
@@ -58,7 +63,7 @@ impl<'a> FsTool<'a> {
                 Ok(canon) => {
                     if !canon.starts_with(&root_canon) {
                         return Err(Error::Scope(format!(
-                            "write path '{rel}' resolves outside the project root"
+                            "path '{rel}' resolves outside the project root"
                         )));
                     }
                     break;
@@ -92,6 +97,55 @@ impl<'a> FsTool<'a> {
             ScopeDecision::Excluded => {
                 Err(Error::Scope(format!("'{rel}' is excluded from this task's scope")))
             }
+        }
+    }
+
+    /// Anchored replace (slice-020): `old` must appear **exactly once** in the
+    /// file; it is replaced by `new`. Same authorization path as `write` —
+    /// role-gated `fs.write` plus the scope decision — because an edit *is* a
+    /// write. The file's current content is read internally without the
+    /// `fs.read` gate, and none of it may appear in an error message: a role
+    /// allowed to write but not read must not be able to use failed edits as a
+    /// read side-channel.
+    pub fn edit(&self, rel: &str, old: &str, new: &str) -> Result<()> {
+        self.require_tool("fs.write")?;
+        let target = self.resolve_in_root(rel)?;
+        match self.scope.decision(rel) {
+            ScopeDecision::Allow => {}
+            ScopeDecision::ReadOnly => {
+                return Err(Error::Scope(format!(
+                    "'{rel}' is read-only (not in allowed_modifications) — report a blocker, \
+                     do not expand scope"
+                )));
+            }
+            ScopeDecision::Excluded => {
+                return Err(Error::Scope(format!("'{rel}' is excluded from this task's scope")));
+            }
+        }
+        if old.is_empty() {
+            return Err(Error::Other(anyhow::anyhow!(
+                "EDIT '{rel}': the text to replace is empty — it would match everywhere"
+            )));
+        }
+        if !target.exists() {
+            return Err(Error::Other(anyhow::anyhow!(
+                "EDIT '{rel}': the file does not exist — use WRITE to create it"
+            )));
+        }
+        let current = std::fs::read_to_string(&target)?;
+        match current.matches(old).count() {
+            1 => {
+                std::fs::write(target, current.replacen(old, new, 1))?;
+                Ok(())
+            }
+            0 => Err(Error::Other(anyhow::anyhow!(
+                "EDIT '{rel}': the text to replace was not found — READ the file and \
+                 anchor on its exact current content"
+            ))),
+            n => Err(Error::Other(anyhow::anyhow!(
+                "EDIT '{rel}': the text to replace appears {n} times — include enough \
+                 surrounding lines to make it unique"
+            ))),
         }
     }
 
@@ -143,6 +197,75 @@ mod tests {
     }
 
     #[test]
+    fn edit_replaces_a_unique_anchor() {
+        let root = temp_root("edit-ok");
+        std::fs::write(root.join("src/a.rs"), "let x = 1;\nlet y = 2;\n").unwrap();
+        let scope = Scope::new(vec!["src".into()], vec![], Tier::Light);
+        let role = role();
+        let fs = FsTool::new(&root, &scope, &role);
+        fs.edit("src/a.rs", "let x = 1;", "let x = 9;").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(root.join("src/a.rs")).unwrap(),
+            "let x = 9;\nlet y = 2;\n"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn edit_failures_name_the_problem_but_never_the_content() {
+        // 0 matches, N matches, empty anchor, missing file — each is a distinct,
+        // actionable error, and none may echo what the file contains: a role
+        // with fs.write but not fs.read must not read via failed edits.
+        let root = temp_root("edit-fail");
+        let secret = "SECRET-CONTENT-marker\nSECRET-CONTENT-marker\n";
+        std::fs::write(root.join("src/a.rs"), secret).unwrap();
+        let scope = Scope::new(vec!["src".into()], vec![], Tier::Light);
+        let role = role();
+        let fs = FsTool::new(&root, &scope, &role);
+
+        let cases = [
+            ("src/a.rs", "not present", "not found"),
+            ("src/a.rs", "SECRET-CONTENT-marker", "2 times"),
+            ("src/a.rs", "", "empty"),
+            ("src/missing.rs", "x", "does not exist"),
+        ];
+        for (path, old, expect) in cases {
+            let err = fs.edit(path, old, "replacement").unwrap_err().to_string();
+            assert!(err.contains(expect), "expected '{expect}' in: {err}");
+            assert!(!err.contains("SECRET-CONTENT"), "content leaked: {err}");
+        }
+        // None of the failures touched the file.
+        assert_eq!(std::fs::read_to_string(root.join("src/a.rs")).unwrap(), secret);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn edit_outside_scope_is_a_scope_error() {
+        let root = temp_root("edit-scope");
+        std::fs::write(root.join("src/a.rs"), "x\n").unwrap();
+        let scope = Scope::new(vec!["docs".into()], vec![], Tier::Light);
+        let role = role();
+        let fs = FsTool::new(&root, &scope, &role);
+        let err = fs.edit("src/a.rs", "x", "y").unwrap_err();
+        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert_eq!(std::fs::read_to_string(root.join("src/a.rs")).unwrap(), "x\n");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn read_escaping_root_is_blocked() {
+        // READ is a model action since slice-020; a `../` path must not read
+        // outside the root even though nothing is written.
+        let root = temp_root("read-escape");
+        let scope = Scope::new(vec!["src".into()], vec![], Tier::Light);
+        let role = role();
+        let fs = FsTool::new(&root, &scope, &role);
+        let err = fs.read("../read-escape-target.txt").unwrap_err();
+        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn write_escaping_root_via_dotdot_is_blocked() {
         let root = temp_root("dotdot");
         // Allow-list "src" would prefix-match the escaping path under the old
@@ -153,9 +276,7 @@ mod tests {
 
         let sentinel = root.parent().unwrap().join("orvena-escape-sentinel.txt");
         let _ = std::fs::remove_file(&sentinel);
-        let err = fs
-            .write("src/../../orvena-escape-sentinel.txt", "pwned")
-            .unwrap_err();
+        let err = fs.write("src/../../orvena-escape-sentinel.txt", "pwned").unwrap_err();
         assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
         assert!(!sentinel.exists(), "escaping write must not create a file outside root");
         let _ = std::fs::remove_dir_all(&root);
