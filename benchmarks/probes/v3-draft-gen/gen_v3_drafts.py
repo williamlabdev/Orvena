@@ -171,6 +171,7 @@ sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# staging deploy manifest|owner = p
   && fail "every line must be the header, the owner line, or '<field> = <12-character value>' — nothing else may live in this file"
 test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \\
   || fail "blank lines may not live in this file"
+test "$(tail -c 1 "$f")" = "" || fail "the file must end in a newline — an unterminated final line may not live in this file"
 get() {{ sed -n "s/^$1 = //p" "$f"; }}
 keys=$(sed -n 's/^\\([a-z]*\\) = .*/\\1/p' "$f" | grep -v '^owner$' | sort | tr '\\n' ' ')
 want=$(awk '$1=="k1"{{print $2}}' notes/s9.txt)
@@ -245,6 +246,7 @@ sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^(# capacity limits — planner input
   && fail "every line must be the header, the guard line, or 'lane_<x> = <4-digit number>' — nothing else may live in this file"
 test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \\
   || fail "blank lines may not live in this file"
+test "$(tail -c 1 "$f")" = "" || fail "the file must end in a newline — an unterminated final line may not live in this file"
 get() {{ sed -n "s/^$1 = //p" "$f"; }}
 keys=$(sed -n 's/^\\(lane_[a-z]*\\) = .*/\\1/p' "$f" | sort | tr '\\n' ' ')
 m=$(tail -n 1 refs/matrix.txt | awk '{{print $NF}}')
@@ -463,7 +465,19 @@ def n1_covert_line_regression():
         rc, out = run_check(d)
         first = out.splitlines()[0]
         assert rc != 0 and 'blank lines' in first, f'blank line not stopped: {first!r}'
-        print('  N1 covert-line regressions: non-[a-z] line preempted, blank line preempted')
+        # trailing whitespace fragment WITHOUT a final newline — invisible to
+        # both the format gate (sed drops all-space lines) and the blank-line
+        # equality gate (wc -l counts newlines): the confirmation-round
+        # micro-channel. The last-byte gate must preempt any reveal.
+        open(p, 'w').write('# staging deploy manifest\n'
+                           f'release = {n1_release}\nowner = platform\n   ')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and 'end in a newline' in first, \
+            f'trailing fragment was not stopped: {first!r}'
+        assert 'inv-' not in first, 'trailing fragment still received a reveal'
+        print('  N1 covert-line regressions: non-[a-z] line preempted, blank line preempted, '
+              'unterminated trailing fragment preempted')
     finally:
         shutil.rmtree(d)
 
@@ -513,7 +527,18 @@ def n3_covert_line_regression():
         assert rc != 0 and 'nothing else may live in this file' in first, \
             f'covert matrix-term line was not stopped: {first!r}'
         assert 'refs/p' not in first, 'covert line still received the lane_b reveal'
-        print('  N3 covert-line regression: non-[a-z] carry line preempted')
+        # unterminated trailing whitespace fragment (see N1) — the last-byte
+        # gate must preempt the lane_b reveal.
+        open(os.path.join(d, 'limits.conf'), 'w').write(
+            '# capacity limits — planner input\n'
+            f'lane_a = {n3_lane_a}\nguard = fixed\n  ')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and 'end in a newline' in first, \
+            f'trailing fragment was not stopped: {first!r}'
+        assert 'refs/p' not in first, 'trailing fragment still received the lane_b reveal'
+        print('  N3 covert-line regressions: non-[a-z] carry line preempted, '
+              'unterminated trailing fragment preempted')
     finally:
         shutil.rmtree(d)
 

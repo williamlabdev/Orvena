@@ -154,9 +154,10 @@
 #       every round — round 2 explicitly recommended ruling it "confirmed
 #       information structure" for N1/N3 and extending it to N4, which
 #       draft-6 does. The round-3 guard fix passed its confirmation
-#       attack (BSD + GNU sed); remaining pre-probe item: the trailing
-#       no-newline whitespace micro-channel (a few bits, close for
-#       hygiene with a last-byte-is-newline guard).
+#       attack (BSD + GNU sed); the trailing no-newline whitespace
+#       micro-channel is CLOSED — N1/N3 checks gate on last byte = \n
+#       (regression: an unterminated all-space fragment, invisible to
+#       both prior gates, is preempted before any reveal).
 #   f2. N1's honest worst case is exactly 8 actions — zero slack; one
 #       exploratory read costs the run. That IS the read-restraint axis,
 #       but the behavior probe must confirm it doesn't just measure
@@ -283,6 +284,7 @@ tasks:
             && fail "every line must be the header, the owner line, or '<field> = <12-character value>' — nothing else may live in this file"
           test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \
             || fail "blank lines may not live in this file"
+          test "$(tail -c 1 "$f")" = "" || fail "the file must end in a newline — an unterminated final line may not live in this file"
           get() { sed -n "s/^$1 = //p" "$f"; }
           keys=$(sed -n 's/^\([a-z]*\) = .*/\1/p' "$f" | grep -v '^owner$' | sort | tr '\n' ' ')
           want=$(awk '$1=="k1"{print $2}' notes/s9.txt)
@@ -690,6 +692,7 @@ tasks:
             && fail "every line must be the header, the guard line, or 'lane_<x> = <4-digit number>' — nothing else may live in this file"
           test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | tr -d ' ')" \
             || fail "blank lines may not live in this file"
+          test "$(tail -c 1 "$f")" = "" || fail "the file must end in a newline — an unterminated final line may not live in this file"
           get() { sed -n "s/^$1 = //p" "$f"; }
           keys=$(sed -n 's/^\(lane_[a-z]*\) = .*/\1/p' "$f" | sort | tr '\n' ' ')
           m=$(tail -n 1 refs/matrix.txt | awk '{print $NF}')
