@@ -1,5 +1,5 @@
 == building orvena (release) ==
-== scaffolding a throwaway project in /var/folders/ck/3p8_2q4s25x5wsfvjw7_k9y40000gn/T/tmp.stK0sAQJ6N ==
+== scaffolding a throwaway project in /var/folders/ck/3p8_2q4s25x5wsfvjw7_k9y40000gn/T/tmp.Jd8GDCtgIf ==
 
 == sanity: offline dry-run (fast, deterministic, no model) ==
 running 1 task(s) × 1 run(s) × 2 governance mode(s) against provider 'offline'…
@@ -28,9 +28,12 @@ false-done:  off: 0% of claims  →  engineering: 0% of claims
 verified:    off: 0%  →  engineering: 0%
 overhead:    ×1.00 steps, ×1.17 tokens (governed / baseline)
 
-report: .orvena/bench/1785833993017-19846-0/report.json
+report: .orvena/bench/1785844492072-10897-0/report.json
 
 == differential: native agent / ollama / qwen3:14b × 30 runs × (off, engineering) ==
    (this calls the model many times; expect an hour-plus for a 14B model)
 running 1 task(s) × 30 run(s) × 2 governance mode(s) against provider 'ollama'…
 
+scripts/bench-m1-depth.sh: line 158: 11118 Terminated: 15          "$BIN" bench --tasks "$TASKS" --agent "$AGENT" --governance off,engineering --repeat "$REPEAT" --out "$OUT"
+
+scratch project kept at: /var/folders/ck/3p8_2q4s25x5wsfvjw7_k9y40000gn/T/tmp.Jd8GDCtgIf
