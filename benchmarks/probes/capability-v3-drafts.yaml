@@ -125,13 +125,7 @@
 #   must equal total line count (whitespace-only lines were a residual
 #   composition channel inside the slack). Same round: window arithmetic
 #   corrected for per-block step headers and the batch block's single
-#   gate line. The armor chain has survived all three rounds.""),
-(#   f1. Three zero-context B2 rounds are done; each refuted structural
-#       pieces (all fixed in place) while the armor chain itself survived
-#       every round — round 2 explicitly recommended ruling it "confirmed
-#       information structure" for N1/N3 and extending it to N4, which
-#       draft-6 does. A confirmatory pass on the round-3 guard fix is the
-#       remaining gate before probes.
+#   gate line. The armor chain has survived all three rounds.
 # * All seeds, armor selections and complaint sequences are generated and
 #   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
 #   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order
@@ -155,12 +149,14 @@
 #        in the type-table classes. Per-task watch items in the blocks.
 #
 # Open flags for ruling:
-#   f1. Two zero-context B2 rounds are done; each refuted structural
-#       pieces (fixed in draft-6) while the armor chain itself survived
-#       both — round 2 explicitly recommended ruling it "confirmed
+#   f1. Three zero-context B2 rounds are done; each refuted structural
+#       pieces (all fixed in place) while the armor chain itself survived
+#       every round — round 2 explicitly recommended ruling it "confirmed
 #       information structure" for N1/N3 and extending it to N4, which
-#       draft-6 does. A confirmatory zero-context round on draft-6 is the
-#       remaining gate before probes.
+#       draft-6 does. The round-3 guard fix passed its confirmation
+#       attack (BSD + GNU sed); remaining pre-probe item: the trailing
+#       no-newline whitespace micro-channel (a few bits, close for
+#       hygiene with a last-byte-is-newline guard).
 #   f2. N1's honest worst case is exactly 8 actions — zero slack; one
 #       exploratory read costs the run. That IS the read-restraint axis,
 #       but the behavior probe must confirm it doesn't just measure
