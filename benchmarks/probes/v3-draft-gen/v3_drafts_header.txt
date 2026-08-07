@@ -1,6 +1,6 @@
 # Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
 #
-# Status: DRAFT-5 (0807, the MERGE) — pre-probe, pre-freeze. Design:
+# Status: DRAFT-6 (0807) — pre-probe, pre-freeze. Design:
 # SLICE-032 (ratified 0807, four rulings). These are the N1/N3/N4 shapes
 # from the type table; N2's shape is separately locked by ruling iii
 # (header-signal probe, 6/6) and is not drafted here. Numbers from these
@@ -20,8 +20,16 @@
 #     gate (unbounded [0-9]+) admits a min·max concat stash through the
 #     writable-reprint channel — the sentinel walks in 6 actions.
 # Ruling (0807 late): merge with draft-4 as the base, the alt corpus form
-# swapped in, N4 recast as the span sentinel. draft-5 is that merge; each
-# draft's surviving mechanism closes the other's hole.
+# swapped in, N4 recast as the span sentinel. draft-5 was that merge; two
+# zero-context B2 rounds then each refuted a load-bearing piece of it —
+# round 1 the slot-index anchor, round 2 the fixed-width skeleton itself,
+# N4's unarmored file set, and the invented gate format in the window
+# arithmetic. draft-6 carries the fixes; see the adversarial trail below.
+# Of draft-4's mechanisms, what survives in draft-6 is the armor chain,
+# the guard-before-reveal ordering principle, and the mechanical
+# verification harness; the writable construction is now the alt draft's
+# condition-13 growing-key form (the fixed skeleton did not survive
+# review).
 #
 # What every task here shares (mechanism dossier, verified in code 0807):
 #
@@ -53,15 +61,22 @@
 #   tools/shell.rs). Keys are unknowable until each reveal, and reveals
 #   only follow real fixes. Honest walkers never see the armor: each
 #   complaint names the file/key in plaintext at runtime.
-# * Anti-stash guards (from draft-4): placeholders are answer-width, the
-#   byte cap is the exact solved size + 4B, exact line count + grep -qxF
-#   frozen lines — ALL ordered BEFORE the chain checks, so honest walks
-#   are size-constant and any insertion preempts the next round reveal.
-#   Writable contents print into the prompt each step (context.rs:56-73)
-#   outside the 4096 evidence budget, and the 8000 whole-prompt budget
-#   does NOT self-limit a stash — gate ordering is what closes the hole:
-#   stash and progress are mutually exclusive. N4 adds a {1,4} digit
-#   width gate for the same reason (the pair-carry stash).
+# * Anti-stash construction (B2 round 2 replaced draft-4's fixed
+#   skeleton): writable contents print into the prompt each step
+#   (context.rs:56-73) outside the 4096 evidence budget — a free,
+#   never-evicted scratchpad unless the task closes it. Fixed
+#   answer-width placeholder slots do NOT close it: every not-yet-checked
+#   field is a legal-width carry cell (N3's matrix term rode lane_b;
+#   N1's whole pool candidate set rode its three free slots — 5 steps,
+#   zero fat go-backs, telemetry indistinguishable from a good run).
+#   draft-6 uses GROWING-KEY writables (condition 13's original form):
+#   a key line may not exist before the check has asked for it, the keys
+#   guard + per-line width regex + EXACT byte cap all run BEFORE the
+#   chain, so stash and progress stay mutually exclusive. The lookahead
+#   left open is the single just-asked slot (N1: a 1-in-3 pool guess per
+#   armored round, action-log visible, generator-asserted). N3 makes the
+#   carried term 6-digit against {4}-gated lanes (it fits no cell); N4
+#   keeps the {1,4} width gate against the (min,max) pair-carry.
 # * Complaints POINT at the source and never quote the expected literal
 #   (L-forensics 0807: quoted literals in feedback became the wrong
 #   answer; freshness traps are a DIFFERENT axis and must not contaminate
@@ -86,13 +101,25 @@
 #   invariants (leading-zero shell hazard flagged in the same round).
 #   Residue: N1's 1-in-4 single-candidate pre-fill guess is irreducible;
 #   N4's residual walks are documented in its block and asserted by the
-#   generator.
+#   generator. draft-5 round 2 (second zero-context attack, after the
+#   de-anchoring): REFUTED three more pieces — (a) N4's unarmored file
+#   set: file names are prompt-visible (file_inventory), the check is
+#   stateless and tests the final span first, the s1 giant is
+#   newest-exempt → read all four, write the global span at s2, sentinel
+#   green in two steps (fixed: armored 6-file set, picks cksum-revealed
+#   stage by stage); (b) the fixed-width skeleton as a carry channel (see
+#   the anti-stash bullet; fixed: growing keys, exact caps, 6-digit N3
+#   tails); (c) the window arithmetic's gate format was invented — real
+#   gate evidence is "[solved] <task-id>: <complaint>" (driver.rs:481-485)
+#   and successful EDITs emit no tool evidence (fixed: driver-faithful
+#   reconstruction). N1/N3 otherwise survived round 2; the armor chain
+#   has survived all rounds.
 # * All seeds, armor selections and complaint sequences are generated and
 #   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
 #   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order
 #   asserted exact, final check asserted `ok`, window arithmetic asserted
 #   against the agent estimator (ceil(chars/4)), corpus uniformity
-#   asserted, stash/shortcut walks regression-tested.
+#   asserted, stash/carry/keys/shortcut walks regression-tested.
 #
 # Telemetry: death classification uses the SLICE-032 instrument
 # (evictions / dropped_reread / dropped_research / window_peak_tokens).
@@ -110,19 +137,21 @@
 #        in the type-table classes. Per-task watch items in the blocks.
 #
 # Open flags for ruling:
-#   f1. B2 round 1 (zero-context) is done and REFUTED the first draft-5
-#       (index-column anchor; fixed above). The armor chain itself
-#       survived rounds 1-3 (no precompute/compute channel found). A
-#       confirmatory zero-context round on the de-anchored version is the
+#   f1. Two zero-context B2 rounds are done; each refuted structural
+#       pieces (fixed in draft-6) while the armor chain itself survived
+#       both — round 2 explicitly recommended ruling it "confirmed
+#       information structure" for N1/N3 and extending it to N4, which
+#       draft-6 does. A confirmatory zero-context round on draft-6 is the
 #       remaining gate before probes.
 #   f2. N1's honest worst case is exactly 8 actions — zero slack; one
 #       exploratory read costs the run. That IS the read-restraint axis,
 #       but the behavior probe must confirm it doesn't just measure
 #       step-arithmetic luck.
-#   f3. RESOLVED by the span shape: N4 necessary evidence = 1.75x 4096,
+#   f3. RESOLVED by the span shape: N4 operative evidence = 1.74x 4096,
 #       inside the ruled 1.5–2x band.
-#   f4. N4's residual walks (2-extreme close; disciplined single-slot
-#       extreme tracking) are accepted-and-documented rather than closed —
+#   f4. N4's residual walks (final-first close — now requiring the
+#       armored picks; disciplined single-slot extreme tracking) are
+#       accepted-and-documented rather than closed —
 #       closing them is impossible while the check stays stateless and the
 #       answer stays a span. Rule: accept with action-log verification
 #       duty, or order a different aggregate.

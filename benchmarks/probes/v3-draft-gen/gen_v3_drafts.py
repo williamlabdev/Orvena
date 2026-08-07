@@ -1,21 +1,38 @@
 #!/usr/bin/env python3
-"""Generate benchmarks/probes/capability-v3-drafts.yaml (N1/N3/N4, draft-5).
+"""Generate benchmarks/probes/capability-v3-drafts.yaml (N1/N3/N4, draft-6).
 
-draft-5 is the MERGE of the two 0807 parallel drafts, per ruling (0807 late):
-draft-4 (0eba93c: armor chain, anti-stash width guards) as the base, the
-alternative draft's corpus form (9b91b4b: uniform records, positional tail
-values) swapped in to close the SEARCH-cost bypass, and N4 recast as the
-span sentinel (which also resolves flag f3).
+Lineage: draft-4 (0eba93c, armor chain + guard ordering) x alt (9b91b4b,
+uniform/positional corpora, span sentinel, growing-key writable) merged per
+the 0807 ruling into draft-5; two zero-context B2 rounds then refuted, in
+order: the slot-index anchor (round 1 -> de-anchored corpora), and in round
+2 the FIXED-WIDTH SKELETON itself plus N4's unarmored file set:
+
+* fixed answer-width placeholder slots are a free stash: every not-yet-
+  checked field is a legal-width carry cell printed back each step, so N3's
+  matrix term (4 digits into lane_b) and N1's whole 3-tail candidate set
+  (3 toks into 3 free slots) ride the reprint and the fat go-backs the
+  tasks exist to measure never happen. draft-6 switches every writable to
+  the alt draft's GROWING-KEY construction (condition 13's original form):
+  a key line may not exist before the check has asked for it, the keys
+  guard runs before every reveal, and the lookahead stash shrinks to the
+  single just-asked slot (a 1-in-pool guess, action-log visible).
+* N3 tails are now 6-digit while lanes stay {4}-gated: the re-needed term
+  no longer fits ANY writable cell, killing the carry outright.
+* N4's operative file set is now ARMORED: refs/f1..f6 exist, the span runs
+  over f1, f2 plus two cksum-picked files revealed stage by stage — a
+  batch reader holds six tails and still cannot compute the final span.
+* the window arithmetic now reconstructs gate evidence in the driver's
+  REAL format ("[solved] <task-id>: <complaint>", driver.rs:481-485;
+  successful EDITs emit no tool evidence) instead of an invented one.
 
 Every corpus token is seeded-random; armor selections are computed with the
-REAL `cksum` binary so the generator verifies end-to-end solvability and the
-exact complaint sequence before the YAML is emitted. The window arithmetic
-(eviction inequalities per task) is asserted here too, with the agent's own
-estimator. Nothing is hand-written that a script can verify.
+REAL `cksum` binary; honest walks, complaint order, stash/keys regressions,
+window inequalities and corpus properties are all asserted before the YAML
+is emitted. Nothing is hand-written that a script can verify.
 """
 import math, os, re, random, shutil, string, subprocess, sys, tempfile
 
-rnd = random.Random(20260808)
+rnd = random.Random(20260809)
 ALNUM = string.ascii_lowercase + string.digits
 
 REGIONS = ["eu-west-1", "eu-west-2", "us-east-1", "us-east-2",
@@ -40,21 +57,12 @@ def est(text: str) -> int:
     return math.ceil(len(text) / 4)  # util.rs:9
 
 
-# ── uniform positional corpora (condition 14) ─────────────────────────────
-# Fixed-shape records; ONLY the last line's final field is operative. No
-# header line: every line is a record, none is distinguishable a priori.
-# Every record ends in a same-shape value, so no pattern formable without
-# having read the file singles the operative one out; a catch-all SEARCH
-# returns every line WITH a `path:line:` prefix (~1.25x the READ it would
-# replace), and MAX_HITS=200 caps any attempt to sweep several refs at once.
-
-# De-anchored records (fresh-eyes round 3, B2): NO index column — SEARCH
-# matches content only, and content no longer encodes position. Fields are
-# per-row RANDOM (no position-correlated cycle to learn from a sibling), and
-# sibling files get pairwise-DISTINCT row counts, so a search hit's
-# path:line: number can never be certified as "the last line" of a file the
-# model has not read. The only certain selector for a tail is the tail
-# itself, which presupposes the read.
+# ── de-anchored uniform positional corpora (condition 14 + B2 round 1) ────
+# Fixed-shape records, ONLY the last line's final field operative. No index
+# column (SEARCH matches content; content must not encode position), per-row
+# random fields (no position-correlated cycle to learn from a sibling),
+# sibling row counts pairwise distinct (a hit's path:line: number cannot be
+# certified as an unread file's last line).
 
 def corpus_tok(rows: int, tail: str) -> str:
     """Records end in a 12-char token; last line's token = `tail`."""
@@ -71,17 +79,18 @@ def corpus_tok(rows: int, tail: str) -> str:
     return body
 
 
-def corpus_num(rows: int, tail: int) -> str:
-    """Records end in a 4-digit number; last line's number = `tail`."""
+def corpus_num(rows: int, tail: int, width: int = 4) -> str:
+    """Records end in a `width`-digit number; last line's number = `tail`."""
+    lo, hi = 10 ** (width - 1), 10 ** width - 1
     out = []
     for i in range(rows):
-        val = tail if i + 1 == rows else rnd.randrange(1000, 9999)
-        assert 1000 <= int(val) <= 9999, "leading-zero / width invariant"
+        val = tail if i + 1 == rows else rnd.randrange(lo, hi)
+        assert lo <= int(val) <= hi, "leading-zero / width invariant"
         out.append(f"{rnd.choice(REGIONS):<10}  {rnd.choice(STATES):<5}  "
                    f"{rnd.choice(PHASES):<6}  "
                    f"{rnd.randrange(0x100000, 0xffffff):06x}  "
                    f"{rnd.choice(NOTES):<21}  {tok()}  "
-                   f"{rnd.randrange(0x100000, 0xffffff):06x}  {val:04d}")
+                   f"{rnd.randrange(0x100000, 0xffffff):06x}  {val:0{width}d}")
     body = '\n'.join(out) + '\n'
     assert body.count('\n') <= 100 and len(body) <= 8192, (body.count('\n'), len(body))
     return body
@@ -95,17 +104,12 @@ def uniform(body: str):
 
 
 def deanchored(task, files):
-    """The B2 round-3 regression: no cross-file positional anchor.
+    """B2 round-1 regression: no cross-file positional anchor.
 
-    (a) pairwise-distinct row counts — a line number seen in a SEARCH hit
-        on an unread sibling cannot be certified as its last line;
-    (b) no field of any row equals a zero-padded index of its own line —
-        the slot-#### anchor stays dead;
-    (c) the last rows' categorical tuples are pairwise distinct across the
-        family — a sibling's last-row field value is not a working selector
-        for THIS file's last row;
-    (d) a catch-all SEARCH (the only certain way to see an unread file's
-        tail) renders dearer than the READ it would replace.
+    (a) pairwise-distinct row counts; (b) no zero-padded own-line-index
+    field (the slot-#### anchor stays dead); (c) last-row categorical
+    tuples pairwise distinct across the family; (d) a catch-all SEARCH
+    renders dearer than the READ it would replace.
     """
     counts = {p: b.count('\n') for p, b in files.items()}
     assert len(set(counts.values())) == len(counts), f"{task}: row counts collide: {counts}"
@@ -121,12 +125,8 @@ def deanchored(task, files):
 
 
 # ── N1: pin-eviction (ordering / re-read decision) ────────────────────────
-# draft-4's 4-round chain, fat lookups now FILE-positional: the armor picks
-# WHICH pool file settles rounds 2-3 (cksum % 3 + 1), and the value is the
-# file's last line — row-level armor died in the 0807 collision (a complaint
-# that names a row key turns every fat value into a ~32-token SEARCH).
 N1_POOL = 3
-N1_POOL_ROWS = {1: 99, 2: 98, 3: 97}  # pairwise distinct (deanchored regression)
+N1_POOL_ROWS = {1: 99, 2: 98, 3: 97}  # pairwise distinct (deanchored)
 
 pin_vals = {k: tok() for k in ('k1', 'k3', 'k5', 'k7', 'k9')}
 pin_body = '# staging pins — rotation 2026-08\n' + \
@@ -135,7 +135,7 @@ pin_body = '# staging pins — rotation 2026-08\n' + \
 n1_release = pin_vals['k1']
 n1_i = cksum_of(n1_release) % N1_POOL + 1
 n1_mirror = tok()
-while cksum_of(n1_mirror) % N1_POOL + 1 == n1_i:  # rounds 2/3 must use distinct files
+while cksum_of(n1_mirror) % N1_POOL + 1 == n1_i:  # rounds 2/3 use distinct files
     n1_mirror = tok()
 n1_j = cksum_of(n1_mirror) % N1_POOL + 1
 n1_fallback = tok()
@@ -149,139 +149,167 @@ for idx in range(1, N1_POOL + 1):
     uniform(n1_pool[f'refs/inv-{idx}.txt'])
 deanchored('N1', n1_pool)
 
+# Growing-key writable: field lines may not exist before they are asked for.
 n1_deploy = """# staging deploy manifest
-release = ------------
-mirror = ------------
-fallback = ------------
-rollback = ------------
 owner = platform
 """
-n1_final = n1_deploy
-for _f, _v in (('release', n1_release), ('mirror', n1_mirror),
-               ('fallback', n1_fallback), ('rollback', n1_rollback)):
-    n1_final = n1_final.replace(f'{_f} = ------------', f'{_f} = {_v}')
-N1_CAP = len(n1_final.encode()) + 4
+n1_final = ('# staging deploy manifest\n'
+            f'release = {n1_release}\n'
+            f'mirror = {n1_mirror}\n'
+            f'fallback = {n1_fallback}\n'
+            f'rollback = {n1_rollback}\n'
+            'owner = platform\n')
+N1_CAP = len(n1_final.encode())  # exact — a solved+4 slack was itself carry room
 
 n1_check = f"""#!/bin/sh
 f=deploy.conf
 fail() {{ echo "deploy problem: $1"; exit 1; }}
-test "$(wc -c < "$f" | tr -d ' ')" -le {N1_CAP} || fail "deploy.conf must stay under {N1_CAP} bytes"
-test "$(wc -l < "$f" | tr -d ' ')" = "6" || fail "deploy.conf must stay exactly 6 lines"
+test "$(wc -c < "$f" | tr -d ' ')" -le {N1_CAP} || fail "deploy.conf must stay within {N1_CAP} bytes"
 grep -qxF '# staging deploy manifest' "$f" || fail "an unrelated line changed: header"
 grep -qxF 'owner = platform' "$f" || fail "an unrelated line changed: owner"
+sed -n '/^[a-z]/p' "$f" | grep -v '^owner = platform$' | grep -qvE '^(release|mirror|fallback|rollback) = [a-z0-9]{{12}}$' \\
+  && fail "every field line must read '<field> = <12-character value>' — nothing else may live in this file"
+get() {{ sed -n "s/^$1 = //p" "$f"; }}
+keys=$(sed -n 's/^\\([a-z]*\\) = .*/\\1/p' "$f" | grep -v '^owner$' | sort | tr '\\n' ' ')
 want=$(awk '$1=="k1"{{print $2}}' notes/s9.txt)
-got=$(sed -n 's/^release = //p' "$f")
-test "$got" = "$want" || fail "release must equal the k1 entry in notes/s9.txt (that file is the source of record for this setting)"
-n=$(printf %s "$got" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
+if [ "$(get release)" != "$want" ]; then
+  case "$keys" in ""|"release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, nothing else" ;; esac
+  fail "release must equal the k1 entry in notes/s9.txt (that file is the source of record; add the line if it is not there)"
+fi
+n=$(printf %s "$(get release)" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
 want=$(tail -n 1 "refs/inv-$n.txt" | awk '{{print $NF}}')
-got=$(sed -n 's/^mirror = //p' "$f")
-test "$got" = "$want" || fail "mirror must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record for this setting)"
-n=$(printf %s "$got" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
+if [ "$(get mirror)" != "$want" ]; then
+  case "$keys" in "release "|"mirror release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release and mirror, nothing else" ;; esac
+  fail "mirror must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
+fi
+n=$(printf %s "$(get mirror)" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
 want=$(tail -n 1 "refs/inv-$n.txt" | awk '{{print $NF}}')
-got=$(sed -n 's/^fallback = //p' "$f")
-test "$got" = "$want" || fail "fallback must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record for this setting)"
-n=$(printf %s "$got" | cksum | awk '{{print $1 % 4}}')
+if [ "$(get fallback)" != "$want" ]; then
+  case "$keys" in "mirror release "|"fallback mirror release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, mirror and fallback, nothing else" ;; esac
+  fail "fallback must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
+fi
+n=$(printf %s "$(get fallback)" | cksum | awk '{{print $1 % 4}}')
 key=k$((2 * n + 3))
 want=$(awk -v k="$key" '$1==k{{print $2}}' notes/s9.txt)
-got=$(sed -n 's/^rollback = //p' "$f")
-test "$got" = "$want" || fail "rollback must equal the $key entry in notes/s9.txt (that file is the source of record for this setting)"
+if [ "$(get rollback)" != "$want" ]; then
+  case "$keys" in "fallback mirror release "|"fallback mirror release rollback ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, mirror, fallback and rollback, nothing else" ;; esac
+  fail "rollback must equal the $key entry in notes/s9.txt (that file is the source of record; add the line if it is not there)"
+fi
 echo ok
 """
 
 # ── N3: converge-fatref (one reference term in EVERY round) ───────────────
-# The alt structure carries the merge here: each lane is a SUBTRACTION whose
-# minuend ends a pool file and whose subtrahend ends refs/matrix.txt, so the
-# matrix term is re-needed every round and the round's other fat read evicts
-# it. draft-4's audit-dump variant is structurally incompatible with a
-# pairwise need (fat gate + two coexisting fat blocks cannot fit 4096 — the
-# task would break condition 9), so the eviction source is the pair itself.
-# The armor picks the round-2 pool file from {{p2,p3}} via cksum(lane_a).
+# Tails are 6-digit; lanes are {4}-gated differences. The re-needed matrix
+# term does not fit any writable cell (B2 round 2 killed the 4-digit carry).
 N3_FILE_ROWS = {'matrix': 84, 'p1': 83, 'p2': 82, 'p3': 81}  # pairwise distinct
+N3_W = 6
 
-n3_m0 = rnd.randrange(1000, 4000)
-n3_lane_a = rnd.randrange(1000, 9999 - n3_m0)
+n3_m0 = rnd.randrange(100000, 999999 - 9999)
+n3_lane_a = rnd.randrange(1000, 9999)
 n3_v1 = n3_m0 + n3_lane_a
 n3_j = cksum_of(str(n3_lane_a)) % 2 + 2  # p2 or p3
-n3_lane_b = rnd.randrange(1000, 9999 - n3_m0)
+n3_lane_b = rnd.randrange(1000, 9999)
 while n3_lane_b == n3_lane_a:
-    n3_lane_b = rnd.randrange(1000, 9999 - n3_m0)
+    n3_lane_b = rnd.randrange(1000, 9999)
 n3_vj = n3_m0 + n3_lane_b
 
-n3_files = {'refs/matrix.txt': corpus_num(N3_FILE_ROWS['matrix'], n3_m0),
-            'refs/p1.txt': corpus_num(N3_FILE_ROWS['p1'], n3_v1)}
+n3_files = {'refs/matrix.txt': corpus_num(N3_FILE_ROWS['matrix'], n3_m0, N3_W),
+            'refs/p1.txt': corpus_num(N3_FILE_ROWS['p1'], n3_v1, N3_W)}
 for idx in (2, 3):
-    tail = n3_vj if idx == n3_j else rnd.randrange(1000, 9999)
-    n3_files[f'refs/p{idx}.txt'] = corpus_num(N3_FILE_ROWS[f'p{idx}'], tail)
+    tail = n3_vj if idx == n3_j else rnd.randrange(100000, 999999)
+    n3_files[f'refs/p{idx}.txt'] = corpus_num(N3_FILE_ROWS[f'p{idx}'], tail, N3_W)
 for body in n3_files.values():
     uniform(body)
 deanchored('N3', n3_files)
-assert all(1000 <= v <= 9999 for v in
-           (n3_m0, n3_v1, n3_vj, n3_lane_a, n3_lane_b)), "leading-zero invariant"
-
+assert all(100000 <= v <= 999999 for v in (n3_m0, n3_v1, n3_vj)), "6-digit invariant"
+assert all(1000 <= v <= 9999 for v in (n3_lane_a, n3_lane_b)), "4-digit lanes"
 
 n3_limits = """# capacity limits — planner input
-lane_a = ----
-lane_b = ----
 guard = fixed
 """
-n3_final = n3_limits.replace('lane_a = ----', f'lane_a = {n3_lane_a}') \
-                    .replace('lane_b = ----', f'lane_b = {n3_lane_b}')
-N3_CAP = len(n3_final.encode()) + 4
+n3_final = ('# capacity limits — planner input\n'
+            f'lane_a = {n3_lane_a}\n'
+            f'lane_b = {n3_lane_b}\n'
+            'guard = fixed\n')
+N3_CAP = len(n3_final.encode())
 
 n3_check = f"""#!/bin/sh
 f=limits.conf
 fail() {{ echo "limits problem: $1"; exit 1; }}
-test "$(wc -c < "$f" | tr -d ' ')" -le {N3_CAP} || fail "limits.conf must stay under {N3_CAP} bytes"
-test "$(wc -l < "$f" | tr -d ' ')" = "4" || fail "limits.conf must stay exactly 4 lines"
+test "$(wc -c < "$f" | tr -d ' ')" -le {N3_CAP} || fail "limits.conf must stay within {N3_CAP} bytes"
 grep -qxF '# capacity limits — planner input' "$f" || fail "an unrelated line changed: header"
 grep -qxF 'guard = fixed' "$f" || fail "an unrelated line changed: guard"
+sed -n '/^[a-z]/p' "$f" | grep -v '^guard = fixed$' | grep -qvE '^lane_[ab] = [0-9]{{4}}$' \\
+  && fail "every lane line must read 'lane_<x> = <4-digit number>' — nothing else may live in this file"
+get() {{ sed -n "s/^$1 = //p" "$f"; }}
+keys=$(sed -n 's/^\\(lane_[a-z]*\\) = .*/\\1/p' "$f" | sort | tr '\\n' ' ')
 m=$(tail -n 1 refs/matrix.txt | awk '{{print $NF}}')
 a=$(tail -n 1 refs/p1.txt | awk '{{print $NF}}')
-got=$(sed -n 's/^lane_a = //p' "$f")
-test "$got" = "$((a - m))" || fail "lane_a must equal the value ending the LAST line of refs/p1.txt minus the value ending the LAST line of refs/matrix.txt"
-n=$(printf %s "$got" | cksum | awk '{{print $1 % 2 + 2}}')
+if [ "$(get lane_a)" != "$((a - m))" ]; then
+  case "$keys" in ""|"lane_a ") ;; *) fail "limits may hold only the lanes asked for so far — that is lane_a, nothing else" ;; esac
+  fail "lane_a must equal the value ending the LAST line of refs/p1.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)"
+fi
+n=$(printf %s "$(get lane_a)" | cksum | awk '{{print $1 % 2 + 2}}')
 b=$(tail -n 1 "refs/p$n.txt" | awk '{{print $NF}}')
-got=$(sed -n 's/^lane_b = //p' "$f")
-test "$got" = "$((b - m))" || fail "lane_b must equal the value ending the LAST line of refs/p$n.txt minus the value ending the LAST line of refs/matrix.txt"
+if [ "$(get lane_b)" != "$((b - m))" ]; then
+  case "$keys" in "lane_a "|"lane_a lane_b ") ;; *) fail "limits may hold only the lanes asked for so far — that is lane_a and lane_b, nothing else" ;; esac
+  fail "lane_b must equal the value ending the LAST line of refs/p$n.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)"
+fi
 echo ok
 """
 
-# ── N4: sentinel-span ─────────────────────────────────────────────────────
-# The carried value is a SPAN (largest minus smallest): a (min,max) PAIR is
-# the running state, and the one writable slot is width-gated to <= 4 digits
-# so it can carry at most ONE of the two — the alt draft's unbounded [0-9]+
-# would have let min·max be concatenated into the slot (free reprint channel,
-# context.rs) and the sentinel walked in 6 actions. Global extremes sit in
-# NON-ADJACENT files (min: f2, max: f4) and the corpora are uniform, so no
-# 2-read pair is identifiable a priori. Residual walks are documented in the
-# task comment; a green cell is only read after action-log verification.
-N4_FILE_ROWS = {'f1': 84, 'f2': 83, 'f3': 82, 'f4': 81}  # pairwise distinct
-N4_TAILS = {'f1': 5210, 'f2': 1120, 'f3': 7450, 'f4': 9803}
-_a, _b, _c, _d = (N4_TAILS[k] for k in ('f1', 'f2', 'f3', 'f4'))
-n4_sA = max(_a, _b) - min(_a, _b)
-n4_sB = max(_a, _b, _c) - min(_a, _b, _c)
-n4_sC = max(N4_TAILS.values()) - min(N4_TAILS.values())
+# ── N4: sentinel-span with an ARMORED file set ────────────────────────────
+# refs/f1..f6 exist; the span runs over f1, f2 and TWO cksum-picked files
+# revealed stage by stage. A batch reader holds all six tails and still
+# cannot compute the final span (B2 round 2 killed the unarmored set: read
+# four named files at s1, write the global span at s2, done in two steps).
+N4_FILE_ROWS = {'f1': 84, 'f2': 83, 'f3': 82, 'f4': 81, 'f5': 80, 'f6': 79}
+
+n4_t1, n4_t2 = 5210, 1120                      # f2 carries the global min
+n4_sA = abs(n4_t1 - n4_t2)
+n4_nB = cksum_of(str(n4_sA)) % 4 + 3           # stage-B file index in f3..f6
+n4_tB = 7450                                   # interim max
+n4_sB = max(n4_t1, n4_t2, n4_tB) - min(n4_t1, n4_t2, n4_tB)
+n4_nC = cksum_of(str(n4_sB)) % 4 + 3
+while n4_nC == n4_nB:                          # stage-C file must differ
+    n4_tB += 1
+    n4_sB = max(n4_t1, n4_t2, n4_tB) - min(n4_t1, n4_t2, n4_tB)
+    n4_nC = cksum_of(str(n4_sB)) % 4 + 3
+n4_tC = 9803                                   # global max
+n4_sC = max(n4_t1, n4_t2, n4_tB, n4_tC) - min(n4_t1, n4_t2, n4_tB, n4_tC)
+
+n4_tails = {'f1': n4_t1, 'f2': n4_t2, f'f{n4_nB}': n4_tB, f'f{n4_nC}': n4_tC}
+for name in N4_FILE_ROWS:
+    if name not in n4_tails:
+        # Decoys must MOVE the stage-B span too — an interior decoy's
+        # candidate span collapses onto sA and shrinks the guess space.
+        cand = rnd.randrange(5500, 9700)
+        while (max(n4_t1, n4_t2, cand) - min(n4_t1, n4_t2, cand)
+               in {n4_sA, n4_sB, n4_sC}) or cand in (n4_t1, n4_t2, n4_tB, n4_tC):
+            cand = rnd.randrange(5500, 9700)
+        n4_tails[name] = cand
 assert len({n4_sA, n4_sB, n4_sC}) == 3, "every N4 stage must move the target"
-assert min(N4_TAILS.values()) == _b and max(N4_TAILS.values()) == _d, \
-    "global extremes must sit in f2 and f4 (non-adjacent)"
 assert all(1000 <= s <= 9999 for s in (n4_sA, n4_sB, n4_sC)), "spans must stay 4-digit"
-assert not ({n4_sA, n4_sB, n4_sC} & set(N4_TAILS.values())), "spans must not equal tails"
+assert all(1000 <= t <= 9999 for t in n4_tails.values()), "tails must stay 4-digit"
+assert not ({n4_sA, n4_sB, n4_sC} & set(n4_tails.values())), "spans must not equal tails"
+# guessability floor: the four candidate stage-B spans must be distinct
+_sB_cands = {max(n4_t1, n4_t2, n4_tails[f'f{k}']) - min(n4_t1, n4_t2, n4_tails[f'f{k}'])
+             for k in range(3, 7)}
+assert len(_sB_cands) == 4, "stage-B candidates must be pairwise distinct"
 
 n4_files = {}
-for name, tail in N4_TAILS.items():
-    n4_files[f'refs/{name}.txt'] = corpus_num(N4_FILE_ROWS[name], tail)
+for name, rows in N4_FILE_ROWS.items():
+    n4_files[f'refs/{name}.txt'] = corpus_num(rows, n4_tails[name])
     uniform(n4_files[f'refs/{name}.txt'])
 deanchored('N4', n4_files)
-assert all(1000 <= v <= 9999 for v in N4_TAILS.values()), "leading-zero invariant"
-
 
 n4_reading = "reading = 0\n"
-N4_CAP = len(f"reading = {n4_sC}\n".encode()) + 4
+N4_CAP = len(f"reading = {n4_sC}\n".encode())
 
 n4_check = f"""#!/bin/sh
 f=reading.conf
 fail() {{ echo "ledger problem: $1"; exit 1; }}
-test "$(wc -c < "$f" | tr -d ' ')" -le {N4_CAP} || fail "reading.conf must stay under {N4_CAP} bytes"
+test "$(wc -c < "$f" | tr -d ' ')" -le {N4_CAP} || fail "reading.conf must stay within {N4_CAP} bytes"
 sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^reading = [0-9]{{1,4}}$' \\
   && fail "the file must hold one line, 'reading = <number, at most four digits>' — nothing else may live in it"
 test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "1" \\
@@ -289,12 +317,18 @@ test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "1" \\
 v=$(sed -n 's/^reading = //p' "$f")
 t() {{ tail -n 1 "refs/$1" | awk '{{print $NF}}'; }}
 span() {{ printf '%s\\n' "$@" | sort -n | awk 'NR==1 {{ lo = $1 }} {{ hi = $1 }} END {{ print hi - lo }}'; }}
-a=$(t f1.txt); b=$(t f2.txt); c=$(t f3.txt); d=$(t f4.txt)
+a=$(t f1.txt); b=$(t f2.txt)
+sA=$(span "$a" "$b")
+nB=$(printf %s "$sA" | cksum | awk '{{print $1 % 4 + 3}}')
+c=$(t "f$nB.txt")
+sB=$(span "$a" "$b" "$c")
+nC=$(printf %s "$sB" | cksum | awk '{{print $1 % 4 + 3}}')
+d=$(t "f$nC.txt")
 test "$v" = "$(span "$a" "$b" "$c" "$d")" && {{ echo ok; exit 0; }}
-test "$v" = "$(span "$a" "$b" "$c")" \\
-  && fail "reading must now also account for refs/f4.txt — largest minus smallest across f1, f2, f3 and f4"
-test "$v" = "$(span "$a" "$b")" \\
-  && fail "reading must now also account for refs/f3.txt — largest minus smallest across f1, f2 and f3"
+test "$v" = "$sB" \\
+  && fail "reading must now also account for refs/f$nC.txt — largest minus smallest across f1, f2, f$nB and f$nC"
+test "$v" = "$sA" \\
+  && fail "reading must now also account for refs/f$nB.txt — largest minus smallest across f1, f2 and f$nB"
 fail "reading must be the largest minus the smallest of the values ending refs/f1.txt and refs/f2.txt"
 """
 
@@ -312,9 +346,24 @@ def run_check(d):
     return r.returncode, r.stdout
 
 
-def verify(name, seeds, writable, fixes, expected_complaints, bytecap=None):
+def set_field(d, writable, field, value, anchor):
+    """Honest edit: set `field` if present, else insert it before `anchor`
+    (growing-key files start without their field lines)."""
+    wpath = os.path.join(d, writable)
+    src = open(wpath).read()
+    if re.search(rf'^{field} = ', src, flags=re.M):
+        new = re.sub(rf'^{field} = .*$', f'{field} = {value}', src, flags=re.M)
+    elif anchor:
+        new = src.replace(anchor, f'{field} = {value}\n{anchor}')
+    else:
+        new = src + f'{field} = {value}\n'
+    assert new != src, f'fix {field} did not change the file'
+    open(wpath, 'w').write(new)
+
+
+def verify(name, seeds, writable, fixes, expected_complaints, anchor, bytecap):
     """Materialize seeds, apply fixes one at a time, assert the check's
-    complaint sequence matches exactly and ends in `ok`."""
+    complaint sequence matches exactly and ends in `ok` at the exact cap."""
     d = tempfile.mkdtemp(prefix=f'v3draft-{name}-')
     try:
         materialize(seeds, d)
@@ -323,18 +372,12 @@ def verify(name, seeds, writable, fixes, expected_complaints, bytecap=None):
             first = out.splitlines()[0] if out else ''
             assert rc != 0, f'{name}: check passed too early at round {i}'
             assert complaint in first, f'{name} round {i}: got {first!r}, want {complaint!r}'
-            wpath = os.path.join(d, writable)
-            src = open(wpath).read()
-            new = re.sub(rf'^{field} = .*$', f'{field} = {value}', src, flags=re.M)
-            assert new != src, f'{name}: fix {field} did not change the file'
-            open(wpath, 'w').write(new)
+            set_field(d, writable, field, value, anchor)
         rc, out = run_check(d)
         assert rc == 0 and out.splitlines()[-1] == 'ok', f'{name}: final check not ok: {out!r}'
-        if bytecap is not None:
-            final = os.path.getsize(os.path.join(d, writable))
-            assert bytecap - final == 4, \
-                f'{name}: cap {bytecap} minus solved {final}B must be exactly 4'
-        print(f'  {name}: {len(fixes)} rounds verified, complaint order exact, final ok')
+        final = os.path.getsize(os.path.join(d, writable))
+        assert bytecap == final, f'{name}: cap {bytecap} must equal solved size {final}'
+        print(f'  {name}: {len(fixes)} rounds verified, complaint order exact, final ok at exact cap')
     finally:
         shutil.rmtree(d)
 
@@ -347,73 +390,115 @@ verify('N1', n1_seeds, 'deploy.conf',
        ['release must equal the k1 entry',
         f'mirror must equal the value ending the LAST line of refs/inv-{n1_i}.txt',
         f'fallback must equal the value ending the LAST line of refs/inv-{n1_j}.txt',
-        f'rollback must equal the {n1_key4} entry'], bytecap=N1_CAP)
+        f'rollback must equal the {n1_key4} entry'],
+       anchor='owner = platform', bytecap=N1_CAP)
 
 
-def n1_stash_regression():
-    """Verifier round-2 walk (0807): fix release, pack all five pin values
-    into the not-yet-checked rollback field. The width guard must preempt
-    the round-2 reveal."""
-    d = tempfile.mkdtemp(prefix='v3draft-stashreg-')
+def n1_keys_regressions():
+    """B2 round-2 walk: the fixed skeleton let a batch reader stash the
+    whole 3-tail candidate set in free slots. The growing-key guard must
+    (a) preempt any reveal when more than the just-asked key is added, and
+    (b) leave exactly the single-slot lookahead open (documented residue),
+    and (c) preempt the old 1-in-4 pin pre-fill outright."""
+    d = tempfile.mkdtemp(prefix='v3draft-n1keys-')
     try:
         materialize(n1_seeds, d)
-        stash = ''.join(pin_vals.values())
-        conf = open(os.path.join(d, 'deploy.conf')).read()
-        conf = conf.replace('release = ------------', f'release = {n1_release}')
-        conf = conf.replace('rollback = ------------', f'rollback = {stash}')
-        open(os.path.join(d, 'deploy.conf'), 'w').write(conf)
+        set_field(d, 'deploy.conf', 'release', n1_release, 'owner = platform')
+        set_field(d, 'deploy.conf', 'mirror', tok(), 'owner = platform')
+        set_field(d, 'deploy.conf', 'fallback', tok(), 'owner = platform')
         rc, out = run_check(d)
         first = out.splitlines()[0]
-        assert rc != 0 and 'bytes' in first, \
-            f'stash regression FAILED: guard did not preempt, got {first!r}'
-        assert 'mirror' not in first, 'stash walk still received the round-2 reveal'
-        print(f'  N1 stash regression: guard preempts reveal ({first!r})')
+        assert rc != 0 and 'only the fields asked for so far' in first, \
+            f'keys guard did not preempt: {first!r}'
+        assert 'inv-' not in first, 'multi-slot stash still received a reveal'
+        # single-slot lookahead: release fixed + a wrong mirror guess DOES
+        # get the mirror reveal — the 1-in-3 residue, action-log visible
+        open(os.path.join(d, 'deploy.conf'), 'w').write(n1_deploy)
+        set_field(d, 'deploy.conf', 'release', n1_release, 'owner = platform')
+        set_field(d, 'deploy.conf', 'mirror', tok(), 'owner = platform')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and f'refs/inv-{n1_i}.txt' in first, \
+            f'single-slot lookahead unexpectedly blocked: {first!r}'
+        # early rollback line (the old 1-in-4 pin pre-fill) trips the guard
+        open(os.path.join(d, 'deploy.conf'), 'w').write(n1_deploy)
+        set_field(d, 'deploy.conf', 'release', n1_release, 'owner = platform')
+        set_field(d, 'deploy.conf', 'rollback', pin_vals['k5'], 'owner = platform')
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and 'only the fields asked for so far' in first and 'inv-' not in first, \
+            f'pin pre-fill was not preempted: {first!r}'
+        print('  N1 keys regressions: multi-slot stash preempted, pin pre-fill preempted, '
+              'single-slot lookahead open (documented 1-in-3)')
     finally:
         shutil.rmtree(d)
 
 
-n1_stash_regression()
+n1_keys_regressions()
 
 n3_seeds = {'limits.conf': n3_limits, 'tests/check.sh': n3_check, **n3_files}
 verify('N3', n3_seeds, 'limits.conf',
        [('lane_a', n3_lane_a), ('lane_b', n3_lane_b)],
        ['lane_a must equal the value ending the LAST line of refs/p1.txt minus',
         f'lane_b must equal the value ending the LAST line of refs/p{n3_j}.txt minus'],
-       bytecap=N3_CAP)
+       anchor='guard = fixed', bytecap=N3_CAP)
+
+
+def n3_carry_regression():
+    """B2 round-2 walk: lane_b as a carry cell for the matrix term. With
+    6-digit tails and a {4} lane gate the term does not fit; the format
+    guard must preempt the lane_b reveal."""
+    d = tempfile.mkdtemp(prefix='v3draft-n3carry-')
+    try:
+        materialize(n3_seeds, d)
+        set_field(d, 'limits.conf', 'lane_a', n3_lane_a, 'guard = fixed')
+        set_field(d, 'limits.conf', 'lane_b', n3_m0, 'guard = fixed')  # 6-digit stash
+        rc, out = run_check(d)
+        first = out.splitlines()[0]
+        assert rc != 0 and ('4-digit number' in first or 'bytes' in first), \
+            f'matrix-term carry was not stopped: {first!r}'
+        assert 'refs/p' not in first, 'carry stash still received the lane_b reveal'
+        print(f'  N3 carry regression: 6-digit term cannot ride a {{4}} lane ({first.split(":")[-1].strip()!r})')
+    finally:
+        shutil.rmtree(d)
+
+
+n3_carry_regression()
 
 n4_seeds = {'reading.conf': n4_reading, 'tests/check.sh': n4_check, **n4_files}
 verify('N4', n4_seeds, 'reading.conf',
        [('reading', n4_sA), ('reading', n4_sB), ('reading', n4_sC)],
        ['reading must be the largest minus the smallest of the values ending refs/f1.txt and refs/f2.txt',
-        'reading must now also account for refs/f3.txt',
-        'reading must now also account for refs/f4.txt'], bytecap=N4_CAP)
+        f'reading must now also account for refs/f{n4_nB}.txt',
+        f'reading must now also account for refs/f{n4_nC}.txt'],
+       anchor='', bytecap=N4_CAP)
 
 
 def n4_residual_walks():
-    """Two residual walks exist BY CONSTRUCTION and are documented, not
-    denied. Assert them so a future edit that silently changes their status
-    fails loudly here."""
-    # (i) the check is stateless and tests the final span first: a model that
-    # somehow holds both global extremes can close without walking stages.
+    """Residual walks exist BY CONSTRUCTION and are documented, not denied.
+    Assert them so a silent status change fails loudly here."""
     d = tempfile.mkdtemp(prefix='v3draft-n4short-')
     try:
         materialize(n4_seeds, d)
         p = os.path.join(d, 'reading.conf')
+        # (i) stateless final-first close still exists — but reaching it now
+        # requires knowing the two ARMORED picks; a batch reader cannot
+        # compute them.
         open(p, 'w').write(f'reading = {n4_sC}\n')
         rc, out = run_check(d)
-        assert rc == 0 and out.strip() == 'ok', '2-extreme close no longer works — recheck design'
-        # (ii) stage-skip: a correct stage-B value gets the f4 reveal without
-        # stage A ever having been written.
+        assert rc == 0 and out.strip() == 'ok', 'final-first close no longer works — recheck design'
+        # (ii) stage-skip: a correct stage-B value reveals f_nC without stage A.
         open(p, 'w').write(f'reading = {n4_sB}\n')
         rc, out = run_check(d)
-        assert rc != 0 and 'account for refs/f4.txt' in out.splitlines()[0]
-        # (iii) the width gate: a min-max concat stash trips the format guard
-        # and never reaches a stage reveal.
-        open(p, 'w').write(f'reading = {min(N4_TAILS.values())}{max(N4_TAILS.values())}\n')
+        assert rc != 0 and f'account for refs/f{n4_nC}.txt' in out.splitlines()[0]
+        # (iii) min-max concat stash trips the width gate before any reveal.
+        open(p, 'w').write(f'reading = {min(n4_tails.values())}{max(n4_tails.values())}\n')
         rc, out = run_check(d)
-        assert rc != 0 and 'at most four digits' in out.splitlines()[0], \
-            f'concat stash was not stopped: {out.splitlines()[0]!r}'
-        print('  N4 residual walks: 2-extreme close open (documented), '
+        first = out.splitlines()[0]
+        assert rc != 0 and ('at most four digits' in first or 'bytes' in first), \
+            f'concat stash was not stopped: {first!r}'
+        assert 'account for' not in first, 'concat stash still received a reveal'
+        print('  N4 residual walks: final-first close open (armored picks required), '
               'stage-skip open (documented), concat stash CLOSED')
     finally:
         shutil.rmtree(d)
@@ -421,21 +506,28 @@ def n4_residual_walks():
 
 n4_residual_walks()
 
-# ── window arithmetic (agent 0.5.0 constants; assert, do not hope) ────────
+# ── window arithmetic (agent 0.5.0 constants; driver-faithful formats) ────
+# Gate evidence really is "[solved] <task-id>: <complaint>\n" (driver.rs:
+# 481-485, runner.rs bench gate name "solved", condition = task id) and a
+# successful EDIT emits NO tool evidence — the edit-step block is the gate
+# line alone. B2 round 2 caught the invented format used before.
 BUDGET = 4096
-GATE = {  # the longest complaint each task's gate can emit, as a gate block
-    'N1': "gate 'check' failed:\ndeploy problem: fallback must equal the value ending the LAST line of refs/inv-9.txt\n",
-    'N3': "gate 'check' failed:\nlimits problem: lane_b must equal the value ending the LAST line of refs/p9.txt minus the value ending the LAST line of refs/matrix.txt\n",
-    'N4': "gate 'check' failed:\nledger problem: reading must now also account for refs/f4.txt — largest minus smallest across f1, f2, f3 and f4\n",
+LONGEST = {
+    'N1': "deploy problem: fallback must equal the value ending the LAST line of refs/inv-9.txt (that file is the source of record; add the line if it is not there)",
+    'N3': "limits problem: lane_b must equal the value ending the LAST line of refs/p9.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)",
+    'N4': "ledger problem: reading must now also account for refs/f9.txt — largest minus smallest across f1, f2, f9 and f9",
 }
+TASK_ID = {'N1': 'capv3-pin-eviction', 'N3': 'capv3-converge-fatref',
+           'N4': 'capv3-sentinel-span'}
+GATE = {k: f"[solved] {TASK_ID[k]}: {v}\n" for k, v in LONGEST.items()}
 
 
 def rblock(task, path, body):
     return est(f"READ '{path}':\n{body}" + GATE[task])
 
 
-def eblock(task, writable):
-    return est(f"EDIT '{writable}': 1 replacement\n" + GATE[task])
+def eblock(task):
+    return est(GATE[task])  # successful edits emit no tool evidence
 
 
 fails = []
@@ -452,7 +544,7 @@ print('--- N1 (pin must not survive the two pool reads) ---')
 s1 = rblock('N1', 'notes/s9.txt', pin_body)
 pool_blocks = sorted(rblock('N1', p, b) for p, b in n1_pool.items())
 lo1, lo2, hi = pool_blocks[0], pool_blocks[1], pool_blocks[-1]
-e = eblock('N1', 'deploy.conf')
+e = eblock('N1')
 print(f'  blocks: pin={s1} pool(sorted)={pool_blocks} edit={e}')
 require('pin evicted before round 4 (worst pool pair)',
         lo1 + e + lo2 + e + e > BUDGET + 60,
@@ -470,7 +562,7 @@ m = rblock('N3', 'refs/matrix.txt', n3_files['refs/matrix.txt'])
 p1 = rblock('N3', 'refs/p1.txt', n3_files['refs/p1.txt'])
 p2b = rblock('N3', 'refs/p2.txt', n3_files['refs/p2.txt'])
 p3b = rblock('N3', 'refs/p3.txt', n3_files['refs/p3.txt'])
-e3 = eblock('N3', 'limits.conf')
+e3 = eblock('N3')
 print(f'  blocks: matrix={m} p1={p1} p2={p2b} p3={p3b} edit={e3} (armored j={n3_j})')
 require('round 1 works', m + p1 + e3 <= BUDGET, f'm+p1+edit = {m + p1 + e3} <= {BUDGET}')
 require('matrix evicted before round-2 edit', m + p1 + e3 + min(p2b, p3b) > BUDGET,
@@ -480,16 +572,24 @@ require('round 2 works after re-read', e3 + max(p2b, p3b) + m <= BUDGET,
 require('cond-9: 6 actions, slack 2', True, 'R m, R p1, E, R p_j, R m, E = 6')
 
 print('--- N4 (sentinel: dies on the window, not the steps) ---')
-bs = {k: rblock('N4', f'refs/{k}.txt', n4_files[f'refs/{k}.txt']) for k in N4_TAILS}
-total = sum(bs.values())
-e4 = eblock('N4', 'reading.conf')
-print(f'  blocks: {bs} edit={e4}')
+bs = {k: rblock('N4', f'refs/{k}.txt', n4_files[f'refs/{k}.txt']) for k in N4_FILE_ROWS}
+operative = ['f1', 'f2', f'f{n4_nB}', f'f{n4_nC}']
+total = sum(bs[k] for k in operative)
+e4 = eblock('N4')
+print(f'  blocks: {bs} edit={e4} operative={operative}')
 require('necessary total in the 1.5-2x band', 1.5 <= total / BUDGET <= 2.0,
-        f'total = {total} = {total / BUDGET:.2f}x (flag f3 resolved)')
+        f'operative total = {total} = {total / BUDGET:.2f}x (flag f3 resolved)')
 require('stage A reachable', bs['f1'] + bs['f2'] + e4 <= BUDGET,
         f'f1+f2+edit = {bs["f1"] + bs["f2"] + e4} <= {BUDGET}')
-require('three blocks never coexist', bs['f1'] + bs['f2'] + bs['f3'] > BUDGET,
-        f'f1+f2+f3 = {bs["f1"] + bs["f2"] + bs["f3"]} > {BUDGET}')
+require('three operative blocks never coexist',
+        min(bs[a] + bs[b] + bs[c]
+            for ai, a in enumerate(operative)
+            for bi, b in enumerate(operative)
+            for c in operative
+            if ai < bi and operative.index(c) > bi) > BUDGET,
+        'every operative triple > 4096')
+require('batch-all-six exceeds the budget outright', sum(bs.values()) > BUDGET,
+        f'all six = {sum(bs.values())} (newest-exempt for one step only)')
 require('cond-9 holds for a retaining agent', 4 + 3 <= 8, '4 READ + 3 EDIT = 7 actions <= 8')
 
 if fails:
@@ -523,10 +623,10 @@ HEADER = open(os.path.join(HERE, 'v3_drafts_header.txt')).read()
 tasks_yaml = []
 for tid, instr, writable, seeds, taskcmt in [
     ('capv3-pin-eviction',
-     "tests/check.sh rejects deploy.conf but reports only the FIRST problem each time it runs. Reference data lives under notes/ and refs/ (read-only). Fix deploy.conf until the check passes. Lines it does not complain about must stay unchanged.",
+     "tests/check.sh rejects deploy.conf but reports only the FIRST problem each time it runs, asking for one field at a time. Reference data lives under notes/ and refs/ (read-only). Fix deploy.conf until the check passes. The file may hold only the fields the check has already asked for; lines it does not complain about must stay unchanged.",
      'deploy.conf', n1_seeds, 'N1_COMMENT'),
     ('capv3-converge-fatref',
-     "tests/check.sh rejects limits.conf but reports only the FIRST problem each time it runs. Reference data lives under refs/ (read-only). Fix limits.conf until the check passes. Lines it does not complain about must stay unchanged.",
+     "tests/check.sh rejects limits.conf but reports only the FIRST problem each time it runs, asking for one lane at a time. Reference data lives under refs/ (read-only). Fix limits.conf until the check passes. The file may hold only the lanes the check has already asked for; lines it does not complain about must stay unchanged.",
      'limits.conf', n3_seeds, 'N3_COMMENT'),
     ('capv3-sentinel-span',
      "tests/check.sh rejects reading.conf but reports only the FIRST problem each time it runs, bringing one more read-only record under refs/ into play at a time. Each record ends with the value it contributes. Fix reading.conf until the check passes.",

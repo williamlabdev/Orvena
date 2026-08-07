@@ -247,7 +247,24 @@ slot-00NN」,對其餘肥檔 `SEARCH slot-0099` 以 ~34 tok 取值
 末行)、末行欄位 tuple 跨檔互異 + catch-all 成本 ≥ READ,全數收進
 產生器 `deanchored()` 迴歸;同輪並將值域 ≥1000(防前導零 shell 歧義)
 從巧合升為顯式斷言。armor chain 本體三輪未破(無預計算/計算管道)。
-去錨點版待確認輪(零上下文)後才進 token 形狀探針。
+
+B2 第二輪(另一支零上下文 verifier,0807):N1/N3 存活,再打穿三處:
+(a) **N4 無 armor 檔集**——檔名首個 prompt 就全列(file_inventory)、
+check 無態且先驗最終 span、s1 巨塊最新豁免 ⇒ 全讀 4 檔、第 2 步直接
+寫全域 span,哨兵 2 步變綠;(b) 覆核中同步發現 **draft-4 固定等寬骨架
+本身是搬運通道**——未輪到欄位是合法等寬載體,N3 的 m0 塞 lane_b、
+N1 的三檔池尾值塞滿三個空槽,5 步通關零肥重讀且遙測與好 run 不可
+分辨;(c) 視窗算式的 gate 格式是杜撰的(實為 `[solved] <task-id>: …`,
+且 EDIT 成功不產工具證據)。draft-6 修法:N4 改 **armored file set**
+(f1..f6,operative=f1、f2+兩個 cksum 逐段揭露的選檔,decoy 候選
+span 互異斷言、賭注地板 1/4);writable 全面改 **growing-key**
+(條件 13 原型:未被問到的 key 不得存在,keys-guard 搶在揭露前;
+lookahead 收斂到單槽=N1 每 armored 輪 1/3 賭注,動作日誌可辨,
+舊 1/4 pin 預填被封死);N3 尾值改 6 位數對 {4} 車道閘(m0 塞不進
+任何槽);byte cap 全改精確值(+4 鬆量本身就是載體);算式改
+driver 忠實格式重建。draft-4 機制存活至 draft-6 者:armor chain、
+guard 先於揭露的排序原則、機械驗證 harness;固定骨架未存活。
+draft-6 待第三輪零上下文確認後才進 token 形狀探針。
 
 ## 裁決(0807,william):四項全裁可
 
