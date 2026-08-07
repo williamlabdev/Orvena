@@ -48,16 +48,24 @@ def est(text: str) -> int:
 # returns every line WITH a `path:line:` prefix (~1.25x the READ it would
 # replace), and MAX_HITS=200 caps any attempt to sweep several refs at once.
 
+# De-anchored records (fresh-eyes round 3, B2): NO index column — SEARCH
+# matches content only, and content no longer encodes position. Fields are
+# per-row RANDOM (no position-correlated cycle to learn from a sibling), and
+# sibling files get pairwise-DISTINCT row counts, so a search hit's
+# path:line: number can never be certified as "the last line" of a file the
+# model has not read. The only certain selector for a tail is the tail
+# itself, which presupposes the read.
+
 def corpus_tok(rows: int, tail: str) -> str:
     """Records end in a 12-char token; last line's token = `tail`."""
     out = []
     for i in range(rows):
-        n = i + 1
-        val = tail if n == rows else tok()
-        out.append(f"slot-{n:04d}  {REGIONS[(i * 5) % 6]:<10}  "
-                   f"{STATES[(i * 3) % 4]:<5}  {PHASES[(i * 7) % 4]:<6}  "
+        val = tail if i + 1 == rows else tok()
+        out.append(f"{rnd.choice(REGIONS):<10}  {rnd.choice(STATES):<5}  "
+                   f"{rnd.choice(PHASES):<6}  "
                    f"{rnd.randrange(0x100000, 0xffffff):06x}  "
-                   f"{NOTES[(i * 3) % 8]:<21}  {val}")
+                   f"{rnd.choice(NOTES):<24}  "
+                   f"{rnd.randrange(0x100000, 0xffffff):06x}  {val}")
     body = '\n'.join(out) + '\n'
     assert body.count('\n') <= 100 and len(body) <= 8192, (body.count('\n'), len(body))
     return body
@@ -67,12 +75,13 @@ def corpus_num(rows: int, tail: int) -> str:
     """Records end in a 4-digit number; last line's number = `tail`."""
     out = []
     for i in range(rows):
-        n = i + 1
-        val = tail if n == rows else rnd.randrange(1000, 9999)
-        out.append(f"slot-{n:04d}  {REGIONS[(i * 5) % 6]:<10}  "
-                   f"{STATES[(i * 3) % 4]:<5}  {PHASES[(i * 7) % 4]:<6}  "
+        val = tail if i + 1 == rows else rnd.randrange(1000, 9999)
+        assert 1000 <= int(val) <= 9999, "leading-zero / width invariant"
+        out.append(f"{rnd.choice(REGIONS):<10}  {rnd.choice(STATES):<5}  "
+                   f"{rnd.choice(PHASES):<6}  "
                    f"{rnd.randrange(0x100000, 0xffffff):06x}  "
-                   f"{NOTES[(i * 3) % 8]:<26}  {val:04d}")
+                   f"{rnd.choice(NOTES):<21}  {tok()}  "
+                   f"{rnd.randrange(0x100000, 0xffffff):06x}  {val:04d}")
     body = '\n'.join(out) + '\n'
     assert body.count('\n') <= 100 and len(body) <= 8192, (body.count('\n'), len(body))
     return body
@@ -85,13 +94,39 @@ def uniform(body: str):
     assert len(shapes) == 1, f"corpus is not uniform: {shapes}"
 
 
+def deanchored(task, files):
+    """The B2 round-3 regression: no cross-file positional anchor.
+
+    (a) pairwise-distinct row counts — a line number seen in a SEARCH hit
+        on an unread sibling cannot be certified as its last line;
+    (b) no field of any row equals a zero-padded index of its own line —
+        the slot-#### anchor stays dead;
+    (c) the last rows' categorical tuples are pairwise distinct across the
+        family — a sibling's last-row field value is not a working selector
+        for THIS file's last row;
+    (d) a catch-all SEARCH (the only certain way to see an unread file's
+        tail) renders dearer than the READ it would replace.
+    """
+    counts = {p: b.count('\n') for p, b in files.items()}
+    assert len(set(counts.values())) == len(counts), f"{task}: row counts collide: {counts}"
+    for p, b in files.items():
+        rows = b.rstrip('\n').split('\n')
+        for ln, r in enumerate(rows, 1):
+            assert f'{ln:04d}' not in r.split()[0], f"{task}:{p}: index anchor at line {ln}"
+        render = sum(len(f'  {p}:{ln}: {r}\n') for ln, r in enumerate(rows, 1))
+        assert est('x' * render) > est(b), f"{task}:{p}: catch-all cheaper than READ"
+    tuples = {p: tuple(files[p].rstrip('\n').split('\n')[-1].split()[:3]) for p in files}
+    assert len(set(tuples.values())) == len(tuples), \
+        f"{task}: last-row tuples collide (bump seed): {tuples}"
+
+
 # ── N1: pin-eviction (ordering / re-read decision) ────────────────────────
 # draft-4's 4-round chain, fat lookups now FILE-positional: the armor picks
 # WHICH pool file settles rounds 2-3 (cksum % 3 + 1), and the value is the
 # file's last line — row-level armor died in the 0807 collision (a complaint
 # that names a row key turns every fat value into a ~32-token SEARCH).
-N1_ROWS = 99
 N1_POOL = 3
+N1_POOL_ROWS = {1: 99, 2: 98, 3: 97}  # pairwise distinct (deanchored regression)
 
 pin_vals = {k: tok() for k in ('k1', 'k3', 'k5', 'k7', 'k9')}
 pin_body = '# staging pins — rotation 2026-08\n' + \
@@ -110,8 +145,9 @@ n1_rollback = pin_vals[n1_key4]
 n1_pool = {}
 for idx in range(1, N1_POOL + 1):
     tail = n1_mirror if idx == n1_i else (n1_fallback if idx == n1_j else tok())
-    n1_pool[f'refs/inv-{idx}.txt'] = corpus_tok(N1_ROWS, tail)
+    n1_pool[f'refs/inv-{idx}.txt'] = corpus_tok(N1_POOL_ROWS[idx], tail)
     uniform(n1_pool[f'refs/inv-{idx}.txt'])
+deanchored('N1', n1_pool)
 
 n1_deploy = """# staging deploy manifest
 release = ------------
@@ -135,20 +171,20 @@ grep -qxF '# staging deploy manifest' "$f" || fail "an unrelated line changed: h
 grep -qxF 'owner = platform' "$f" || fail "an unrelated line changed: owner"
 want=$(awk '$1=="k1"{{print $2}}' notes/s9.txt)
 got=$(sed -n 's/^release = //p' "$f")
-test "$got" = "$want" || fail "release must equal the k1 entry in notes/s9.txt"
+test "$got" = "$want" || fail "release must equal the k1 entry in notes/s9.txt (that file is the source of record for this setting)"
 n=$(printf %s "$got" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
 want=$(tail -n 1 "refs/inv-$n.txt" | awk '{{print $NF}}')
 got=$(sed -n 's/^mirror = //p' "$f")
-test "$got" = "$want" || fail "mirror must equal the value ending the LAST line of refs/inv-$n.txt"
+test "$got" = "$want" || fail "mirror must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record for this setting)"
 n=$(printf %s "$got" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
 want=$(tail -n 1 "refs/inv-$n.txt" | awk '{{print $NF}}')
 got=$(sed -n 's/^fallback = //p' "$f")
-test "$got" = "$want" || fail "fallback must equal the value ending the LAST line of refs/inv-$n.txt"
+test "$got" = "$want" || fail "fallback must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record for this setting)"
 n=$(printf %s "$got" | cksum | awk '{{print $1 % 4}}')
 key=k$((2 * n + 3))
 want=$(awk -v k="$key" '$1==k{{print $2}}' notes/s9.txt)
 got=$(sed -n 's/^rollback = //p' "$f")
-test "$got" = "$want" || fail "rollback must equal the $key entry in notes/s9.txt"
+test "$got" = "$want" || fail "rollback must equal the $key entry in notes/s9.txt (that file is the source of record for this setting)"
 echo ok
 """
 
@@ -160,7 +196,7 @@ echo ok
 # pairwise need (fat gate + two coexisting fat blocks cannot fit 4096 — the
 # task would break condition 9), so the eviction source is the pair itself.
 # The armor picks the round-2 pool file from {{p2,p3}} via cksum(lane_a).
-N3_ROWS = 90
+N3_FILE_ROWS = {'matrix': 84, 'p1': 83, 'p2': 82, 'p3': 81}  # pairwise distinct
 
 n3_m0 = rnd.randrange(1000, 4000)
 n3_lane_a = rnd.randrange(1000, 9999 - n3_m0)
@@ -171,13 +207,17 @@ while n3_lane_b == n3_lane_a:
     n3_lane_b = rnd.randrange(1000, 9999 - n3_m0)
 n3_vj = n3_m0 + n3_lane_b
 
-n3_files = {'refs/matrix.txt': corpus_num(N3_ROWS, n3_m0),
-            'refs/p1.txt': corpus_num(N3_ROWS, n3_v1)}
+n3_files = {'refs/matrix.txt': corpus_num(N3_FILE_ROWS['matrix'], n3_m0),
+            'refs/p1.txt': corpus_num(N3_FILE_ROWS['p1'], n3_v1)}
 for idx in (2, 3):
     tail = n3_vj if idx == n3_j else rnd.randrange(1000, 9999)
-    n3_files[f'refs/p{idx}.txt'] = corpus_num(N3_ROWS, tail)
+    n3_files[f'refs/p{idx}.txt'] = corpus_num(N3_FILE_ROWS[f'p{idx}'], tail)
 for body in n3_files.values():
     uniform(body)
+deanchored('N3', n3_files)
+assert all(1000 <= v <= 9999 for v in
+           (n3_m0, n3_v1, n3_vj, n3_lane_a, n3_lane_b)), "leading-zero invariant"
+
 
 n3_limits = """# capacity limits — planner input
 lane_a = ----
@@ -215,7 +255,7 @@ echo ok
 # NON-ADJACENT files (min: f2, max: f4) and the corpora are uniform, so no
 # 2-read pair is identifiable a priori. Residual walks are documented in the
 # task comment; a green cell is only read after action-log verification.
-N4_ROWS = 90
+N4_FILE_ROWS = {'f1': 84, 'f2': 83, 'f3': 82, 'f4': 81}  # pairwise distinct
 N4_TAILS = {'f1': 5210, 'f2': 1120, 'f3': 7450, 'f4': 9803}
 _a, _b, _c, _d = (N4_TAILS[k] for k in ('f1', 'f2', 'f3', 'f4'))
 n4_sA = max(_a, _b) - min(_a, _b)
@@ -229,8 +269,11 @@ assert not ({n4_sA, n4_sB, n4_sC} & set(N4_TAILS.values())), "spans must not equ
 
 n4_files = {}
 for name, tail in N4_TAILS.items():
-    n4_files[f'refs/{name}.txt'] = corpus_num(N4_ROWS, tail)
+    n4_files[f'refs/{name}.txt'] = corpus_num(N4_FILE_ROWS[name], tail)
     uniform(n4_files[f'refs/{name}.txt'])
+deanchored('N4', n4_files)
+assert all(1000 <= v <= 9999 for v in N4_TAILS.values()), "leading-zero invariant"
+
 
 n4_reading = "reading = 0\n"
 N4_CAP = len(f"reading = {n4_sC}\n".encode()) + 4
@@ -407,31 +450,33 @@ def require(label, cond, detail):
 
 print('--- N1 (pin must not survive the two pool reads) ---')
 s1 = rblock('N1', 'notes/s9.txt', pin_body)
-s3 = rblock('N1', f'refs/inv-{n1_i}.txt', n1_pool[f'refs/inv-{n1_i}.txt'])
-s5 = rblock('N1', f'refs/inv-{n1_j}.txt', n1_pool[f'refs/inv-{n1_j}.txt'])
+pool_blocks = sorted(rblock('N1', p, b) for p, b in n1_pool.items())
+lo1, lo2, hi = pool_blocks[0], pool_blocks[1], pool_blocks[-1]
 e = eblock('N1', 'deploy.conf')
-print(f'  blocks: pin={s1} inv_i={s3} inv_j={s5} edit={e}')
-require('pin evicted before round 4', s3 + e + s5 + e + e > BUDGET + 60,
-        f's3..s6+s2 walk-back = {s3 + e + s5 + 2 * e} > {BUDGET} (+60 margin)')
-require('round-3 edit still sees inv_j', e + s5 + e <= BUDGET,
-        f's4+s5+s6 = {e + s5 + e} <= {BUDGET}')
-require('recovery fits', s1 + e + s5 + e <= BUDGET,
-        f're-read pin + newest blocks = {s1 + e + s5 + e} <= {BUDGET}')
-require('cond-11 batch block dies', s1 + s3 + s5 + est(n1_check) > BUDGET,
-        f'pin+2 pool files+check = {s1 + s3 + s5 + est(n1_check)} > {BUDGET}')
+print(f'  blocks: pin={s1} pool(sorted)={pool_blocks} edit={e}')
+require('pin evicted before round 4 (worst pool pair)',
+        lo1 + e + lo2 + e + e > BUDGET + 60,
+        f's3..s6+s2 walk-back (two smallest) = {lo1 + e + lo2 + 2 * e} > {BUDGET} (+60 margin)')
+require('round-3 edit still sees inv_j (largest)', e + hi + e <= BUDGET,
+        f's4+s5+s6 = {e + hi + e} <= {BUDGET}')
+require('recovery fits', s1 + e + hi + e <= BUDGET,
+        f're-read pin + newest blocks = {s1 + e + hi + e} <= {BUDGET}')
+require('cond-11 batch block dies', s1 + lo1 + lo2 + est(n1_check) > BUDGET,
+        f'pin+2 smallest pool files+check = {s1 + lo1 + lo2 + est(n1_check)} > {BUDGET}')
 require('cond-9: 8 actions', True, 'R pin, E, R inv_i, E, R inv_j, E, R pin, E = 8 (zero slack, flag f2)')
 
 print('--- N3 (matrix term needed every round, evicted between rounds) ---')
 m = rblock('N3', 'refs/matrix.txt', n3_files['refs/matrix.txt'])
 p1 = rblock('N3', 'refs/p1.txt', n3_files['refs/p1.txt'])
-pj = rblock('N3', f'refs/p{n3_j}.txt', n3_files[f'refs/p{n3_j}.txt'])
+p2b = rblock('N3', 'refs/p2.txt', n3_files['refs/p2.txt'])
+p3b = rblock('N3', 'refs/p3.txt', n3_files['refs/p3.txt'])
 e3 = eblock('N3', 'limits.conf')
-print(f'  blocks: matrix={m} p1={p1} p_j={pj} edit={e3}')
+print(f'  blocks: matrix={m} p1={p1} p2={p2b} p3={p3b} edit={e3} (armored j={n3_j})')
 require('round 1 works', m + p1 + e3 <= BUDGET, f'm+p1+edit = {m + p1 + e3} <= {BUDGET}')
-require('matrix evicted before round-2 edit', m + p1 + e3 + pj > BUDGET,
-        f'+p_j = {m + p1 + e3 + pj} > {BUDGET}')
-require('round 2 works after re-read', e3 + pj + m <= BUDGET,
-        f'edit+p_j+matrix = {e3 + pj + m} <= {BUDGET}')
+require('matrix evicted before round-2 edit', m + p1 + e3 + min(p2b, p3b) > BUDGET,
+        f'+p_j (smaller) = {m + p1 + e3 + min(p2b, p3b)} > {BUDGET}')
+require('round 2 works after re-read', e3 + max(p2b, p3b) + m <= BUDGET,
+        f'edit+p_j (larger)+matrix = {e3 + max(p2b, p3b) + m} <= {BUDGET}')
 require('cond-9: 6 actions, slack 2', True, 'R m, R p1, E, R p_j, R m, E = 6')
 
 print('--- N4 (sentinel: dies on the window, not the steps) ---')

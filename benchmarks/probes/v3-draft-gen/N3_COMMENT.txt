@@ -3,9 +3,11 @@
   # Shape: H deepened. Each lane is a SUBTRACTION — the value ending a pool
   # file's last line minus the value ending refs/matrix.txt's last line —
   # so the matrix term is re-needed in EVERY round, and the round's other
-  # fat read evicts it (asserted: m+p1+edit fits; +p_j exceeds; the re-read
-  # round fits again). Round 2's pool file is armored: p2 vs p3 selected by
-  # cksum(lane_a's correct value) at runtime.
+  # fat read evicts it (asserted for both armor outcomes: m+p1+edit fits;
+  # +p_j exceeds; the re-read round fits again). Round 2's pool file is
+  # armored: p2 vs p3 selected by cksum(lane_a's correct value) at runtime.
+  # Lane and term values are asserted >= 1000 (no leading-zero ambiguity
+  # between %04d corpus text and shell $((...)) arithmetic).
   #
   # MERGE NOTE (draft-5): draft-4's N3 (row-keyed chain inside one matrix +
   # a fat static audit dump on every gate fail) died twice over in the 0807
@@ -39,8 +41,10 @@
   #     is unknowable until the reveal, and by then the giant is evicted.
   #   compute-channel walk: none — RUN is fixed-argv only (tools/shell.rs);
   #     cksum cannot be run on chosen input.
-  #   search walk: both terms are last-line positional; a difference
-  #     appears in no file.
+  #   search walk: both terms are last-line positional in DE-ANCHORED
+  #     corpora (no index column, random fields, pairwise-distinct row
+  #     counts — `deanchored()` asserts; see N1 for the round-3 story),
+  #     and a difference appears in no file at all.
   #   stash walk: placeholders are answer-width (4 digits), cap = solved
   #     size + 4B, guards precede the lane checks — insertion preempts the
   #     reveal. The necessary evidence is two ~7.1KB files that no 4-char

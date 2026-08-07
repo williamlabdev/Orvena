@@ -29,12 +29,17 @@
 #   after fix k — real state dependency, per design condition 11.
 # * UNIFORM / POSITIONAL CORPORA (condition 14, from the alt draft): fat
 #   records are fixed-shape, every record ends in a same-shape value, and
-#   the operative value is the file's LAST line. No pattern formable
-#   without having read the file singles it out; a catch-all SEARCH
-#   returns every line with a path:line: prefix (~1.25x the READ it would
-#   replace) and MAX_HITS=200 stops multi-file sweeps. N1's pin file is
-#   the deliberate exemption (see its block: the needle is SUPPOSED to be
-#   cheap to re-acquire; the go-back is the measurement).
+#   the operative value is the file's LAST line, and the records are
+#   DE-ANCHORED (fresh-eyes round 3): no index column, per-row fields
+#   random, sibling row counts pairwise distinct. SEARCH matches content
+#   and content does not encode position; a hit's path:line: number
+#   cannot be certified as an unread file's last line; the only certain
+#   selector for a tail is the tail itself, which presupposes the read;
+#   a catch-all sweep renders dearer than the READ (all four properties
+#   asserted by the generator's deanchored() regression; MAX_HITS=200
+#   additionally caps multi-file sweeps). N1's pin file is the deliberate
+#   exemption (see its block: the needle is SUPPOSED to be cheap to
+#   re-acquire; the go-back is the measurement).
 # * ARMOR CHAIN (from draft-4, now file-level): which pool file (N1, N3)
 #   or which pin key (N1 round 4) settles round k+1 is derived from the
 #   CORRECT value of field k via `cksum` at runtime. Why: condition 11's
@@ -63,16 +68,25 @@
 #   these).
 # * Fat refs are deliberately under the READ/RUN truncation edge (100
 #   lines / 8KB, cap_run_output), so one READ returns the whole file
-#   untruncated: N1 pool 99 lines / ~8.1KB ≈ 2030 tok; N3/N4 refs 90
-#   lines / ~7.1KB ≈ 1778 tok.
+#   untruncated: N1 pool 97-99 lines / ~8KB ≈ 1990-2030 tok; N3/N4 refs
+#   81-84 lines / ~6.9-7.1KB ≈ 1720-1790 tok (counts pairwise distinct
+#   per family — part of the de-anchoring).
 # * Adversarial review trail: draft-1→4 (verifier x2: print-budget
 #   self-blinding refuted; RUN-simulator channel nonexistent; live stash
 #   walk through draft-3's cap → answer-width placeholders + solved+4
 #   caps, stash walk now a generator regression test). draft-4→5 (the
 #   collision review above; the SEARCH-cost bypass and the concat stash
-#   are both closed and both regression-tested). Residue: N1's 1-in-4
-#   single-candidate pre-fill guess is irreducible; N4's residual walks
-#   are documented in its block and asserted by the generator.
+#   are both closed and both regression-tested). draft-5 round 3 (the
+#   ruled B2 zero-context attack): REFUTED the first draft-5 — the
+#   slot-#### index column was itself a cross-file positional anchor
+#   (read one sibling, SEARCH the known last index in the others,
+#   17-60x cheaper than the READ; the same class of hole the collision
+#   killed draft-4 over, in new clothes). Fixed by de-anchoring (above)
+#   + the deanchored() generator regression + explicit >=1000 value
+#   invariants (leading-zero shell hazard flagged in the same round).
+#   Residue: N1's 1-in-4 single-candidate pre-fill guess is irreducible;
+#   N4's residual walks are documented in its block and asserted by the
+#   generator.
 # * All seeds, armor selections and complaint sequences are generated and
 #   MECHANICALLY verified by benchmarks/probes/v3-draft-gen/
 #   gen_v3_drafts.py: honest walk applied fix-by-fix, complaint order
@@ -96,13 +110,16 @@
 #        in the type-table classes. Per-task watch items in the blocks.
 #
 # Open flags for ruling:
-#   f1. The armor chain awaits its ruled B2 round: a zero-context
-#       fresh-eyes attack on this merged draft before any probe.
+#   f1. B2 round 1 (zero-context) is done and REFUTED the first draft-5
+#       (index-column anchor; fixed above). The armor chain itself
+#       survived rounds 1-3 (no precompute/compute channel found). A
+#       confirmatory zero-context round on the de-anchored version is the
+#       remaining gate before probes.
 #   f2. N1's honest worst case is exactly 8 actions — zero slack; one
 #       exploratory read costs the run. That IS the read-restraint axis,
 #       but the behavior probe must confirm it doesn't just measure
 #       step-arithmetic luck.
-#   f3. RESOLVED by the span shape: N4 necessary evidence = 1.77x 4096,
+#   f3. RESOLVED by the span shape: N4 necessary evidence = 1.75x 4096,
 #       inside the ruled 1.5–2x band.
 #   f4. N4's residual walks (2-extreme close; disciplined single-slot
 #       extreme tracking) are accepted-and-documented rather than closed —

@@ -14,9 +14,9 @@
   # against a ~2000-token READ, which zeroes the window pressure on every
   # fat value (all three constructs hurt). draft-5 makes the fat corpora
   # UNIFORM and the operative value POSITIONAL (the file's last line,
-  # condition 14): no pattern formable without having read the file singles
-  # it out, a catch-all SEARCH costs ~1.25x the READ (path:line: prefixes),
-  # and MAX_HITS=200 caps sweeping several refs in one call. The armor
+  # condition 14) — and, after fresh-eyes round 3, DE-ANCHORED (see the
+  # search walk below; the first positional version still leaked position
+  # through its index column). The armor
   # chain consequently moves from row selection to FILE selection: the
   # complaint names the file in plaintext at runtime, and which pool file
   # settles round k+1 is cksum-derived from round k's correct value.
@@ -28,10 +28,13 @@
   # exists precisely so this recovery is visible.
   #
   # Pressure arithmetic (estimate_tokens = ceil(chars/4), asserted by the
-  # generator, not hoped): pool blocks ~2062 incl gate, edit blocks ~35.
-  # Sequential walk-back at the round-4 step: s3+s4+s5+s6+s2 ≈ 4229 > 4096
-  # → the pin (s1/s2) is out, dropped marker shown. Margin ~133; the
-  # token-shape probe must still confirm evictions.first_step <= 7.
+  # generator, not hoped): pool blocks ~2020-2070 incl gate (97-99 rows,
+  # pairwise distinct — part of the de-anchoring), edit blocks ~35; every
+  # complaint carries a neutral source-of-record clause so each block's
+  # gate rider stays fat. Sequential walk-back at the round-4 step, WORST
+  # pool pair: ≈ 4168 > 4096 → the pin (s1/s2) is out, dropped marker
+  # shown. Margin ~72; the token-shape probe must still confirm
+  # evictions.first_step <= 7.
   #
   # Condition 9: honest worst case = R pin, E, R inv_i, E, R inv_j, E,
   # R pin, E = 8 actions exactly (zero slack — flag f2 stands). Best honest
@@ -48,9 +51,19 @@
   #     cannot pass arguments), so cksum cannot be executed on any chosen
   #     input; CRC is not text reasoning either. The chain cannot be
   #     precomputed at any step, by any route.
-  #   search walk (new in draft-5): SEARCH cannot single out a last line it
-  #     has not read; a targeted pattern presupposes the value, a catch-all
-  #     is dearer than the READ. The two fat rounds stay full-block reads.
+  #   search walk (rebuilt after fresh-eyes round 3 refuted draft-5's
+  #     first version — the slot-#### index column was a cross-file
+  #     positional anchor: read one sibling, learn "last line = slot-00NN",
+  #     SEARCH it in the others for ~34 tok vs a ~2000-tok READ):
+  #     de-anchored corpora carry NO index column (SEARCH matches content,
+  #     content no longer encodes position), per-row fields are random (no
+  #     position-correlated cycle to learn from a sibling), and pool row
+  #     counts are pairwise DISTINCT — a hit's path:line: number cannot be
+  #     certified as another file's last line. The only certain selector
+  #     for a tail is the tail itself, which presupposes the read; a
+  #     catch-all sweep renders dearer than the READ (all four properties
+  #     generator-asserted, `deanchored()`). The two fat rounds stay
+  #     full-block reads.
   #   stash walk (killed twice in draft-3/4 review, regression-tested):
   #     placeholders are answer-width (12 chars), the byte cap is the solved
   #     size + 4B, and both guards run BEFORE the chain — a stashed file

@@ -4,7 +4,9 @@
   # the moment the agent learns retention/summarization — v3's E, per
   # ruling iv. The alt session's span shape, adopted per the merge ruling
   # (this also RESOLVES flag f3: necessary evidence is now 4 blocks ≈
-  # 1.77x 4096, inside the ruled 1.5–2x band).
+  # 1.75x 4096, inside the ruled 1.5–2x band). Corpora are de-anchored
+  # (no index column, random fields, pairwise-distinct row counts —
+  # `deanchored()` asserts; see N1); tails and spans asserted >= 1000.
   #
   # Mechanism: the carried value is a SPAN (largest minus smallest of the
   # values ending refs/f1..f4.txt). The running state is a (min,max) PAIR;
@@ -50,8 +52,8 @@
   # correct stage values, and only stage A is computable from the giant
   # newest block at s2 (that is one stage, not the task — the giant is gone
   # at s3 and stages B/C still need their terms). No compute channel (RUN
-  # fixed-argv); no search shortcut (positional tails, differences in no
-  # file for the spans themselves).
+  # fixed-argv); no search shortcut (de-anchored positional tails, and the
+  # spans themselves appear in no file).
   #
   # Freeze note: reads 0/0 are only meaningful with the probe confirming
   # window_peak_tokens near/over budget and the death shapes above; a zero
