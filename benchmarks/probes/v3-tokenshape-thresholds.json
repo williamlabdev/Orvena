@@ -1,0 +1,23 @@
+{
+  "budget": 4096,
+  "tasks": {
+    "capv3-pin-eviction": {
+      "peak_floor": 2047,
+      "first_step_max": 7,
+      "go_back_required": true,
+      "static_assertion": "pin evicted before round 4 (worst pool pair)"
+    },
+    "capv3-converge-fatref": {
+      "peak_floor": 1825,
+      "first_step_max": null,
+      "go_back_required": true,
+      "static_assertion": "matrix evicted before round-2 edit"
+    },
+    "capv3-sentinel-span": {
+      "peak_floor": 1727,
+      "first_step_max": null,
+      "go_back_required": true,
+      "static_assertion": "three operative blocks never coexist"
+    }
+  }
+}

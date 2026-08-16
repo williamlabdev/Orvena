@@ -30,7 +30,7 @@ REAL `cksum` binary; honest walks, complaint order, stash/keys regressions,
 window inequalities and corpus properties are all asserted before the YAML
 is emitted. Nothing is hand-written that a script can verify.
 """
-import math, os, re, random, shutil, string, subprocess, sys, tempfile
+import json, math, os, re, random, shutil, string, subprocess, sys, tempfile
 
 rnd = random.Random(20260809)
 ALNUM = string.ascii_lowercase + string.digits
@@ -681,6 +681,57 @@ if fails:
     sys.exit(1)
 print('\nall pressure conditions hold (offline arithmetic; the live '
       'token-shape probe is still required)')
+
+# ── probe thresholds (0816 ruling) ────────────────────────────────────────
+# The retired criterion was "window_peak_tokens near BUDGET". It is not
+# reachable by an honest walk and IS reachable by the batch walk condition 11
+# exists to kill: `retained_evidence` keeps the newest block unconditionally
+# (driver.rs: `if kept > 0 && used + cost > BUDGET`), so a single giant batch
+# block reads a peak ABOVE the budget while the honest walk — whose blocks are
+# capped at ~2048 tokens by the READ path's RUN caps (100 lines / 8KB) — reads
+# about half of it. An absolute-occupancy criterion therefore scores the walk
+# we judge dead higher than the walk we measure.
+#
+# What replaces it, per task:
+#   * peak_floor      — peak must reach at least ONE fat block, i.e. a fat
+#                       file really entered the window (this is the real
+#                       failure mode the old criterion was reaching for: a
+#                       task too small to pressure anything).
+#   * first_step_max  — the eviction must happen by the step the honest walk
+#                       needs it to (null = not yet derived for this task;
+#                       fill it from that task's honest walk before its probe).
+#   * go_back_required— dropped_reread + dropped_research > 0. The model going
+#                       back for what the window dropped is what makes the
+#                       evicted block demonstrably the one it needed — and it
+#                       is observable, which "was the evicted block the needed
+#                       one?" is not (the driver keeps no per-step path log).
+# The static half of the criterion is the require() lines above: each task
+# asserts offline that a needed block MUST be evicted on the honest walk.
+PROBE_THRESHOLDS = {
+    'capv3-pin-eviction': {
+        'peak_floor': min(pool_blocks),
+        'first_step_max': 7,
+        'go_back_required': True,
+        'static_assertion': 'pin evicted before round 4 (worst pool pair)',
+    },
+    'capv3-converge-fatref': {
+        'peak_floor': min(p1, p2b, p3b),
+        'first_step_max': None,
+        'go_back_required': True,
+        'static_assertion': 'matrix evicted before round-2 edit',
+    },
+    'capv3-sentinel-span': {
+        'peak_floor': min(bs.values()),
+        'first_step_max': None,
+        'go_back_required': True,
+        'static_assertion': 'three operative blocks never coexist',
+    },
+}
+if len(sys.argv) > 2:
+    with open(sys.argv[2], 'w') as fh:
+        json.dump({'budget': BUDGET, 'tasks': PROBE_THRESHOLDS}, fh, indent=2)
+        fh.write('\n')
+    print(f'  wrote {sys.argv[2]}')
 
 for label, body in [('pin (s9)', pin_body),
                     *[(p, b) for p, b in n1_pool.items()],
