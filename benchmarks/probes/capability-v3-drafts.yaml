@@ -19,17 +19,24 @@
 #     field↔source map its condition-11 case collapses, and its N4 format
 #     gate (unbounded [0-9]+) admits a min·max concat stash through the
 #     writable-reprint channel — the sentinel walks in 6 actions.
-# Ruling (0807 late): merge with draft-4 as the base, the alt corpus form
-# swapped in, N4 recast as the span sentinel. draft-5 was that merge; two
-# zero-context B2 rounds then each refuted a load-bearing piece of it —
-# round 1 the slot-index anchor, round 2 the fixed-width skeleton itself,
-# N4's unarmored file set, and the invented gate format in the window
-# arithmetic. draft-6 carries the fixes; see the adversarial trail below.
-# Of draft-4's mechanisms, what survives in draft-6 is the armor chain,
+# Ruling (0807 late), AS ORIGINALLY WORDED: merge with draft-4 as the
+# base, the alt corpus form swapped in, N4 recast as the span sentinel.
+# draft-5 was that merge; two zero-context B2 rounds then each refuted a
+# load-bearing piece of it — round 1 the slot-index anchor, round 2 the
+# fixed-width skeleton itself, N4's unarmored file set, and the invented
+# gate format in the window arithmetic. draft-6 carries the fixes; see the
+# adversarial trail below.
+#
+# RESTATED (0816, william): "draft-4 as the base" no longer describes
+# these files and is recorded as A MERGE WITH NO BASE — neither draft is
+# the parent. B2 round 2 took the fixed-width skeleton, which was draft-4's
+# load-bearing construction, and the writable form here is the alt draft's
+# condition-13 growing-key. What survives FROM draft-4 is the armor chain,
 # the guard-before-reveal ordering principle, and the mechanical
-# verification harness; the writable construction is now the alt draft's
-# condition-13 growing-key form (the fixed skeleton did not survive
-# review).
+# verification harness; the corpus form and the writable construction are
+# the alt's. The restatement changes no file — it exists so a later
+# citation of "draft-4 as the base" cannot read more into the ruling than
+# the drafts actually hold.
 #
 # What every task here shares (mechanism dossier, verified in code 0807):
 #
@@ -224,7 +231,14 @@ tasks:
   # evictions.first_step <= 7.
   #
   # Condition 9: honest worst case = R pin, E, R inv_i, E, R inv_j, E,
-  # R pin, E = 8 actions exactly (zero slack — flag f2 stands).
+  # R pin, E = 8 actions exactly (zero slack — flag f2, RULED 0816
+  # (william): ACCEPTED, no slack added. Reading restraint is one of the
+  # three sub-behaviors this axis measures (ordering / re-read decision /
+  # restraint), so a task that punishes a wasted action is measuring the
+  # axis, not noise; and slack would cost pressure the task stands on.
+  # STANDING CONDITION: if the behavior probe shows the floor cell dying
+  # indistinguishably at the ceiling — every death budget_exhausted with
+  # no death-shape separation — the flag reopens and slack is added.)
   #
   # Condition 11 self-test:
   #   batch walk: s1 READ pin+pool+check.sh. Close at s2? NO — pool picks
@@ -1088,6 +1102,17 @@ tasks:
   #       are revealed. That IS elite window management — a green cell is
   #       only a reading after action-log verification (which files read,
   #       what interim values written).
+  #       FLAG f4, RULED 0816 (william): ACCEPTED AS-IS, with the
+  #       action-log verification made an OBLIGATION rather than a
+  #       recommendation — every green cell on this task carries the log
+  #       check or it is not a reading at all. The aggregate is NOT
+  #       changed: the walk is unclosable by construction (a stateless
+  #       check whose answer is a span cannot reject a correct span
+  #       composed any way), so closing it would mean replacing the span
+  #       — the shape the collision ruling put here — and re-deriving the
+  #       armor and width-gate arithmetic for a walk that the log already
+  #       distinguishes. Recording beats a rewrite when the recording is
+  #       mechanical.
   #
   # Expected 0.5.0 deaths (arithmetic, not luck):
   #   JIT walk: every stage beyond A needs a term whose block is gone —

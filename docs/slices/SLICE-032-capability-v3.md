@@ -292,3 +292,67 @@ iii. **N2 給廉價信號**:採傾向——冗餘檔檔頭一行點明用途,
      非正式)——14b 讀得懂檔頭一行,N2 重造版照本裁決落形,無需回裁。
 iv.  **N4 哨兵照 E 前例保送一席**;凍選總席次於凍選時定
      (一維一題紀律照舊)。
+
+## 裁決追加(0816,william):f2 / f4 / draft-4 縮水追認
+
+v.   **f2 接受零餘裕,不加餘裕**。N1 誠實最壞情況 8 動作 = 預算上限。
+     理由:讀的節制是本軸三個子行為之一(排序/重讀決策/節制),
+     會罰掉一次浪費動作的題正是在量這條軸;加餘裕等於降壓力係數。
+     **附帶條件(已寫入題目註解)**:行為探針若顯示地板格死法無法分辨
+     (全部 budget_exhausted、死法無分離),f2 重開並補餘裕。
+vi.  **f4 接受 N4 殘餘走法 (iii),不改 aggregate**,但把動作日誌查核
+     從建議升為**義務**:本題每一個綠格都必須附日誌查核,否則不算讀數。
+     理由:check 無態 + 答案是 span ⇒ 該走法結構上封不掉;改 aggregate
+     等於換掉碰撞裁定放進來的 span 形狀,armor 與位寬閘算式全部重驗,
+     而日誌本來就分得出來。
+vii. **合併裁定改述為「合併,無主從」**。原文「draft-4 為底」已不描述
+     現在的檔案:B2 第二輪打掉固定等寬骨架(draft-4 的承重構造),
+     writable 現為 alt 的條件 13 growing-key。存活自 draft-4 者只有
+     armor chain、guard 先於揭露、機械驗證 harness;語料形式與 writable
+     構造都是 alt 的。改述不動任何檔案,只防日後引用讀出檔案沒有的東西。
+
+## token 形狀探針(0816,35b 單 run):一個判準被證明結構上不可達
+
+報表 `bench-runs/20260816-probe-capv3-n1-tokenshape-35b-v050.json`(非正式,
+數字不進任何官方帳)。qwen3.6:35b / native 0.5.0 / engineering /
+取樣 0.6·0.95·20 無 seed(calibration-sampling.sh)/ ollama 0.32.11 /
+ctx 32768 of 262144。單題 `capv3-pin-eviction`,repeat 1。
+
+| 遙測 | 讀數 | 判準 | 結果 |
+|---|---|---|---|
+| `evictions.first_step` | **7**(count 2、evicted_steps [1,2,3,4]) | ≤ 7 | **過**(貼線) |
+| `dropped_reread` | **1** | > 0 才分得出重讀死 | **過** |
+| `dropped_research` | 0 | — | — |
+| `window_peak_tokens` | **2350** | 貼 4096 | **不過(57%)** |
+
+跑況本身:FAIL、8 步、`exit=budget_exhausted`、tool_calls 10、
+action_counts `write 1 / edit 2 / read 4 / search 0 / run 3`、
+in 22167 + out 5032 tok。
+
+**「不貼就加胖」這條既定路線在 N1 上已無空間,而且加胖會打開一條已修的洞。**
+三個硬事實:
+
+1. **READ 證據與 RUN 共用截頂**:`driver.rs:316` 的 READ 走
+   `cap_run_output`,常數是 `RUN_EVIDENCE_MAX_LINES=100` /
+   `RUN_EVIDENCE_MAX_BYTES=8*1024`(`driver.rs:29-30`)。估價器是
+   `len/4`(util.rs:9)⇒ **單一 READ 塊的天花板 ≈ 2048 tok = 預算的一半**。
+2. **N1 池檔兩個維度都已頂到邊**:99/98/97 行(距 100 剩 1 行)、
+   8118/8036/7954 bytes(距 8192 剩 74 bytes)。handoff 記的「行數已頂、
+   只剩 bytes 空間」實測是 bytes 也只剩 74。
+3. **一加胖就觸截頂,而截頂會附註「READ shows the head; SEARCH for the
+   rest」** ⇒ 正好把 B2 第一輪修掉的 SEARCH 便宜取值通道重新指給模型。
+
+顆粒度算式(產生器印的實際塊尺寸):pin 87、池檔 2047/2068/2088、
+edit/gate 53。兩塊池檔 = 4115 > 4096 裝不下 ⇒ 窗只留一塊 + 小塊,
+**peak 結構上就是 ~2100–2350**,實測 2350 完全吻合。要 peak 貼 4096
+只有批次巨塊做得到,而條件 11 的設計正是要讓批次塊(N1 4863)整塊被擠掉。
+
+**因此「window_peak_tokens 貼 4096」對任何以單檔 READ 為主的 v3 題目
+都不可達**——它不是壓力不足的訊號,是判準選錯了代理指標。壓力到位的
+直接證據是這次同時拿到的另外兩欄:擠出真的發生在誠實走法需要的塊上
+(evicted_steps 含 step 1 的 pin),且模型真的回頭重讀(dropped_reread=1)。
+
+**待裁(此段不自行改判讀,照 0805 規矩)**:(a) 判準改為
+「擠出命中誠實走法所需塊 + dropped_reread>0」,peak 只作記錄;
+(b) 動 agent 的 READ 截頂常數(換版號,且動的是治理對象本身);
+(c) 維持原判準並接受 N1 永遠不過。建議 (a)。

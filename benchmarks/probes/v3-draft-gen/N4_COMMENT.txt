@@ -39,6 +39,17 @@
   #       are revealed. That IS elite window management — a green cell is
   #       only a reading after action-log verification (which files read,
   #       what interim values written).
+  #       FLAG f4, RULED 0816 (william): ACCEPTED AS-IS, with the
+  #       action-log verification made an OBLIGATION rather than a
+  #       recommendation — every green cell on this task carries the log
+  #       check or it is not a reading at all. The aggregate is NOT
+  #       changed: the walk is unclosable by construction (a stateless
+  #       check whose answer is a span cannot reject a correct span
+  #       composed any way), so closing it would mean replacing the span
+  #       — the shape the collision ruling put here — and re-deriving the
+  #       armor and width-gate arithmetic for a walk that the log already
+  #       distinguishes. Recording beats a rewrite when the recording is
+  #       mechanical.
   #
   # Expected 0.5.0 deaths (arithmetic, not luck):
   #   JIT walk: every stage beyond A needs a term whose block is gone —

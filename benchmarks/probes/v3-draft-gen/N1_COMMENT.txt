@@ -50,7 +50,14 @@
   # evictions.first_step <= 7.
   #
   # Condition 9: honest worst case = R pin, E, R inv_i, E, R inv_j, E,
-  # R pin, E = 8 actions exactly (zero slack — flag f2 stands).
+  # R pin, E = 8 actions exactly (zero slack — flag f2, RULED 0816
+  # (william): ACCEPTED, no slack added. Reading restraint is one of the
+  # three sub-behaviors this axis measures (ordering / re-read decision /
+  # restraint), so a task that punishes a wasted action is measuring the
+  # axis, not noise; and slack would cost pressure the task stands on.
+  # STANDING CONDITION: if the behavior probe shows the floor cell dying
+  # indistinguishably at the ceiling — every death budget_exhausted with
+  # no death-shape separation — the flag reopens and slack is added.)
   #
   # Condition 11 self-test:
   #   batch walk: s1 READ pin+pool+check.sh. Close at s2? NO — pool picks
