@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate benchmarks/probes/capability-v3-drafts.yaml (N1/N3/N4, draft-6).
+"""Generate benchmarks/probes/capability-v3-drafts.yaml (N1/N3/N4, draft-7).
 
 Lineage: draft-4 (0eba93c, armor chain + guard ordering) x alt (9b91b4b,
 uniform/positional corpora, span sentinel, growing-key writable) merged per
@@ -25,6 +25,29 @@ order: the slot-index anchor (round 1 -> de-anchored corpora), and in round
   REAL format ("[solved] <task-id>: <complaint>", driver.rs:481-485;
   successful EDITs emit no tool evidence) instead of an invented one.
 
+draft-7 (ruling c, 0818): the 0816 behavior probes refuted the POSITIONAL
+anchor itself — 10 of 12 deaths across N1/N3/N4 were wrong-tail: the model
+resolves the armor, reads the right file, and operates on MID-FILE values
+("value = last line" never binds on 35b). The operative record is now
+selected by a SELF-REFERENTIAL PREDICATE: in each fat file exactly one
+record's two seal codes (the two hex fields) agree, and that record's
+closing value is the operative value. The predicate is (a) unsearchable —
+the driver's search engine is the Rust regex crate (grep.rs:11,80), which
+has no backreferences, so "a row whose two code fields match" cannot be
+written as a pattern; the codes are unknown before a read; and each anchor
+code occurs nowhere else in the task's corpus (sealed() asserts); (b)
+verifiable in-window — the model can CHECK a candidate row by comparing
+its two codes, a grounded verification that "is this the last line?" never
+offered; (c) still fat — only a full READ locates the agreeing record, and
+the catch-all SEARCH stays dearer than the READ it would replace
+(deanchored (d)). Anchor positions are interior and pairwise distinct
+across a task's files. Evicted literals are unrecoverable — the context is
+rebuilt every step from instruction + writable + retained evidence alone
+(driver.rs:191-218) — so a code seen once and then evicted cannot seed a
+later SEARCH. The f2 standing condition fired on 0816 (honest walks killed
+by one wasted RUN at zero slack): every instruction now states that the
+check runs by itself.
+
 Every corpus token is seeded-random; armor selections are computed with the
 REAL `cksum` binary; honest walks, complaint order, stash/keys regressions,
 window inequalities and corpus properties are all asserted before the YAML
@@ -32,7 +55,7 @@ is emitted. Nothing is hand-written that a script can verify.
 """
 import json, math, os, re, random, shutil, string, subprocess, sys, tempfile
 
-rnd = random.Random(20260809)
+rnd = random.Random(20260819)
 ALNUM = string.ascii_lowercase + string.digits
 
 REGIONS = ["eu-west-1", "eu-west-2", "us-east-1", "us-east-2",
@@ -64,36 +87,80 @@ def est(text: str) -> int:
 # sibling row counts pairwise distinct (a hit's path:line: number cannot be
 # certified as an unread file's last line).
 
-def corpus_tok(rows: int, tail: str) -> str:
-    """Records end in a 12-char token; last line's token = `tail`."""
+def seal() -> str:
+    return f'{rnd.randrange(0x100000, 0xffffff):06x}'
+
+
+def seal_pair(agree: bool):
+    a = seal()
+    if agree:
+        return a, a
+    b = seal()
+    while b == a:
+        b = seal()
+    return a, b
+
+
+def corpus_tok(rows: int, val: str, at: int) -> str:
+    """Uniform records closing in a 12-char token. The OPERATIVE record is
+    the one at 1-based interior position `at` — the only row whose two seal
+    codes agree — and its closing token = `val` (draft-7, ruling c 0818:
+    selection by self-referential predicate, not by position)."""
+    assert 1 < at < rows, (at, rows)
     out = []
     for i in range(rows):
-        val = tail if i + 1 == rows else tok()
+        a, b = seal_pair(i + 1 == at)
+        v = val if i + 1 == at else tok()
         out.append(f"{rnd.choice(REGIONS):<10}  {rnd.choice(STATES):<5}  "
                    f"{rnd.choice(PHASES):<6}  "
-                   f"{rnd.randrange(0x100000, 0xffffff):06x}  "
+                   f"{a}  "
                    f"{rnd.choice(NOTES):<24}  "
-                   f"{rnd.randrange(0x100000, 0xffffff):06x}  {val}")
+                   f"{b}  {v}")
     body = '\n'.join(out) + '\n'
     assert body.count('\n') <= 100 and len(body) <= 8192, (body.count('\n'), len(body))
+    assert body.count(val) == 1, "operative value must appear exactly once"
     return body
 
 
-def corpus_num(rows: int, tail: int, width: int = 4) -> str:
-    """Records end in a `width`-digit number; last line's number = `tail`."""
+def corpus_num(rows: int, val: int, at: int, width: int = 4) -> str:
+    """Uniform records closing in a `width`-digit number; operative record =
+    agreeing-seals row at interior position `at` (see corpus_tok)."""
+    assert 1 < at < rows, (at, rows)
     lo, hi = 10 ** (width - 1), 10 ** width - 1
     out = []
     for i in range(rows):
-        val = tail if i + 1 == rows else rnd.randrange(lo, hi)
-        assert lo <= int(val) <= hi, "leading-zero / width invariant"
+        a, b = seal_pair(i + 1 == at)
+        v = val if i + 1 == at else rnd.randrange(lo, hi)
+        assert lo <= int(v) <= hi, "leading-zero / width invariant"
         out.append(f"{rnd.choice(REGIONS):<10}  {rnd.choice(STATES):<5}  "
                    f"{rnd.choice(PHASES):<6}  "
-                   f"{rnd.randrange(0x100000, 0xffffff):06x}  "
+                   f"{a}  "
                    f"{rnd.choice(NOTES):<21}  {tok()}  "
-                   f"{rnd.randrange(0x100000, 0xffffff):06x}  {val:0{width}d}")
+                   f"{b}  {v:0{width}d}")
     body = '\n'.join(out) + '\n'
     assert body.count('\n') <= 100 and len(body) <= 8192, (body.count('\n'), len(body))
+    assert body.count(f'{val:0{width}d}') == 1, "operative value must appear exactly once"
     return body
+
+
+def sealed(task, files):
+    """Draft-7 anchor invariants (ruling c, 0818): exactly one agreeing-seals
+    record per file; its seal code occurs nowhere else across the task's
+    corpus (no literal to bootstrap a cheap SEARCH from — the predicate
+    itself is inexpressible in the driver's regex engine, which has no
+    backreferences: regex crate, grep.rs:11,80)."""
+    all_bodies = '\n'.join(files.values())
+    for p, b in files.items():
+        rows = [r.split() for r in b.rstrip('\n').split('\n')]
+        width = {len(r) for r in rows}
+        assert len(width) == 1, f'{task}:{p}: ragged rows'
+        n = width.pop()
+        ia, ib = (3, 5) if n == 7 else (3, 6)
+        agree = [i for i, r in enumerate(rows, 1) if r[ia] == r[ib]]
+        assert len(agree) == 1, f'{task}:{p}: agreeing rows = {agree}'
+        code = rows[agree[0] - 1][ia]
+        assert all_bodies.count(code) == 2, (
+            f'{task}:{p}: seal code {code} leaks beyond its own record')
 
 
 def uniform(body: str):
@@ -103,13 +170,14 @@ def uniform(body: str):
     assert len(shapes) == 1, f"corpus is not uniform: {shapes}"
 
 
-def deanchored(task, files):
+def deanchored(task, files, anchors):
     """B2 round-1 regression: no cross-file positional anchor.
 
     (a) pairwise-distinct row counts; (b) no zero-padded own-line-index
-    field (the slot-#### anchor stays dead); (c) last-row categorical
+    field (the slot-#### anchor stays dead); (c) anchor-row categorical
     tuples pairwise distinct across the family; (d) a catch-all SEARCH
-    renders dearer than the READ it would replace.
+    renders dearer than the READ it would replace; (e) draft-7: anchor
+    positions pairwise distinct (no cross-file position to re-learn).
     """
     counts = {p: b.count('\n') for p, b in files.items()}
     assert len(set(counts.values())) == len(counts), f"{task}: row counts collide: {counts}"
@@ -119,9 +187,12 @@ def deanchored(task, files):
             assert f'{ln:04d}' not in r.split()[0], f"{task}:{p}: index anchor at line {ln}"
         render = sum(len(f'  {p}:{ln}: {r}\n') for ln, r in enumerate(rows, 1))
         assert est('x' * render) > est(b), f"{task}:{p}: catch-all cheaper than READ"
-    tuples = {p: tuple(files[p].rstrip('\n').split('\n')[-1].split()[:3]) for p in files}
+    tuples = {p: tuple(files[p].rstrip('\n').split('\n')[anchors[p] - 1].split()[:3])
+              for p in files}
     assert len(set(tuples.values())) == len(tuples), \
-        f"{task}: last-row tuples collide (bump seed): {tuples}"
+        f"{task}: anchor-row tuples collide (bump seed): {tuples}"
+    assert len(set(anchors.values())) == len(anchors), \
+        f"{task}: anchor positions collide (bump seed): {anchors}"
 
 
 # ── N1: pin-eviction (ordering / re-read decision) ────────────────────────
@@ -143,11 +214,16 @@ n1_key4 = f'k{(cksum_of(n1_fallback) % 4) * 2 + 3}'  # k3/k5/k7/k9, runtime-deri
 n1_rollback = pin_vals[n1_key4]
 
 n1_pool = {}
+n1_at = {f'refs/inv-{idx}.txt': at
+         for idx, at in zip(range(1, N1_POOL + 1),
+                            rnd.sample(range(2, min(N1_POOL_ROWS.values())), N1_POOL))}
 for idx in range(1, N1_POOL + 1):
-    tail = n1_mirror if idx == n1_i else (n1_fallback if idx == n1_j else tok())
-    n1_pool[f'refs/inv-{idx}.txt'] = corpus_tok(N1_POOL_ROWS[idx], tail)
+    val = n1_mirror if idx == n1_i else (n1_fallback if idx == n1_j else tok())
+    n1_pool[f'refs/inv-{idx}.txt'] = corpus_tok(
+        N1_POOL_ROWS[idx], val, n1_at[f'refs/inv-{idx}.txt'])
     uniform(n1_pool[f'refs/inv-{idx}.txt'])
-deanchored('N1', n1_pool)
+deanchored('N1', n1_pool, n1_at)
+sealed('N1', n1_pool)
 
 # Growing-key writable: field lines may not exist before they are asked for.
 n1_deploy = """# staging deploy manifest
@@ -180,16 +256,16 @@ if [ "$(get release)" != "$want" ]; then
   fail "release must equal the k1 entry in notes/s9.txt (that file is the source of record; add the line if it is not there)"
 fi
 n=$(printf %s "$(get release)" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
-want=$(tail -n 1 "refs/inv-$n.txt" | awk '{{print $NF}}')
+want=$(awk '$4==$6 {{print $NF}}' "refs/inv-$n.txt")
 if [ "$(get mirror)" != "$want" ]; then
   case "$keys" in "release "|"mirror release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release and mirror, nothing else" ;; esac
-  fail "mirror must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
+  fail "mirror must equal the value ending the record whose two seal codes agree in refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
 fi
 n=$(printf %s "$(get mirror)" | cksum | awk '{{print $1 % {N1_POOL} + 1}}')
-want=$(tail -n 1 "refs/inv-$n.txt" | awk '{{print $NF}}')
+want=$(awk '$4==$6 {{print $NF}}' "refs/inv-$n.txt")
 if [ "$(get fallback)" != "$want" ]; then
   case "$keys" in "mirror release "|"fallback mirror release ") ;; *) fail "the manifest may hold only the fields asked for so far — that is release, mirror and fallback, nothing else" ;; esac
-  fail "fallback must equal the value ending the LAST line of refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
+  fail "fallback must equal the value ending the record whose two seal codes agree in refs/inv-$n.txt (that file is the source of record; add the line if it is not there)"
 fi
 n=$(printf %s "$(get fallback)" | cksum | awk '{{print $1 % 4}}')
 key=k$((2 * n + 3))
@@ -216,14 +292,21 @@ while n3_lane_b == n3_lane_a:
     n3_lane_b = rnd.randrange(1000, 9999)
 n3_vj = n3_m0 + n3_lane_b
 
-n3_files = {'refs/matrix.txt': corpus_num(N3_FILE_ROWS['matrix'], n3_m0, N3_W),
-            'refs/p1.txt': corpus_num(N3_FILE_ROWS['p1'], n3_v1, N3_W)}
+n3_at = {f'refs/{k}.txt': at
+         for k, at in zip(N3_FILE_ROWS,
+                          rnd.sample(range(2, min(N3_FILE_ROWS.values())), len(N3_FILE_ROWS)))}
+n3_files = {'refs/matrix.txt': corpus_num(N3_FILE_ROWS['matrix'], n3_m0,
+                                          n3_at['refs/matrix.txt'], N3_W),
+            'refs/p1.txt': corpus_num(N3_FILE_ROWS['p1'], n3_v1,
+                                      n3_at['refs/p1.txt'], N3_W)}
 for idx in (2, 3):
-    tail = n3_vj if idx == n3_j else rnd.randrange(100000, 999999)
-    n3_files[f'refs/p{idx}.txt'] = corpus_num(N3_FILE_ROWS[f'p{idx}'], tail, N3_W)
+    val = n3_vj if idx == n3_j else rnd.randrange(100000, 999999)
+    n3_files[f'refs/p{idx}.txt'] = corpus_num(N3_FILE_ROWS[f'p{idx}'], val,
+                                              n3_at[f'refs/p{idx}.txt'], N3_W)
 for body in n3_files.values():
     uniform(body)
-deanchored('N3', n3_files)
+deanchored('N3', n3_files, n3_at)
+sealed('N3', n3_files)
 assert all(100000 <= v <= 999999 for v in (n3_m0, n3_v1, n3_vj)), "6-digit invariant"
 assert all(1000 <= v <= 9999 for v in (n3_lane_a, n3_lane_b)), "4-digit lanes"
 
@@ -249,17 +332,17 @@ test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "$(wc -l < "$f" | 
 test "$(tail -c 1 "$f")" = "" || fail "the file must end in a newline — an unterminated final line may not live in this file"
 get() {{ sed -n "s/^$1 = //p" "$f"; }}
 keys=$(sed -n 's/^\\(lane_[a-z]*\\) = .*/\\1/p' "$f" | sort | tr '\\n' ' ')
-m=$(tail -n 1 refs/matrix.txt | awk '{{print $NF}}')
-a=$(tail -n 1 refs/p1.txt | awk '{{print $NF}}')
+m=$(awk '$4==$7 {{print $NF}}' refs/matrix.txt)
+a=$(awk '$4==$7 {{print $NF}}' refs/p1.txt)
 if [ "$(get lane_a)" != "$((a - m))" ]; then
   case "$keys" in ""|"lane_a ") ;; *) fail "limits may hold only the lanes asked for so far — that is lane_a, nothing else" ;; esac
-  fail "lane_a must equal the value ending the LAST line of refs/p1.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)"
+  fail "lane_a must equal the value ending the record whose two seal codes agree in refs/p1.txt minus the value ending the record whose two seal codes agree in refs/matrix.txt (add the line if it is not there)"
 fi
 n=$(printf %s "$(get lane_a)" | cksum | awk '{{print $1 % 2 + 2}}')
-b=$(tail -n 1 "refs/p$n.txt" | awk '{{print $NF}}')
+b=$(awk '$4==$7 {{print $NF}}' "refs/p$n.txt")
 if [ "$(get lane_b)" != "$((b - m))" ]; then
   case "$keys" in "lane_a "|"lane_a lane_b ") ;; *) fail "limits may hold only the lanes asked for so far — that is lane_a and lane_b, nothing else" ;; esac
-  fail "lane_b must equal the value ending the LAST line of refs/p$n.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)"
+  fail "lane_b must equal the value ending the record whose two seal codes agree in refs/p$n.txt minus the value ending the record whose two seal codes agree in refs/matrix.txt (add the line if it is not there)"
 fi
 echo ok
 """
@@ -303,11 +386,16 @@ _sB_cands = {max(n4_t1, n4_t2, n4_tails[f'f{k}']) - min(n4_t1, n4_t2, n4_tails[f
              for k in range(3, 7)}
 assert len(_sB_cands) == 4, "stage-B candidates must be pairwise distinct"
 
+n4_at = {f'refs/{k}.txt': at
+         for k, at in zip(N4_FILE_ROWS,
+                          rnd.sample(range(2, min(N4_FILE_ROWS.values())), len(N4_FILE_ROWS)))}
 n4_files = {}
 for name, rows in N4_FILE_ROWS.items():
-    n4_files[f'refs/{name}.txt'] = corpus_num(rows, n4_tails[name])
+    n4_files[f'refs/{name}.txt'] = corpus_num(rows, n4_tails[name],
+                                              n4_at[f'refs/{name}.txt'])
     uniform(n4_files[f'refs/{name}.txt'])
-deanchored('N4', n4_files)
+deanchored('N4', n4_files, n4_at)
+sealed('N4', n4_files)
 
 n4_reading = "reading = 0\n"
 N4_CAP = len(f"reading = {n4_sC}\n".encode())
@@ -321,7 +409,7 @@ sed -n '/[^[:space:]]/p' "$f" | grep -qvE '^reading = [0-9]{{1,4}}$' \\
 test "$(sed -n '/[^[:space:]]/p' "$f" | wc -l | tr -d ' ')" = "1" \\
   || fail "the file must hold one line, 'reading = <number, at most four digits>' — nothing else may live in it"
 v=$(sed -n 's/^reading = //p' "$f")
-t() {{ tail -n 1 "refs/$1" | awk '{{print $NF}}'; }}
+t() {{ awk '$4==$7 {{print $NF}}' "refs/$1"; }}
 span() {{ printf '%s\\n' "$@" | sort -n | awk 'NR==1 {{ lo = $1 }} {{ hi = $1 }} END {{ print hi - lo }}'; }}
 a=$(t f1.txt); b=$(t f2.txt)
 sA=$(span "$a" "$b")
@@ -332,10 +420,10 @@ nC=$(printf %s "$sB" | cksum | awk '{{print $1 % 4 + 3}}')
 d=$(t "f$nC.txt")
 test "$v" = "$(span "$a" "$b" "$c" "$d")" && {{ echo ok; exit 0; }}
 test "$v" = "$sB" \\
-  && fail "reading must now also account for refs/f$nC.txt — largest minus smallest across f1, f2, f$nB and f$nC"
+  && fail "reading must now also account for refs/f$nC.txt — largest minus smallest across the agreeing-seals values of f1, f2, f$nB and f$nC"
 test "$v" = "$sA" \\
-  && fail "reading must now also account for refs/f$nB.txt — largest minus smallest across f1, f2 and f$nB"
-fail "reading must be the largest minus the smallest of the values ending refs/f1.txt and refs/f2.txt"
+  && fail "reading must now also account for refs/f$nB.txt — largest minus smallest across the agreeing-seals values of f1, f2 and f$nB"
+fail "reading must be the largest minus the smallest of the values ending the agreeing-seals records of refs/f1.txt and refs/f2.txt"
 """
 
 # ── mechanical verification: full honest walk per task ───────────────────
@@ -394,8 +482,8 @@ verify('N1', n1_seeds, 'deploy.conf',
        [('release', n1_release), ('mirror', n1_mirror),
         ('fallback', n1_fallback), ('rollback', n1_rollback)],
        ['release must equal the k1 entry',
-        f'mirror must equal the value ending the LAST line of refs/inv-{n1_i}.txt',
-        f'fallback must equal the value ending the LAST line of refs/inv-{n1_j}.txt',
+        f'mirror must equal the value ending the record whose two seal codes agree in refs/inv-{n1_i}.txt',
+        f'fallback must equal the value ending the record whose two seal codes agree in refs/inv-{n1_j}.txt',
         f'rollback must equal the {n1_key4} entry'],
        anchor='owner = platform', bytecap=N1_CAP)
 
@@ -487,8 +575,8 @@ n1_covert_line_regression()
 n3_seeds = {'limits.conf': n3_limits, 'tests/check.sh': n3_check, **n3_files}
 verify('N3', n3_seeds, 'limits.conf',
        [('lane_a', n3_lane_a), ('lane_b', n3_lane_b)],
-       ['lane_a must equal the value ending the LAST line of refs/p1.txt minus',
-        f'lane_b must equal the value ending the LAST line of refs/p{n3_j}.txt minus'],
+       ['lane_a must equal the value ending the record whose two seal codes agree in refs/p1.txt minus',
+        f'lane_b must equal the value ending the record whose two seal codes agree in refs/p{n3_j}.txt minus'],
        anchor='guard = fixed', bytecap=N3_CAP)
 
 
@@ -548,7 +636,7 @@ n3_covert_line_regression()
 n4_seeds = {'reading.conf': n4_reading, 'tests/check.sh': n4_check, **n4_files}
 verify('N4', n4_seeds, 'reading.conf',
        [('reading', n4_sA), ('reading', n4_sB), ('reading', n4_sC)],
-       ['reading must be the largest minus the smallest of the values ending refs/f1.txt and refs/f2.txt',
+       ['reading must be the largest minus the smallest of the values ending the agreeing-seals records of refs/f1.txt and refs/f2.txt',
         f'reading must now also account for refs/f{n4_nB}.txt',
         f'reading must now also account for refs/f{n4_nC}.txt'],
        anchor='', bytecap=N4_CAP)
@@ -593,9 +681,9 @@ n4_residual_walks()
 # line alone. B2 round 2 caught the invented format used before.
 BUDGET = 4096
 LONGEST = {
-    'N1': "deploy problem: fallback must equal the value ending the LAST line of refs/inv-9.txt (that file is the source of record; add the line if it is not there)",
-    'N3': "limits problem: lane_b must equal the value ending the LAST line of refs/p9.txt minus the value ending the LAST line of refs/matrix.txt (add the line if it is not there)",
-    'N4': "ledger problem: reading must now also account for refs/f9.txt — largest minus smallest across f1, f2, f9 and f9",
+    'N1': "deploy problem: fallback must equal the value ending the record whose two seal codes agree in refs/inv-9.txt (that file is the source of record; add the line if it is not there)",
+    'N3': "limits problem: lane_b must equal the value ending the record whose two seal codes agree in refs/p9.txt minus the value ending the record whose two seal codes agree in refs/matrix.txt (add the line if it is not there)",
+    'N4': "ledger problem: reading must now also account for refs/f9.txt — largest minus smallest across the agreeing-seals values of f1, f2, f9 and f9",
 }
 TASK_ID = {'N1': 'capv3-pin-eviction', 'N3': 'capv3-converge-fatref',
            'N4': 'capv3-sentinel-span'}
@@ -639,7 +727,7 @@ n1_batch = est("READ 'notes/s9.txt':\n" + pin_body
                + "READ 'tests/check.sh':\n" + n1_check + GATE['N1']) + STEP_HDR
 require('cond-11 batch block dies (single-step block, one gate)', n1_batch > BUDGET,
         f'pin+2 pool files+check as ONE block = {n1_batch} > {BUDGET}')
-require('cond-9: 8 actions', True, 'R pin, E, R inv_i, E, R inv_j, E, R pin, E = 8 (zero slack, flag f2)')
+require('cond-9: 8 actions', True, 'R pin, E, R inv_i, E, R inv_j, E, R pin, E = 8 (zero slack; f2 standing condition fired 0816 — the observed killer was one wasted RUN, so draft-7 states in-instruction that the check self-runs)')
 
 print('--- N3 (matrix term needed every round, evicted between rounds) ---')
 m = rblock('N3', 'refs/matrix.txt', n3_files['refs/matrix.txt'])
@@ -758,13 +846,13 @@ HEADER = open(os.path.join(HERE, 'v3_drafts_header.txt')).read()
 tasks_yaml = []
 for tid, instr, writable, seeds, taskcmt in [
     ('capv3-pin-eviction',
-     "tests/check.sh rejects deploy.conf but reports only the FIRST problem each time it runs, asking for one field at a time. Reference data lives under notes/ and refs/ (read-only). Fix deploy.conf until the check passes. The file may hold only the fields the check has already asked for; lines it does not complain about must stay unchanged.",
+     "tests/check.sh rejects deploy.conf but reports only the FIRST problem each time it runs, asking for one field at a time; it also runs by itself after every change, so you never need to run it. Reference data lives under notes/ and refs/ (read-only); in each refs/ file exactly one record has two seal codes that agree, and that record's closing value is the file's operative value. Fix deploy.conf until the check passes. The file may hold only the fields the check has already asked for; lines it does not complain about must stay unchanged.",
      'deploy.conf', n1_seeds, 'N1_COMMENT'),
     ('capv3-converge-fatref',
-     "tests/check.sh rejects limits.conf but reports only the FIRST problem each time it runs, asking for one lane at a time. Reference data lives under refs/ (read-only). Fix limits.conf until the check passes. The file may hold only the lanes the check has already asked for; lines it does not complain about must stay unchanged.",
+     "tests/check.sh rejects limits.conf but reports only the FIRST problem each time it runs, asking for one lane at a time; it also runs by itself after every change, so you never need to run it. Reference data lives under refs/ (read-only); in each file exactly one record has two seal codes that agree, and that record's closing value is the file's operative value. Fix limits.conf until the check passes. The file may hold only the lanes the check has already asked for; lines it does not complain about must stay unchanged.",
      'limits.conf', n3_seeds, 'N3_COMMENT'),
     ('capv3-sentinel-span',
-     "tests/check.sh rejects reading.conf but reports only the FIRST problem each time it runs, bringing one more read-only record under refs/ into play at a time. Each record ends with the value it contributes. Fix reading.conf until the check passes.",
+     "tests/check.sh rejects reading.conf but reports only the FIRST problem each time it runs, bringing one more read-only file under refs/ into play at a time; it also runs by itself after every change, so you never need to run it. In each refs/ file exactly one record has two seal codes that agree, and that record's closing value is the value the file contributes. Fix reading.conf until the check passes.",
      'reading.conf', n4_seeds, 'N4_COMMENT'),
 ]:
     cmt = open(os.path.join(HERE, f'{taskcmt}.txt')).read().rstrip('\n')

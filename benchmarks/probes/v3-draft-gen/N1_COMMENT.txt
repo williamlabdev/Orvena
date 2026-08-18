@@ -9,12 +9,24 @@
   # (dropped_reread >= 1) or by SEARCH (dropped_research >= 1; the
   # instrument counts both since 42e59da).
   #
-  # Corpora (condition 14 + B2 rounds 1-2): fat pool files are UNIFORM,
-  # POSITIONAL (value = last line) and DE-ANCHORED — no index column,
-  # per-row random fields, pairwise-distinct row counts; see the search
-  # walk below. The armor works at FILE level because row-level armor died
-  # in the 0807 collision (a complaint that names a row key turns every
-  # fat value into a ~32-token SEARCH).
+  # Corpora (condition 14; draft-7, ruling c 0818): fat pool files are
+  # UNIFORM and DE-ANCHORED — no index column, per-row random fields,
+  # pairwise-distinct row counts. The operative record is no longer
+  # positional: the 0816 behavior probes killed "value = last line"
+  # outright (10 of 12 deaths across the draft were wrong-tail — armor
+  # solved, right file read, value taken from a mid-file row; the
+  # positional selector never binds and offers nothing to verify a pick
+  # against). Draft-7 selects by SELF-REFERENTIAL PREDICATE: exactly one
+  # record per file has two AGREEING seal codes (the two hex fields), and
+  # that record's closing value is the operative value. The predicate is
+  # verifiable in-window (compare the two codes on the chosen row — a
+  # grounded check the tail never offered), unsearchable (see the search
+  # walk), and interior at pairwise-distinct positions across the pool
+  # (deanchored (e)). The armor still works at FILE level — row-level
+  # armor died in the 0807 collision (a complaint that names a row key
+  # turns every fat value into a ~32-token SEARCH); naming the PREDICATE
+  # in the complaint gives SEARCH nothing, because the predicate is not a
+  # pattern.
   #
   # Writable (condition 13, B2 round 2): GROWING-KEY manifest — a field
   # line may not exist before the check has asked for it, and the keys
@@ -67,11 +79,15 @@
   #   compute-channel walk: RUN executes only pre-declared fixed-argv
   #     commands (bench_commands: a single fixed `check`; tools/shell.rs)
   #     — cksum cannot run on chosen input; CRC is not text reasoning.
-  #   search walk: de-anchored corpora — no index column, random fields,
-  #     pairwise-distinct row counts; a hit's path:line: number cannot be
-  #     certified as an unread file's last line; the only certain selector
-  #     for a tail presupposes the read; catch-all renders dearer than the
-  #     READ (all generator-asserted, deanchored()).
+  #   search walk: the agreeing-seals predicate is inexpressible in the
+  #     driver's search engine — grep.rs (regex crate, no backreferences
+  #     or lookaround) cannot say "a row whose 4th and 6th fields match";
+  #     the codes themselves are unknown before a read and each anchor
+  #     code occurs nowhere else in the corpus (sealed() asserts), so
+  #     there is no literal to search for; evicted literals cannot seed a
+  #     later SEARCH (the context is rebuilt each step from instruction +
+  #     writable + retained evidence only, driver.rs:191-218); catch-all
+  #     renders dearer than the READ (deanchored (d)).
   #   stash walk: growing keys + exact byte cap + ALL-LINES format guard
   #     (every non-blank line must be the header, the owner line, or a
   #     legal key line — B2 round 3 executed a covert `A=<tail>` cache
@@ -85,4 +101,9 @@
   # Expected deaths: fabricated round-4 value (grounding rule catches →
   # burned steps); edit-without-goback after the dropped marker
   # (dropped_reread = 0 AND dropped_research = 0); batch cliff followed by
-  # full re-read burn (steps exhaust).
+  # full re-read burn (steps exhaust). Forensic addition after 0816: a
+  # value taken from a NON-AGREEING row is the draft-6 wrong-tail death's
+  # successor and is now classifiable from the worktree alone (the chosen
+  # row's codes differ — the model skipped a verification the corpus
+  # affords). If the probe still shows it dominating, that is a reading
+  # about predicate binding, not a corpus artifact.

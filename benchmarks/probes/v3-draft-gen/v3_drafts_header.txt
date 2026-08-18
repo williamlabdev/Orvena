@@ -1,6 +1,6 @@
 # Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
 #
-# Status: DRAFT-6 (0807) — pre-probe, pre-freeze. Design:
+# Status: DRAFT-7 (0818) — pre-probe, pre-freeze. Design:
 # SLICE-032 (ratified 0807, four rulings). These are the N1/N3/N4 shapes
 # from the type table; N2's shape is separately locked by ruling iii
 # (header-signal probe, 6/6) and is not drafted here. Numbers from these
@@ -24,8 +24,13 @@
 # draft-5 was that merge; two zero-context B2 rounds then each refuted a
 # load-bearing piece of it — round 1 the slot-index anchor, round 2 the
 # fixed-width skeleton itself, N4's unarmored file set, and the invented
-# gate format in the window arithmetic. draft-6 carries the fixes; see the
-# adversarial trail below.
+# gate format in the window arithmetic. draft-6 carried the fixes; see the
+# adversarial trail below. draft-7 (ruling c, 0818) replaces the anchor
+# FORM itself after the 0816 behavior probes refuted it corpus-wide (10 of
+# 12 deaths wrong-tail): the operative record is no longer the last line
+# but the single record per file whose two seal codes agree — a
+# self-referential predicate that is verifiable in-window and
+# inexpressible as a search pattern (see the corpus bullet below).
 #
 # RESTATED (0816, william): "draft-4 as the base" no longer describes
 # these files and is recorded as A MERGE WITH NO BASE — neither draft is
@@ -42,19 +47,27 @@
 #
 # * Sequential first-problem-only check (H pattern): reveal k+1 exists only
 #   after fix k — real state dependency, per design condition 11.
-# * UNIFORM / POSITIONAL CORPORA (condition 14, from the alt draft): fat
-#   records are fixed-shape, every record ends in a same-shape value, and
-#   the operative value is the file's LAST line, and the records are
-#   DE-ANCHORED (fresh-eyes round 3): no index column, per-row fields
-#   random, sibling row counts pairwise distinct. SEARCH matches content
-#   and content does not encode position; a hit's path:line: number
-#   cannot be certified as an unread file's last line; the only certain
-#   selector for a tail is the tail itself, which presupposes the read;
-#   a catch-all sweep renders dearer than the READ (all four properties
-#   asserted by the generator's deanchored() regression; MAX_HITS=200
-#   additionally caps multi-file sweeps). N1's pin file is the deliberate
-#   exemption (see its block: the needle is SUPPOSED to be cheap to
-#   re-acquire; the go-back is the measurement).
+# * UNIFORM / PREDICATE-ANCHORED CORPORA (condition 14; draft-7, ruling c
+#   0818): fat records are fixed-shape and every record ends in a
+#   same-shape value, but the operative record is the ONE record per file
+#   whose two seal codes (the two hex fields) agree — its closing value is
+#   the file's operative value. The records stay DE-ANCHORED (fresh-eyes
+#   round 3): no index column, per-row fields random, sibling row counts
+#   pairwise distinct, anchor positions interior and pairwise distinct.
+#   Why this form: the 0816 behavior probes showed the positional anchor
+#   ("value = last line") never binds — models operated on mid-file values
+#   in 10 of 12 deaths, and a tail offers nothing to verify a pick
+#   against, while agreeing codes are a grounded in-window check. Why it
+#   is still unsearchable: the driver's engine is the Rust regex crate
+#   (grep.rs:11,80) — no backreferences, so the predicate cannot be a
+#   pattern; the codes are unknown before a read and each anchor code
+#   occurs nowhere else in the task's corpus (sealed() asserts); evicted
+#   literals cannot seed a later SEARCH (context is rebuilt per step from
+#   instruction + writable + retained evidence, driver.rs:191-218); a
+#   catch-all sweep renders dearer than the READ (deanchored (d);
+#   MAX_HITS=200 additionally caps multi-file sweeps). N1's pin file is
+#   the deliberate exemption (see its block: the needle is SUPPOSED to be
+#   cheap to re-acquire; the go-back is the measurement).
 # * ARMOR CHAIN (from draft-4, now file-level): which pool file (N1, N3)
 #   or which pin key (N1 round 4) settles round k+1 is derived from the
 #   CORRECT value of field k via `cksum` at runtime. Why: condition 11's
@@ -76,7 +89,7 @@
 #   field is a legal-width carry cell (N3's matrix term rode lane_b;
 #   N1's whole pool candidate set rode its three free slots — 5 steps,
 #   zero fat go-backs, telemetry indistinguishable from a good run).
-#   draft-6 uses GROWING-KEY writables (condition 13's original form):
+#   draft-6+ uses GROWING-KEY writables (condition 13's original form):
 #   a key line may not exist before the check has asked for it, the keys
 #   guard + per-line width regex + EXACT byte cap all run BEFORE the
 #   chain, so stash and progress stay mutually exclusive. The lookahead

@@ -13,13 +13,18 @@
   # s2, done in TWO steps with zero window pressure. The sentinel read
   # green for the most natural strategy there is.
   #
-  # Mechanism now: refs/f1..f6 exist; the span runs over f1, f2 plus TWO
-  # cksum-picked files revealed stage by stage (nB = f(span(f1,f2)),
-  # nC = f(stage-B span), nC != nB asserted). A batch reader holds six
-  # tails and still cannot compute the final span — it does not know which
-  # four files count. Decoy tails are chosen so every candidate stage-B
-  # span is distinct (guess floor 1/4, asserted); stage reveals name the
-  # picked files in plaintext for the honest walker.
+  # Mechanism now: refs/f1..f6 exist; the span runs over the four files'
+  # SEALED values — each file contributes the closing value of its single
+  # agreeing-seals record (draft-7, ruling c 0818; the 0816 probe caught
+  # all three N4 deaths computing the span over EVERY value in view, so
+  # the anchor had to become a verifiable predicate — see N1) — f1, f2
+  # plus TWO cksum-picked files revealed stage by stage (nB =
+  # f(span(f1,f2)), nC = f(stage-B span), nC != nB asserted). A batch
+  # reader holds six sealed values and still cannot compute the final
+  # span — it does not know which four files count. Decoy sealed values
+  # are chosen so every candidate stage-B span is distinct (guess floor
+  # 1/4, asserted); stage reveals name the picked files in plaintext for
+  # the honest walker.
   #
   # Carried value: a SPAN (largest minus smallest) — the running state is
   # a (min,max) PAIR, and the single writable slot is {1,4}-width-gated
@@ -31,7 +36,8 @@
   #   (i) final-first close: the stateless check still accepts a correct
   #       final span written from nothing — but composing it now requires
   #       knowing BOTH armored picks, i.e. walking the reveals (or a blind
-  #       tail-pair guess across 6 uniform files at ~3 actions per try).
+  #       row-pair guess across six files of ~80 uniform records each —
+  #       far below the old 1-in-15 tail-pair floor).
   #   (ii) stage-skip: a correct stage-B span draws the f_nC reveal
   #       without stage A ever passing — knowledge of nB is still needed.
   #   (iii) disciplined extreme-tracking with the single 4-digit carry +
@@ -58,7 +64,7 @@
   #     cliff-evicted whole; only stage A is computable from it, and the
   #     stage-B pick is unknowable at that point.
   #   Three operative blocks never coexist (asserted for every triple),
-  #   and stage C needs three tails at once unless an extreme is carried —
+  #   and stage C needs three sealed values at once unless an extreme is carried —
   #   which the slot width fights.
   #
   # Condition 9: a retaining agent solves in 4 READ + 3 EDIT = 7 actions
@@ -68,7 +74,8 @@
   # Condition 11 self-test: batch close at s2 fails — only stage A is
   # computable from the giant newest block; the picks are cksum-armored.
   # No compute channel (RUN fixed-argv); no search shortcut (de-anchored
-  # positional tails, and the spans themselves appear in no file).
+  # agreeing-seals records, predicate unsearchable — and the spans
+  # themselves appear in no file).
   #
   # Freeze note: reads 0/0 are only meaningful with the probe confirming
   # window_peak_tokens near/over budget and the death shapes above; a zero
