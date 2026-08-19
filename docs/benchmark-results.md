@@ -1,5 +1,18 @@
 # Benchmark results
 
+> **Fourth number (capability v3, first official reading) — 2026-08-19:** on
+> the frozen 3-task **capability v3 set** (the window-management axis,
+> FROZEN-3, slice-032), both cells measured back to back under the ruler
+> protocol: **`qwen3.6:35b` × native 0.5.0: 22% (2/9)** and **`qwen3:14b` ×
+> native 0.5.0: 11% (1/9)**. Low on purpose — v3 was built *because* v1 was
+> saturated at 100% on both models; this is the new ruler's baseline, not a
+> regression. The only cross-cell gradient is `capv3-converge-fatref` (2/3 vs
+> 1/3); `capv3-pin-eviction` read 0/3 in both cells; `capv3-sentinel-span`
+> read 0/3 in both cells **by design** (it is the retention sentinel — red is
+> the expected reading on agent 0.5.0, and every red carried the designed
+> mechanism signature). All earlier v3 numbers (the 0816/0819 probes) remain
+> informal; this bundle is the set's first quotable reading.
+>
 > **Third number (the capability ruler, first ladder) — 2026-08-04/05:** on
 > the 8-task **capability set** (the smartness ruler, slice-022) driving
 > `qwen3:14b`, three agent envelopes measured back to back:
@@ -58,6 +71,77 @@ this".
 > [2026-08-02 section](#the-governance-differential-re-measured-2026-08-02)
 > immediately below, and it moved the numbers enough that the old headline no
 > longer holds.
+
+## The capability v3 first reading (2026-08-19)
+
+The first official measurement on **capability v3** — the window-management
+axis (slice-032), frozen 0819 as FROZEN-3. The set exists because capability
+v1 saturated at 100% on both models: these three tasks put the pressure on
+*what the loop keeps in its window* (ordering and re-read restraint,
+convergence under fat state, a retention sentinel), not on locating or
+editing. Probe numbers from 0816/0819 were declared informal when they were
+taken; this bundle is the first reading quotable against the set.
+
+| | |
+|---|---|
+| Date | 2026-08-19 |
+| Provider / models | `ollama` / `qwen3.6:35b` and `qwen3:14b` (local, serial — same daemon) |
+| Task set | [`benchmarks/capability-v3.yaml`](../benchmarks/capability-v3.yaml) — 3 frozen tasks |
+| Runs | 3 per task per cell (9 task-runs per cell; 0 skipped, 0 provider errors, 0 oracle errors) |
+| Posture | `engineering` only (per the ruler protocol) |
+| Sampling | temperature 0.6 / top_p 0.95 / top_k 20 (B1: one set for every model), no seed |
+| Comparability key | set `benchmarks/capability-v3.yaml` @ `cf05533` · `max_steps = 8` · model per cell · `native 0.5.0` — all four recorded in the bundles |
+| Raw reports | `bench-runs/20260819-capability-v3-qwen3.6-35b.json` · `bench-runs/20260819-capability-v3-qwen3-14b.json` — every per-run death retained |
+
+| Measurement | `qwen3.6:35b` | `qwen3:14b` |
+|---|---|---|
+| **Ground-truth solve rate** (verify-gate as oracle) | **22%** (2/9) | **11%** (1/9) |
+| **Budget exhaustion** (`exit = budget_exhausted`) | 78% (7/9) | 89% (8/9) |
+| Mean steps per task-run | 7.6 | 7.9 |
+| `capv3-pin-eviction` (N1) | 0/3 | 0/3 |
+| `capv3-converge-fatref` (N3) | **2/3** | **1/3** |
+| `capv3-sentinel-span` (N4, sentinel) | 0/3 (by design) | 0/3 (by design) |
+
+### What the runs actually show
+
+- **The solves are in-envelope and verified.** All three solves exited
+  `gates_passed` at 6–7 steps with the oracle agreeing (`verified` =
+  `solved` on every run in both cells; false-done 0%). Nothing squeaked by
+  at step 8.
+- **`converge-fatref` is the set's only cross-cell gradient** (2/3 vs 1/3),
+  the same direction the informal probes showed (3/3 vs 2/3). On three reps
+  per cell that is a lean, not a wall — the next reading will say whether it
+  holds.
+- **`pin-eviction` read 0/3 in both cells, and that does not contradict "not
+  a wall".** The informal probes saw it solved twice (35b once by
+  bundle-read, 14b once by seven-step retention); at this sampling it is a
+  low-probability solve, and this bundle drew none. Every death was
+  `budget_exhausted` with reads dominating the action mix and rereads being
+  dropped by eviction (up to 4 per run) — the designed failure mode, not a
+  wrong-row or format death.
+- **The sentinel is red with the right mechanism.** `capv3-sentinel-span` is
+  supposed to read red on agent 0.5.0 — a green is only a reading after
+  action-log verification (the f4 obligation, ruled 0816). Both cells' reds
+  carry the designed signature: window peaks hugging the 4096 cap
+  (3687–4078 across all six runs), 7–8 reads per run with rereads evicted
+  (up to 5 dropped), and — on the 14b rep that tried — **two `SEARCH`
+  actions returning nothing** (`search: blocked`): the agreeing-seals anchor
+  is not expressible as a search pattern, exactly as built. The sentinel is
+  armed, not broken.
+- **Cross-model numbers are never pooled.** 22% and 11% sit side by side as
+  two facts about two envelopes; the quotable object is the pair, keyed by
+  the comparability key above.
+
+### Reproduce
+
+```sh
+scripts/bench-capv3.sh            # both cells, 3 reps each, serial
+scripts/bench-capv3.sh 3 qwen3.6:35b   # one cell
+```
+
+The script scaffolds a throwaway project, applies the B1 calibration
+sampling, refuses to overwrite an existing report, and writes one bundle per
+cell into `bench-runs/`.
 
 ## The capability first run (2026-08-04)
 
