@@ -1,0 +1,412 @@
+{
+  "provider": "ollama",
+  "model": "qwen3:14b",
+  "endpoint": null,
+  "run_id": "1787129860492-48595-0",
+  "provenance": {
+    "server_version": "ollama 0.32.13",
+    "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 40960,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.5.0",
+  "repeat": 3,
+  "task_count": 1,
+  "ran": 1,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 0.0,
+  "solved_any": 0,
+  "verified_rate": 0.0,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 8.0,
+  "budget_exhaustion_rate": 1.0,
+  "mean_total_tokens": 61973.0,
+  "search_use_rate": 0.33333334,
+  "search_yield_rate": 0.0,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv3-sentinel-span",
+      "runs": 3,
+      "solved": 0,
+      "skipped": false,
+      "pass_rate": 0.0,
+      "exhaustion_rate": 1.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 48304,
+          "action_counts": {
+            "write": 3,
+            "edit": 0,
+            "read": 6,
+            "search": 1,
+            "run": 0
+          },
+          "search_hits": [
+            0
+          ],
+          "search": "miss",
+          "evictions": {
+            "count": 2,
+            "first_step": 7,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 3,
+          "dropped_research": 0,
+          "window_peak_tokens": 3777
+        },
+        {
+          "rep": 1,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 71552,
+          "action_counts": {
+            "write": 2,
+            "edit": 0,
+            "read": 6,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 3,
+            "first_step": 6,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "dropped_reread": 3,
+          "dropped_research": 0,
+          "window_peak_tokens": 3709
+        },
+        {
+          "rep": 2,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 66063,
+          "action_counts": {
+            "write": 4,
+            "edit": 2,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "dropped_research": 0,
+          "window_peak_tokens": 3812
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 1
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 0,
+          "failed": 2
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1787129860492-48595-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.13",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv3-sentinel-span",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 10,
+          "action_counts": {
+            "write": 3,
+            "edit": 0,
+            "read": 6,
+            "search": 1,
+            "run": 0
+          },
+          "search_hits": [
+            0
+          ],
+          "input_tokens": 31852,
+          "output_tokens": 16452,
+          "evidence_path": ".orvena/bench/1787129860492-48595-0-rep0/capv3-sentinel-span/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 2,
+            "first_step": 7,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 3,
+          "dropped_research": 0,
+          "window_peak_tokens": 3777
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1787129860492-48595-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.13",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv3-sentinel-span",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 2,
+            "edit": 0,
+            "read": 6,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 53532,
+          "output_tokens": 18020,
+          "evidence_path": ".orvena/bench/1787129860492-48595-0-rep1/capv3-sentinel-span/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 3,
+            "first_step": 6,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "dropped_reread": 3,
+          "dropped_research": 0,
+          "window_peak_tokens": 3709
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3:14b",
+      "endpoint": null,
+      "run_id": "1787129860492-48595-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.13",
+        "model_digest": "bdbd181c33f2ed1b31c972991882db3cf4d192569092138a7d29e973cd9debe8",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 40960,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.5.0",
+      "task_count": 1,
+      "passed": 0,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.0,
+      "verified": 0,
+      "verified_rate": 0.0,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 1,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 1,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv3-sentinel-span",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 8,
+          "action_counts": {
+            "write": 4,
+            "edit": 2,
+            "read": 2,
+            "search": 0,
+            "run": 0
+          },
+          "search_hits": [],
+          "input_tokens": 21346,
+          "output_tokens": 44717,
+          "evidence_path": ".orvena/bench/1787129860492-48595-0-rep2/capv3-sentinel-span/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "dropped_research": 0,
+          "window_peak_tokens": 3812
+        }
+      ]
+    }
+  ]
+}
