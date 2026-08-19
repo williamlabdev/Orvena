@@ -1,11 +1,21 @@
-# Orvena capability v3 DRAFTS — window-management axis. NOT a ruler.
+# Orvena capability v3 — window-management axis.
 #
-# Status: DRAFT-7 (0818) — pre-probe, pre-freeze. Design:
-# SLICE-032 (ratified 0807, four rulings). These are the N1/N3/N4 shapes
-# from the type table; N2's shape is separately locked by ruling iii
-# (header-signal probe, 6/6) and is not drafted here. Numbers from these
-# tasks never enter any official account; the probe protocol below must
-# pass before any freeze talk.
+# Status: FROZEN-3 (ruled 0819) — the set is the 3 drafted shapes:
+#   capv3-pin-eviction (N1, ordering / re-read / restraint),
+#   capv3-converge-fatref (N3, convergence + fat state),
+#   capv3-sentinel-span (N4, retention sentinel — reads red in BOTH
+#   cells on agent 0.5.0 by design; a green is only a reading after
+#   action-log verification, f4 obligation, ruled 0816).
+# Freezing was SELECTION + DECLARATION only (no task edited; the corpus
+# is byte-identical to the draft-7 probe corpus — editing any task is a
+# new set version). Behavior-probe evidence (0819, informal, both cells
+# 35b/14b): wrong-row deaths 0/x across all reps; N1 solvable by
+# bundle-read (35b) and by retention (14b, 7 steps); N3 3/3 vs 2/3;
+# N4 red in both cells via the designed JIT reread-burn mechanism.
+# f2 STANDING CONDITION void: floor cell shows a solve and separated
+# death shapes. Full material: SLICE-032.
+# N2's shape is separately locked by ruling iii and joins as a later
+# set version if drafted.
 #
 # PROVENANCE — the 0807 draft collision and its ruling:
 # Two sessions drafted v3 in parallel. draft-4 (0eba93c: armor chain,
@@ -190,6 +200,11 @@
 #       closing them is impossible while the check stays stateless and the
 #       answer stays a span. Rule: accept with action-log verification
 #       duty, or order a different aggregate.
+
+frozen:
+  - capv3-pin-eviction
+  - capv3-converge-fatref
+  - capv3-sentinel-span
 
 tasks:
   # ══ N1 — ordering / reread decision (capv3-pin-eviction) ═════════════════

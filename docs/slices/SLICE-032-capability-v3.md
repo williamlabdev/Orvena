@@ -717,3 +717,22 @@ william 對 0819 三待議事項裁「都要」。本輪兩組(非正式):
 
 三題死活全部落在設計敘事內,錯列死兩輪合計 0/24 rep(17 死中 0 錯列)。draft-7
 達成凍結前置條件;凍結執行記下節。
+
+## 凍結(0819,裁「都要」執行):FROZEN-3
+
+v2 先例(0806 凍 8):凍結=**純選擇+聲明,不動任務**。v3 執行:
+- `benchmarks/probes/capability-v3-drafts.yaml` → `git mv` 促升為
+  `benchmarks/capability-v3.yaml`,檔頭 DRAFT-7 聲明改 FROZEN-3,
+  加 `frozen:` 清單(三題全選——v3 無備選,選擇是平凡的;凍結的
+  實質是聲明+語料定版)。**語料 byte-identical**(diff 確認只有
+  檔頭註解與 frozen 塊,任務塊零差異——探針跑過的就是凍進去的)。
+- 迴歸測試:`benchmark.rs` 新增 v3 honesty 測試(id 前綴/verify/
+  writes/無 compliance 設施/frozen 清單雙向對應);一項有意偏離:
+  v2 的「seed ≤50 行」上限不搬——v3 語料 79–99 行是視窗壓力軸的
+  設計本身,測試內註明。14 測試全綠。
+- frozen 選擇實跑:`bench --tasks benchmarks/capability-v3.yaml` →
+  "frozen selection: running 3 of 3"。
+- 官方讀數規矩不變:探針數字(0816/0819 全部)非正式;v3 官方讀數
+  之後照 ruler protocol(set version + max_steps + model + agent
+  version 四鍵)跑正式 bundle 才算。N4 綠格必附動作日誌驗證(f4
+  義務);N2 由裁 iii 另鎖形狀,入集=新 set version。

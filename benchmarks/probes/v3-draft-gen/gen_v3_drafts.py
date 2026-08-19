@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generate benchmarks/probes/capability-v3-drafts.yaml (N1/N3/N4, draft-7).
+"""Generate benchmarks/capability-v3.yaml (N1/N3/N4, draft-7; frozen 0819 as
+capv3-pin-eviction / capv3-converge-fatref / capv3-sentinel-span).
 
 Lineage: draft-4 (0eba93c, armor chain + guard ordering) x alt (9b91b4b,
 uniform/positional corpora, span sentinel, growing-key writable) merged per

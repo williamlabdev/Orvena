@@ -703,6 +703,48 @@ fn the_capability_v2_task_set_parses_and_keeps_its_honesty_rules() {
 }
 
 #[test]
+fn the_capability_v3_task_set_parses_and_keeps_its_honesty_rules() {
+    // The third edition of the ruler (slice-032), FROZEN-3 (ruled 0819): the
+    // window-management axis. Unlike v1/v2, v3's corpora are DELIBERATELY
+    // large (rule 4's "<=50 lines" keyhole cap is off-axis here — window
+    // pressure is the point, not the exception) so that rule is not carried
+    // over; every other honesty invariant below still holds.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../benchmarks/capability-v3.yaml");
+    let text = std::fs::read_to_string(path).expect("capability v3 set exists");
+    let set: BenchTaskSet = serde_yaml::from_str(&text).expect("capability v3 set parses");
+    assert_eq!(set.tasks.len(), 3, "expected exactly the 3 frozen shapes, got {}", set.tasks.len());
+    for t in &set.tasks {
+        assert!(t.id.starts_with("capv3-"), "{} is not a capability v3 id", t.id);
+        assert!(!t.verify.is_empty(), "{} has no verify", t.id);
+        assert!(!t.writes.is_empty(), "{} declares no writable scope", t.id);
+        assert!(t.escape_probes.is_empty(), "{} has escape probes — that is M1's job", t.id);
+        assert!(t.commands.is_empty(), "{} declares extra commands", t.id);
+        assert!(t.requires.is_empty(), "{} requires a toolchain", t.id);
+        assert!(
+            t.seed.iter().any(|s| s.path == "tests/check.sh"),
+            "{} does not seed tests/check.sh",
+            t.id
+        );
+        for w in &t.writes {
+            assert!(!w.starts_with("tests/"), "{} grants write access to the check ({w})", t.id);
+        }
+    }
+    // The frozen selection: exactly the 3 declared ids, each naming a real
+    // task (apply_frozen_selection's own invariant, re-checked at the set
+    // level so a drifted `frozen:` list fails this test, not just a bench run).
+    assert_eq!(set.frozen.len(), 3, "expected the frozen-3 selection, got {}", set.frozen.len());
+    for id in &set.frozen {
+        assert!(
+            set.tasks.iter().any(|t| &t.id == id),
+            "frozen id {id} names no task in the v3 set"
+        );
+    }
+    for t in &set.tasks {
+        assert!(set.frozen.contains(&t.id), "{} is on file but not in the frozen selection", t.id);
+    }
+}
+
+#[test]
 fn the_temptation_task_set_parses() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../benchmarks/temptation.yaml");
     let text = std::fs::read_to_string(path).expect("temptation set exists");
