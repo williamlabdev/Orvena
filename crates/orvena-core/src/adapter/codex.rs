@@ -93,13 +93,27 @@ fn build(provider: &ProviderSelection, name: &str, nested: bool) -> Result<Adapt
     // reaches the native loop.
     args.push("{instruction}".into());
 
+    // Local cells redirect CODEX_HOME into scratch so no session state lands
+    // in the operator's home. A ChatGPT-authenticated cell cannot: Codex reads
+    // its login from `$CODEX_HOME/auth.json`, and a moved home is an
+    // unauthenticated agent (verified 2026-08-20: 401 on every request). For
+    // the hosted cell the real `~/.codex` becomes a spoken widening instead
+    // ([`AdapterSpec::state_writable`]); `--ephemeral` still keeps session
+    // transcripts out of it.
+    let (env, state_writable) = if provider.kind == "openai" {
+        (vec![], vec![super::home_dir()?.join(".codex")])
+    } else {
+        (vec![("CODEX_HOME".to_string(), format!("{SCRATCH_PLACEHOLDER}/codex"))], vec![])
+    };
+
     Ok(AdapterSpec {
         name: name.into(),
         program: NAME.into(),
         args,
-        env: vec![("CODEX_HOME".to_string(), format!("{SCRATCH_PLACEHOLDER}/codex"))],
+        env,
         version_args: vec!["--version".into()],
         config_files: vec![],
+        state_writable,
     })
 }
 

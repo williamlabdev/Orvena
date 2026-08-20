@@ -34,6 +34,7 @@
 //! distribution. Adapters are how the same guarantees reach agents we don't own.
 
 pub mod aider;
+pub mod claude;
 pub mod codex;
 pub mod continue_cli;
 pub mod opencode;
@@ -102,6 +103,33 @@ pub struct AdapterSpec {
     /// never declared.
     #[serde(default)]
     pub config_files: Vec<(String, String)>,
+    /// Absolute paths of the agent's **own state** (login/session store) that
+    /// must stay writable for the agent to function at all — e.g. `~/.codex`
+    /// for a ChatGPT-authenticated Codex, `~/.claude` for a subscription
+    /// -authenticated Claude Code. Empty for profiles whose state can be
+    /// redirected into scratch.
+    ///
+    /// This is a **spoken widening**, in the same register as `network:
+    /// allow`: the OS boundary stops confining these paths, and the run
+    /// evidence must say so. The claim that survives is scoped to the project
+    /// tree — which is what the independent oracle judges — not to the
+    /// operator's home. Redirecting the state dir into scratch instead would
+    /// be prettier, but both vendors bind their login to the real state
+    /// location (Codex reads `$CODEX_HOME/auth.json`; Claude Code's keychain
+    /// credential is not honored under a moved `CLAUDE_CONFIG_DIR`), so a
+    /// redirect quietly produces an unauthenticated agent — a cell that
+    /// measures a login screen.
+    #[serde(default)]
+    pub state_writable: Vec<PathBuf>,
+}
+
+/// The operator's home directory, for profiles that must grant the agent's
+/// real state location ([`AdapterSpec::state_writable`]).
+pub fn home_dir() -> crate::Result<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|h| !h.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| crate::Error::Config("HOME is not set — cannot locate the agent's own state directory".into()))
 }
 
 /// Which agent drives a run: Orvena's own bounded loop, or a wrapped external
@@ -671,6 +699,7 @@ mod tests {
             env: vec![],
             version_args: vec!["--version".into()],
             config_files: vec![],
+        state_writable: vec![],
         }
     }
 

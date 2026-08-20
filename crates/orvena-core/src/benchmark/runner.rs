@@ -303,9 +303,13 @@ fn run_external_task(
     workdir: &Path,
     mode: GovernanceMode,
 ) -> Result<RunReport> {
-    let extra_writable = temp_extra_writable(workdir);
+    let mut extra_writable = temp_extra_writable(workdir);
+    // The agent's own state (login/session store) stays writable when the
+    // profile says it must — a spoken widening, surfaced below like every
+    // other honest limit. See `AdapterSpec::state_writable`.
+    extra_writable.extend(spec.state_writable.iter().cloned());
 
-    let (policy, widenings) = match mode {
+    let (policy, mut widenings) = match mode {
         GovernanceMode::Off => {
             (adapter::baseline_sandbox_policy(workdir, extra_writable.clone()), vec![])
         }
@@ -316,6 +320,14 @@ fn run_external_task(
             adapter::sandbox_policy(workdir, &task.writes, true, extra_writable.clone())
         }
     };
+    for p in &spec.state_writable {
+        widenings.push(format!(
+            "sandbox widened: agent state path '{}' is writable — the agent's login/session \
+             store lives there and the agent cannot run without it; containment stays scoped \
+             to the project tree the oracle judges",
+            p.display()
+        ));
+    }
     let sandbox = Sandbox::for_policy(policy);
     // The gate is measurement, not an agent action, so it is confined by the
     // host boundary only — the same policy the ungoverned baseline runs under.

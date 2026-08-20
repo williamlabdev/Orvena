@@ -39,7 +39,17 @@ pub async fn run(
     if let Some(kind) = provider {
         config.agent.provider.kind = kind;
     }
-    preflight_provider(&config.agent.provider)?;
+    let agent_selection = resolve_agent(&agent, &config.agent.provider)?;
+    // Provider readiness checks that *orvena's own builder* could run — an API
+    // key in this process's environment. A wrapped agent never invokes that
+    // builder: every adapter profile authenticates itself (codex login, claude
+    // subscription login, aider's own env conventions). Demanding a key here
+    // would fail cells whose agent is perfectly able to run, and a key exported
+    // just to satisfy this check could leak into the child and silently switch
+    // its auth path. The adapter's own spec() already validated the mapping.
+    if matches!(agent_selection, AgentSelection::Native) {
+        preflight_provider(&config.agent.provider)?;
+    }
 
     let mut set: BenchTaskSet = match &tasks {
         Some(path) => {
@@ -95,8 +105,6 @@ pub async fn run(
             modes
         }
     };
-
-    let agent_selection = resolve_agent(&agent, &config.agent.provider)?;
 
     let run_id = run_timestamp();
     let base = dir.join("bench");
@@ -193,19 +201,22 @@ fn resolve_agent(agent: &str, provider: &ProviderSelection) -> Result<AgentSelec
         adapter::continue_cli::NAME => {
             wrapped(adapter::continue_cli::spec(provider)?, INSTALL_CONTINUE)
         }
+        adapter::claude::NAME => wrapped(adapter::claude::spec(provider)?, INSTALL_CLAUDE),
         adapter::codex::NAME => wrapped(adapter::codex::spec(provider)?, INSTALL_CODEX),
         adapter::codex::NAME_NESTED => {
             wrapped(adapter::codex::spec_nested(provider)?, INSTALL_CODEX)
         }
         adapter::opencode::NAME => wrapped(adapter::opencode::spec(provider)?, INSTALL_OPENCODE),
         other => bail!(
-            "unknown --agent '{other}' (known: native, aider, openhands, continue, codex, \
-             codex-nested, opencode)"
+            "unknown --agent '{other}' (known: native, aider, claude, openhands, continue, \
+             codex, codex-nested, opencode)"
         ),
     }
 }
 
 const INSTALL_CODEX: &str = "install it (e.g. `npm install -g @openai/codex`) and re-run";
+const INSTALL_CLAUDE: &str =
+    "install it (e.g. `npm install -g @anthropic-ai/claude-code`) and re-run";
 const INSTALL_OPENCODE: &str = "install it (e.g. `npm install -g opencode-ai`) and re-run";
 const INSTALL_OPENHANDS: &str =
     "install it (e.g. `uv tool install openhands --python 3.12`) and re-run";

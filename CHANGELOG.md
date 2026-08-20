@@ -6,6 +6,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Claude Code adapter profile** (`--agent claude`,
+  `crates/orvena-core/src/adapter/claude.rs`) — headless `claude -p
+  --dangerously-skip-permissions`, Anthropic models only, subscription
+  login. Same posture as the Codex profile: the vendor's own "I am already
+  externally sandboxed" switch stands its gate down, Orvena's OS boundary is
+  the only one under test.
+- **`AdapterSpec::state_writable`** — cloud-authenticated agents bind their
+  login to their real state location (Codex reads `$CODEX_HOME/auth.json`;
+  Claude Code's credential is not honored under a moved `CLAUDE_CONFIG_DIR` —
+  both verified empirically 2026-08-20, redirected homes produce an
+  unauthenticated agent). Such profiles now declare those paths; the sandbox
+  grants them and the run evidence speaks the widening, in the same register
+  as `network: allow`. The Codex `openai` cell uses it for `~/.codex`; local
+  (`ollama`) cells keep the scratch redirect unchanged.
+
+### Changed
+
+- `bench` skips the provider API-key preflight for wrapped agents: every
+  adapter profile authenticates itself, no orvena builder ever runs, and a
+  key exported only to satisfy the check could leak into the child and
+  silently switch its auth path (subscription → metered API).
+
 ## [0.6.0] — 2026-08-20
 
 Everything below, down to 0.1.0, ships in this tag — the 0.2.x–0.5.x agent
