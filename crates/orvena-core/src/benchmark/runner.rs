@@ -109,6 +109,7 @@ pub async fn run_benchmark(
                 dropped_reread: None,
                 dropped_research: None,
                 window_peak_tokens: None,
+                pins: None,
             });
             continue;
         }
@@ -212,6 +213,7 @@ pub async fn run_benchmark(
                     dropped_reread: report.dropped_reread,
                     dropped_research: report.dropped_research,
                     window_peak_tokens: report.window_peak_tokens,
+                    pins: report.pins.clone(),
                 }
             }
             Err(e) => TaskResult {
@@ -247,6 +249,7 @@ pub async fn run_benchmark(
                 dropped_reread: None,
                 dropped_research: None,
                 window_peak_tokens: None,
+                pins: None,
             },
         });
     }
@@ -797,6 +800,7 @@ mod tests {
             dropped_reread: None,
             dropped_research: None,
             window_peak_tokens: None,
+            pins: None,
         }
     }
 

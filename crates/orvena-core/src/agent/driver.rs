@@ -62,6 +62,13 @@ fn cap_run_output(raw: &str, hint: &str) -> (String, String) {
 /// key), not a ruler constant like `max_steps`.
 const EVIDENCE_BUDGET_TOKENS: u32 = 4096;
 
+/// Ceiling on the pinned share of the evidence window (slice-033). Half, not
+/// all: a fully pinnable window is a bigger desk in disguise — the rung is
+/// "learned to choose what to keep", and choice needs scarcity. PIN accepts
+/// are charged against this at accept time; the refusal is spoken into the
+/// window (a silent refusal reads as "pinned" to the model).
+const PINNED_BUDGET_TOKENS: u32 = 2048;
+
 /// One step's assembled evidence window plus what the assembly observed —
 /// the SLICE-032 instrument. The telemetry is observation only: nothing in it
 /// may alter what the window contains (measurement/policy separation), which
@@ -75,39 +82,75 @@ struct RetainedWindow {
     evicted_steps: Vec<u32>,
 }
 
-/// Assemble the evidence window from the per-step log: newest blocks first
-/// under [`EVIDENCE_BUDGET_TOKENS`], rendered oldest-to-newest with a step
-/// label each. The newest block is always kept even when it alone exceeds the
-/// cap — an empty window would be a regression to no memory at all. When older
-/// blocks are dropped the window opens by saying so: a silently short history
-/// reads as "that is all that happened", and a model that believes it will
-/// re-read what it has already seen.
-fn retained_evidence(log: &[(u32, String)]) -> RetainedWindow {
-    let mut kept = 0usize;
+/// Assemble the evidence window from the per-step log: pinned blocks are
+/// exempt from eviction and charged first, then unpinned blocks newest-first
+/// under what remains of [`EVIDENCE_BUDGET_TOKENS`], rendered oldest-to-newest
+/// with a step label each (pinned blocks say so — a pin the model cannot see
+/// holding is a pin it will re-issue). The newest block is always kept even
+/// when it alone exceeds the cap — an empty window would be a regression to no
+/// memory at all; with pins the worst case is pinned + newest, so overflow
+/// still only enters through that one carve-out (slice-033). With no pins this
+/// reduces byte-for-byte to the 0.5.0 assembly. When blocks are dropped the
+/// window opens by saying so: a silently short history reads as "that is all
+/// that happened", and a model that believes it will re-read what it has
+/// already seen.
+fn retained_evidence(
+    log: &[(u32, String)],
+    pinned: &std::collections::BTreeSet<u32>,
+) -> RetainedWindow {
+    let mut keep = vec![false; log.len()];
     let mut used = 0u32;
-    for (_, block) in log.iter().rev() {
+    for (i, (step, block)) in log.iter().enumerate() {
+        if pinned.contains(step) {
+            keep[i] = true;
+            used += crate::util::estimate_tokens(block);
+        }
+    }
+    // Unpinned retention stays a newest-first suffix (an older block never
+    // outlives a newer one it squeezed past): stop at the first non-fitting
+    // block rather than continuing to smaller older ones.
+    let mut kept_any_unpinned = false;
+    for (i, (step, block)) in log.iter().enumerate().rev() {
+        if pinned.contains(step) {
+            continue;
+        }
         let cost = crate::util::estimate_tokens(block);
-        if kept > 0 && used + cost > EVIDENCE_BUDGET_TOKENS {
+        if kept_any_unpinned && used + cost > EVIDENCE_BUDGET_TOKENS {
             break;
         }
+        keep[i] = true;
         used += cost;
-        kept += 1;
+        kept_any_unpinned = true;
     }
+    let evicted_steps: Vec<u32> =
+        log.iter().enumerate().filter(|(i, _)| !keep[*i]).map(|(_, (s, _))| *s).collect();
     let mut out = String::new();
-    if kept < log.len() {
-        let last_dropped = log[log.len() - kept - 1].0;
-        out.push_str(&format!(
-            "(evidence from steps 1–{last_dropped} dropped: evidence budget reached)\n"
-        ));
+    if !evicted_steps.is_empty() {
+        if pinned.is_empty() {
+            // No pins → the evicted set is a contiguous prefix; keep the
+            // 0.5.0 wording byte-for-byte.
+            let last_dropped = *evicted_steps.last().unwrap();
+            out.push_str(&format!(
+                "(evidence from steps 1–{last_dropped} dropped: evidence budget reached)\n"
+            ));
+        } else {
+            let list = evicted_steps.iter().map(u32::to_string).collect::<Vec<_>>().join(", ");
+            out.push_str(&format!(
+                "(evidence from steps {list} dropped: evidence budget reached; pinned steps are kept)\n"
+            ));
+        }
     }
-    for (step, block) in &log[log.len() - kept..] {
-        out.push_str(&format!("── evidence from step {step} ──\n{block}"));
+    for (i, (step, block)) in log.iter().enumerate() {
+        if !keep[i] {
+            continue;
+        }
+        if pinned.contains(step) {
+            out.push_str(&format!("── evidence from step {step} (pinned) ──\n{block}"));
+        } else {
+            out.push_str(&format!("── evidence from step {step} ──\n{block}"));
+        }
     }
-    RetainedWindow {
-        text: out,
-        used_tokens: used,
-        evicted_steps: log[..log.len() - kept].iter().map(|(s, _)| *s).collect(),
-    }
+    RetainedWindow { text: out, used_tokens: used, evicted_steps }
 }
 
 /// Bench-only loop options (D2: the ungoverned baseline is a bench flag, not a
@@ -177,6 +220,9 @@ pub(crate) async fn run_loop_with(
     report.dropped_reread = Some(0);
     report.dropped_research = Some(0);
     report.window_peak_tokens = Some(0);
+    // PIN telemetry (slice-033), same contract: a run that never pinned must
+    // read as "observed, and it never pinned", not as "not attributable".
+    report.pins = Some(crate::metrics::Pins::default());
     // One labeled block per step that produced evidence; the window the next
     // attempt sees is assembled by `retained_evidence` (accumulate, not
     // overwrite — slice-031). Both postures push into the same log: the window
@@ -187,6 +233,12 @@ pub(crate) async fn run_loop_with(
     // dropped-reread instrument compares against the evicted set. Observation
     // only; never consulted by the loop's own decisions.
     let mut last_read: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    // Steps whose evidence the model pinned (slice-033) and the token cost the
+    // accepted pins carry — the accept-time charge against
+    // [`PINNED_BUDGET_TOKENS`]. Model-controlled: nothing here is ever set by
+    // the loop's own judgment.
+    let mut pinned: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
+    let mut pinned_cost: u32 = 0;
 
     for step_no in 1..=max_steps {
         report.steps = step_no;
@@ -194,9 +246,10 @@ pub(crate) async fn run_loop_with(
         // 1. prepare context (re-built each attempt; carries the accumulated
         // evidence window — tool output and failed-gate output from every
         // prior step that fits the evidence budget)
-        let window = retained_evidence(&evidence_log);
-        // Record what the assembly observed. Retention is a monotone suffix
-        // (once out, a block stays out), so this assembly's evicted list IS
+        let window = retained_evidence(&evidence_log, &pinned);
+        // Record what the assembly observed. Retention stays monotone (once
+        // out, a block stays out: pins on evicted steps are refused, and the
+        // unpinned budget only tightens), so this assembly's evicted list IS
         // the run's full evicted set so far — assignment, not union.
         if let Some(peak) = report.window_peak_tokens.as_mut() {
             *peak = (*peak).max(window.used_tokens);
@@ -260,6 +313,7 @@ pub(crate) async fn run_loop_with(
                     step::Action::Read { .. } => counts.read += 1,
                     step::Action::Search { .. } => counts.search += 1,
                     step::Action::Run { .. } => counts.run += 1,
+                    step::Action::Pin { .. } => counts.pin += 1,
                 }
             }
             match action {
@@ -396,6 +450,52 @@ pub(crate) async fn run_loop_with(
                         }
                     }
                 }
+                step::Action::Pin { step } => {
+                    // Window bookkeeping, not a tool: no role gate, no scope
+                    // gate, identical in both postures (measurement/policy
+                    // separation — the pin surface is capability, not
+                    // obligation). Every outcome is spoken into the window:
+                    // a silent refusal reads as "pinned" to the model.
+                    let block_cost = evidence_log
+                        .iter()
+                        .find(|(s, _)| *s == step)
+                        .map(|(_, b)| crate::util::estimate_tokens(b));
+                    let verdict = match block_cost {
+                        // Axis protection (slice-033): the log still holds
+                        // evicted blocks, so honoring this pin would be a
+                        // free recall of dropped evidence — the window
+                        // pressure the v3 ruler stands on would evaporate.
+                        _ if window.evicted_steps.contains(&step) => {
+                            Err(format!("PIN {step} refused: step {step} was already evicted"))
+                        }
+                        None => Err(format!("PIN {step} refused: no evidence from step {step}")),
+                        Some(_) if pinned.contains(&step) => {
+                            Ok(format!("PIN {step}: already pinned\n"))
+                        }
+                        Some(cost) if pinned_cost + cost > PINNED_BUDGET_TOKENS => {
+                            Err(format!("PIN {step} refused: pinned budget full"))
+                        }
+                        Some(cost) => {
+                            pinned.insert(step);
+                            pinned_cost += cost;
+                            if let Some(p) = report.pins.as_mut() {
+                                p.count += 1;
+                                p.pinned_steps.push(step);
+                            }
+                            Ok(format!("PIN {step}: evidence from step {step} pinned\n"))
+                        }
+                    };
+                    match verdict {
+                        Ok(line) => tool_evidence.push_str(&line),
+                        Err(msg) => {
+                            if let Some(p) = report.pins.as_mut() {
+                                p.refused += 1;
+                            }
+                            tool_evidence.push_str(&msg);
+                            tool_evidence.push('\n');
+                        }
+                    }
+                }
                 step::Action::Run { name } => {
                     match shell.run(&name) {
                         Ok(out) => {
@@ -526,7 +626,7 @@ mod tests {
     #[test]
     fn everything_fits_and_stays_in_step_order() {
         let log = vec![block(1, "first"), block(2, "second")];
-        let win = retained_evidence(&log);
+        let win = retained_evidence(&log, &Default::default());
         let out = &win.text;
         let a = out.find("step 1").unwrap();
         let b = out.find("step 2").unwrap();
@@ -543,7 +643,7 @@ mod tests {
         // the 4096 budget.
         let big = "x".repeat(8000);
         let log = vec![block(1, &big), block(2, &big), block(3, &big)];
-        let win = retained_evidence(&log);
+        let win = retained_evidence(&log, &Default::default());
         let out = &win.text;
         assert!(!out.contains("step 1 ──"), "the oldest block is dropped");
         assert!(out.contains("step 2 ──") && out.contains("step 3 ──"));
@@ -565,7 +665,7 @@ mod tests {
         // An empty window would be a regression to no memory at all.
         let huge = "y".repeat(40_000);
         let log = vec![block(1, "small"), block(2, &huge)];
-        let win = retained_evidence(&log);
+        let win = retained_evidence(&log, &Default::default());
         assert!(win.text.contains("step 2 ──"), "the newest evidence is never evicted");
         assert!(!win.text.contains("small"), "the older block yields");
         assert_eq!(win.evicted_steps, vec![1]);
@@ -577,10 +677,33 @@ mod tests {
 
     #[test]
     fn an_empty_log_is_an_empty_window() {
-        let win = retained_evidence(&[]);
+        let win = retained_evidence(&[], &Default::default());
         assert_eq!(win.text, "");
         assert_eq!(win.used_tokens, 0);
         assert!(win.evicted_steps.is_empty());
+    }
+
+    // ── slice-033: pinned blocks are exempt from eviction ──────────────────
+
+    #[test]
+    fn a_pinned_block_survives_and_the_window_says_so() {
+        // Three ~2000-token blocks; only two fit. 0.5.0 would drop the oldest;
+        // with step 1 pinned the unpinned middle block yields instead.
+        let big = "x".repeat(8000);
+        let log = vec![block(1, &big), block(2, &big), block(3, &big)];
+        let pinned = std::collections::BTreeSet::from([1]);
+        let win = retained_evidence(&log, &pinned);
+        assert!(win.text.contains("step 1 (pinned) ──"), "the pin is visible, not silent");
+        assert!(win.text.contains("step 3 ──"));
+        assert!(!win.text.contains("step 2 ──"), "the unpinned middle block yields");
+        assert_eq!(win.evicted_steps, vec![2]);
+        assert!(
+            win.text.contains(
+                "(evidence from steps 2 dropped: evidence budget reached; pinned steps are kept)"
+            ),
+            "a non-prefix drop is listed, not ranged: {}",
+            &win.text[..160]
+        );
     }
 
     // ── the loop accumulates across steps, in both postures ────────────────
@@ -766,6 +889,126 @@ mod tests {
             peak > 2000 && peak <= EVIDENCE_BUDGET_TOKENS,
             "the peak is one big block's cost, under the budget: {peak}"
         );
+    }
+
+    /// Emits a fixed script and records every user prompt it is sent.
+    struct RecordingScript {
+        script: Vec<&'static str>,
+        calls: Mutex<usize>,
+        prompts: Arc<Mutex<Vec<String>>>,
+    }
+
+    #[async_trait]
+    impl Provider for RecordingScript {
+        fn id(&self) -> &str {
+            "recording-script"
+        }
+        async fn chat(
+            &self,
+            req: crate::provider::ChatRequest,
+        ) -> crate::error::Result<ChatResponse> {
+            let user = req
+                .messages
+                .iter()
+                .filter(|m: &&Message| m.role == "user")
+                .map(|m| m.content.clone())
+                .collect::<Vec<_>>()
+                .join("\n");
+            self.prompts.lock().unwrap().push(user);
+            let mut calls = self.calls.lock().unwrap();
+            let content = self.script[(*calls).min(self.script.len() - 1)];
+            *calls += 1;
+            Ok(ChatResponse { content: content.into(), input_tokens: 0, output_tokens: 0 })
+        }
+    }
+
+    #[test]
+    fn a_pin_redirects_eviction_and_is_recorded() {
+        // slice-033: three ~1900-token reads with step 1 pinned. At step 4's
+        // assembly (pinned 1 + newest 3 ≈ 3800 fits; block 2 does not) the
+        // unpinned step 2 block yields — 0.5.0 would have dropped step 1.
+        let root = std::env::temp_dir().join(format!("orvena-pin-loop-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let big = format!("{}\n", "x".repeat(75)).repeat(100);
+        for f in ["big1.txt", "big2.txt", "big3.txt"] {
+            std::fs::write(root.join(f), &big).unwrap();
+        }
+
+        let prompts = Arc::new(Mutex::new(Vec::new()));
+        let provider = RecordingScript {
+            script: vec![
+                "<<<READ big1.txt\n>>>",
+                "<<<PIN 1\n>>>\n<<<READ big2.txt\n>>>",
+                "<<<READ big3.txt\n>>>",
+                "<<<READ big3.txt\n>>>",
+            ],
+            calls: Mutex::new(0),
+            prompts: Arc::clone(&prompts),
+        };
+        let mut cfg = config(vec![]);
+        cfg.agent.max_steps = 4;
+        let agent = super::super::Agent::with_provider(cfg, &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report =
+            rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let pins = report.pins.expect("the native loop claims the pin record on entry");
+        assert_eq!(pins.count, 1);
+        assert_eq!(pins.pinned_steps, vec![1]);
+        assert_eq!(pins.refused, 0);
+        let ev = report.evictions.expect("claimed on entry");
+        assert_eq!(
+            ev.evicted_steps,
+            vec![2],
+            "the pin held: eviction fell on the unpinned newer block"
+        );
+        let seen = prompts.lock().unwrap();
+        assert!(
+            seen[2].contains("PIN 1: evidence from step 1 pinned"),
+            "the accept is spoken into the window"
+        );
+        assert!(seen[3].contains("step 1 (pinned) ──"), "the model can see its pin holding");
+    }
+
+    #[test]
+    fn pin_refusals_are_counted_and_spoken() {
+        // One ~2200-token read exceeds the 2048 pinned budget; pinning it is
+        // refused, as is pinning a step that never produced evidence. Both
+        // refusals must land in the next prompt — a silent refusal reads as
+        // "pinned" to the model.
+        let root = std::env::temp_dir().join(format!("orvena-pin-refuse-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let big = format!("{}\n", "x".repeat(87)).repeat(100);
+        std::fs::write(root.join("big1.txt"), &big).unwrap();
+
+        let prompts = Arc::new(Mutex::new(Vec::new()));
+        let provider = RecordingScript {
+            script: vec![
+                "<<<READ big1.txt\n>>>",
+                "<<<PIN 1\n>>>\n<<<PIN 7\n>>>",
+                "<<<READ big1.txt\n>>>",
+            ],
+            calls: Mutex::new(0),
+            prompts: Arc::clone(&prompts),
+        };
+        let agent = super::super::Agent::with_provider(config(vec![]), &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report =
+            rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+
+        let pins = report.pins.expect("claimed on entry");
+        assert_eq!(pins.count, 0);
+        assert_eq!(pins.refused, 2);
+        assert!(pins.pinned_steps.is_empty());
+        let seen = prompts.lock().unwrap();
+        assert!(seen[2].contains("PIN 1 refused: pinned budget full"));
+        assert!(seen[2].contains("PIN 7 refused: no evidence from step 7"));
     }
 
     #[test]

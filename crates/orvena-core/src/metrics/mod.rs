@@ -37,6 +37,11 @@ pub struct ActionCounts {
     pub search: u32,
     #[serde(default)]
     pub run: u32,
+    /// PIN actions parsed (slice-033, agent 0.6.0) — attempted, like every
+    /// other count here; `pins` records accepted vs refused. Additive: bundles
+    /// written before the action existed read back as 0.
+    #[serde(default)]
+    pub pin: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,6 +188,14 @@ pub struct RunReport {
     /// = not attributable. Additive — stays v1.
     #[serde(default)]
     pub window_peak_tokens: Option<u32>,
+    /// Model-controlled retention telemetry (slice-033, agent 0.6.0): what the
+    /// PIN action actually did. This is the f4 verification surface — an N4
+    /// green is only a reading when this record shows the green came from
+    /// retention behavior. Same `None` contract as `action_counts`: `None`
+    /// means not attributable (wrapped agent, pre-0.6.0 bundle), never
+    /// "no pins". Additive — stays v1.
+    #[serde(default)]
+    pub pins: Option<Pins>,
 }
 
 /// Eviction telemetry for the native evidence window — see
@@ -200,6 +213,23 @@ pub struct Evictions {
     /// Step numbers of every evidence block ever evicted, ascending. Retention
     /// is a newest-first suffix, so once out a block stays out.
     pub evicted_steps: Vec<u32>,
+}
+
+/// PIN telemetry for the native evidence window — see [`RunReport::pins`].
+/// Refusals travel with the accepts: a model that pinned well once and was
+/// refused five times is a different shape from one that pinned well once,
+/// and the refusal reasons are spoken into the window itself (never silent),
+/// so the transcript and this record must agree.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Pins {
+    /// PIN actions accepted — each added one step's evidence block to the
+    /// pinned (never-evicted) set.
+    pub count: u32,
+    /// Step numbers pinned, in acceptance order.
+    pub pinned_steps: Vec<u32>,
+    /// PIN actions refused (no such step / step already evicted / pinned
+    /// budget full). Already-pinned re-pins are no-ops, counted nowhere.
+    pub refused: u32,
 }
 
 /// Why a run's loop stopped — see [`RunReport::exit`]. An observation field:
@@ -287,6 +317,7 @@ impl RunReport {
             dropped_reread: None,
             dropped_research: None,
             window_peak_tokens: None,
+            pins: None,
         }
     }
 

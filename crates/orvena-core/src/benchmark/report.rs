@@ -106,6 +106,11 @@ pub struct TaskResult {
     /// contract as `evictions`.
     #[serde(default)]
     pub window_peak_tokens: Option<u32>,
+    /// PIN telemetry, carried verbatim from the bundle (see
+    /// [`crate::metrics::RunReport::pins`]) — the slice-033 retention surface
+    /// and the f4 verification record. Same `None` contract as `evictions`.
+    #[serde(default)]
+    pub pins: Option<crate::metrics::Pins>,
 }
 
 /// The identity of a run, as opposed to its configuration.
@@ -295,6 +300,11 @@ pub struct DeathRow {
     pub dropped_research: Option<u32>,
     #[serde(default)]
     pub window_peak_tokens: Option<u32>,
+    /// PIN telemetry (slice-033) — the f4 verification surface travels with
+    /// the death row so a green can be judged from the bundle alone. Same
+    /// `None` contract as `evictions`.
+    #[serde(default)]
+    pub pins: Option<crate::metrics::Pins>,
 }
 
 impl DeathRow {
@@ -315,6 +325,7 @@ impl DeathRow {
             dropped_reread: r.dropped_reread,
             dropped_research: r.dropped_research,
             window_peak_tokens: r.window_peak_tokens,
+            pins: r.pins.clone(),
         }
     }
 }
@@ -656,6 +667,7 @@ mod tests {
             dropped_reread: None,
             dropped_research: None,
             window_peak_tokens: None,
+            pins: None,
         };
         let table = SearchSolveTable::tally(&[
             row(true, SearchOutcome::Hit),

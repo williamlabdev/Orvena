@@ -1,8 +1,9 @@
 //! Per-step parsing: the model speaks a tiny action protocol so the loop can
-//! apply changes deterministically. Five actions — writing a file in full, an
-//! anchored partial edit, reading a file, a read-only content search, and
+//! apply changes deterministically. Six actions — writing a file in full, an
+//! anchored partial edit, reading a file, a read-only content search,
 //! running a pre-declared command by name (never a free-form command string —
-//! see ADR-001):
+//! see ADR-001), and pinning a step's evidence against window eviction
+//! (slice-033):
 //!
 //! ```text
 //! <<<WRITE relative/path
@@ -24,6 +25,9 @@
 //!
 //! <<<RUN <command name>
 //! >>>
+//!
+//! <<<PIN <step number>
+//! >>>
 //! ```
 //!
 //! EDIT's old/new are split on the first body line that is exactly `===`
@@ -35,11 +39,31 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
-    Write { path: String, content: String },
-    Edit { path: String, old: String, new: String },
-    Read { path: String },
-    Search { pattern: String, path: Option<String> },
-    Run { name: String },
+    Write {
+        path: String,
+        content: String,
+    },
+    Edit {
+        path: String,
+        old: String,
+        new: String,
+    },
+    Read {
+        path: String,
+    },
+    Search {
+        pattern: String,
+        path: Option<String>,
+    },
+    Run {
+        name: String,
+    },
+    /// Pin one step's evidence block against eviction (slice-033). Carries the
+    /// step number as spoken; existence / eviction / budget checks live in the
+    /// driver, where the window state is.
+    Pin {
+        step: u32,
+    },
 }
 
 /// Parse zero or more `<<<WRITE …>>>` / `<<<SEARCH …>>>` / `<<<RUN …>>>` blocks
@@ -129,6 +153,23 @@ pub fn parse_actions(text: &str) -> Vec<Action> {
             }
             if !pattern.is_empty() {
                 actions.push(Action::Search { pattern, path });
+            }
+        } else if let Some(raw) = trimmed.strip_prefix("<<<PIN ") {
+            let (arg, self_closed) = split_header(raw);
+            // Like RUN: the header carries everything; body lines are ignored.
+            if !self_closed {
+                for body in lines.by_ref() {
+                    if body.trim() == ">>>" {
+                        break;
+                    }
+                }
+            }
+            // A non-numeric argument yields no action (same discipline as an
+            // empty READ path): a guessed pin target would refuse confusingly
+            // in the driver, and the model gets clearer feedback from the
+            // block simply not landing.
+            if let Ok(step) = arg.parse::<u32>() {
+                actions.push(Action::Pin { step });
             }
         } else if let Some(raw) = trimmed.strip_prefix("<<<RUN ") {
             let (name, self_closed) = split_header(raw);
@@ -386,6 +427,16 @@ mod tests {
         assert_eq!(
             parse_actions("<<<READ src/lib.rs>>>"),
             vec![Action::Read { path: "src/lib.rs".into() }]
+        );
+    }
+
+    #[test]
+    fn pin_takes_a_step_number_and_rejects_junk() {
+        assert_eq!(parse_actions("<<<PIN 3\n>>>"), vec![Action::Pin { step: 3 }]);
+        assert_eq!(parse_actions("<<<PIN 3 >>>"), vec![Action::Pin { step: 3 }]);
+        assert!(
+            parse_actions("<<<PIN three\n>>>").is_empty(),
+            "a non-numeric target yields no action, not a guessed pin"
         );
     }
 

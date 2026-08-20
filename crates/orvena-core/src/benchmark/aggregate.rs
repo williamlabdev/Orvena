@@ -228,6 +228,7 @@ mod tests {
             dropped_reread: None,
             dropped_research: None,
             window_peak_tokens: None,
+            pins: None,
         }
     }
 

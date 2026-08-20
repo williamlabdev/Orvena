@@ -259,6 +259,14 @@ fn system_prompt(role: &Role, ungoverned: bool) -> String {
          \x20 command the project declared by NAME — you cannot pass a command string:\n\
          \x20 <<<RUN <command name>\n\
          \x20 >>>\n\
+         - Evidence from your earlier steps is carried forward in a limited window;\n\
+         \x20 when it overflows, the oldest unpinned evidence is dropped (the window\n\
+         \x20 says so when it happens). To keep one step's evidence from ever being\n\
+         \x20 dropped, pin it by its step number (pinned evidence is kept, up to half\n\
+         \x20 the window; pin the evidence your later changes will depend on, before\n\
+         \x20 it is dropped — already-dropped evidence cannot be pinned):\n\
+         \x20 <<<PIN <step number>\n\
+         \x20 >>>\n\
          - Ground every change in evidence you have actually seen: never invent a\n\
          \x20 value your change depends on (a port, a path, a name, an expected\n\
          \x20 string). If the correct value lives in a file you have not seen this\n\
@@ -414,6 +422,10 @@ mod tests {
         // is the governed variable — READ/EDIT must appear in both postures.
         assert!(b.contains("<<<READ"), "READ is a capability, present in both postures");
         assert!(b.contains("<<<EDIT"), "EDIT is a capability, present in both postures");
+        // slice-033: the pin surface is capability too — a baseline that cannot
+        // pin has a shallower memory, and the differential would measure the
+        // window instead of governance.
+        assert!(b.contains("<<<PIN"), "PIN is a capability, present in both postures");
     }
 
     // slice-023: the grounding discipline is strategy (competence), not
