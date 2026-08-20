@@ -6,7 +6,39 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-20
+
+Everything below, down to 0.1.0, ships in this tag — the 0.2.x–0.5.x agent
+versions were comparability-key bumps measured on the ruler pages, never cut
+as releases.
+
 ### Added
+
+- **PIN — model-controlled retention for the evidence window** (slice-033,
+  `crates/orvena-core/src/agent/{step,driver,context}.rs`, agent **0.6.0**) —
+  a sixth action, `<<<PIN <step>>>`, marks one step's evidence block exempt
+  from eviction. Pinned blocks are charged first and capped at half the
+  evidence budget (a fully pinnable window is a bigger desk in disguise);
+  unpinned retention stays a newest-first suffix; the newest-block carve-out
+  is unchanged. Every PIN outcome is spoken into the window — accept,
+  already-pinned, no-such-step, already-evicted, budget-full — because a
+  silent refusal reads as "pinned". Pinning an already-evicted step is
+  refused by design: the log still holds those blocks, and honoring the pin
+  would be a free recall of dropped evidence (the window pressure the v3
+  ruler stands on would evaporate). Same surface in both postures; with no
+  pins the assembly is byte-identical to 0.5.0. Telemetry:
+  `RunReport.pins {count, pinned_steps, refused}` +
+  `ActionCounts.pin`, carried into the bundle's death rows — the f4
+  verification surface for any future sentinel green. **Measured on the v3
+  ruler (35b cell, n=3 per task): the rung did not move — 22% → 22%, and the
+  model issued zero PIN actions across all nine runs.** The surface was
+  offered and never reached for; per the ladder's decision rule that reading
+  is the point (the ruler killed the "just add the mechanism" hypothesis
+  before it compounded). N3 held 2/3 (no regression); the sentinel stayed
+  red with the designed reread-burn shape. The 14b cell was not measured for
+  this rung (ruled 2026-08-20: the rung verdict keys on the 35b cell by the
+  slice's own prediction 4). Disposition of the surface (keep as a standing
+  capability vs revert) is an open ruling in SLICE-033.
 
 - **Evidence accumulation — the loop now remembers the whole run, not the last
   step** (slice-031, `crates/orvena-core/src/agent/driver.rs`, agent

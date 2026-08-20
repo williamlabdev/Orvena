@@ -1,5 +1,17 @@
 # Benchmark results
 
+> **Fifth number (the PIN rung) — 2026-08-20:** agent **0.6.0** added
+> model-controlled retention (`<<<PIN <step>>>`, slice-033) and the v3 ruler
+> measured it on the 35b cell: **22% → 22%, zero PIN actions issued across
+> all nine runs**. The surface was offered and never reached for — the rung
+> did not move, and the ruler killed the "just add the mechanism" hypothesis
+> before it compounded (the 0.3.0 precedent's shape, without the regression:
+> `converge-fatref` held 2/3, the sentinel stayed red with the designed
+> reread-burn signature). The 14b cell was not measured for this rung (ruled
+> 2026-08-20 — the rung verdict keys on the 35b cell by the slice's own
+> prediction 4). Whether the pin surface stays or reverts is an open ruling
+> in SLICE-033.
+>
 > **Fourth number (capability v3, first official reading) — 2026-08-19:** on
 > the frozen 3-task **capability v3 set** (the window-management axis,
 > FROZEN-3, slice-032), both cells measured back to back under the ruler
@@ -71,6 +83,52 @@ this".
 > [2026-08-02 section](#the-governance-differential-re-measured-2026-08-02)
 > immediately below, and it moved the numbers enough that the old headline no
 > longer holds.
+
+## The PIN rung: offered, never reached for (2026-08-20)
+
+Agent **0.6.0** is the first loop investment measured by the v3 ruler:
+slice-033 gave the model a retention action (`<<<PIN <step>>>` — pin one
+step's evidence against eviction, up to half the window, every refusal
+spoken into the window). The v3 first reading's deaths were reread-burn:
+evidence evicted, the grounding rule forcing a re-read, steps exhausted.
+The hypothesis: give the model control over what is kept and the N1 deaths
+convert.
+
+| | |
+|---|---|
+| Date | 2026-08-20 |
+| Provider / model | `ollama` / `qwen3.6:35b` (digest `07d35212591f`, Q4_K_M) — **the 14b cell was not measured** (ruled 2026-08-20; the rung verdict keys on 35b per SLICE-033 prediction 4) |
+| Task set / runs / posture / sampling | as the 2026-08-19 reading (3 frozen tasks × 3 runs, `engineering`, B1 sampling) |
+| Comparability key | set `benchmarks/capability-v3.yaml` @ `cf05533` · `max_steps = 8` · `qwen3.6:35b` · **`native 0.6.0`** |
+| Raw report | `bench-runs/20260820-capability-v3-qwen3.6-35b.json` |
+
+| Measurement | 0.5.0 (08-19) | 0.6.0 (08-20) |
+|---|---|---|
+| Ground-truth solve rate | 22% (2/9) | **22% (2/9)** |
+| `capv3-pin-eviction` (N1, the rung's target) | 0/3 | **0/3** |
+| `capv3-converge-fatref` (N3) | 2/3 | 2/3 |
+| `capv3-sentinel-span` (N4, sentinel) | 0/3 | 0/3 |
+| **PIN actions issued (accepted + refused)** | n/a | **0** |
+
+### What the runs actually show
+
+- **The model never used the mechanism.** Zero PIN actions in nine runs —
+  not "pinned the wrong thing" (a capability reading) but never reached for
+  the surface at all. The prompt described it; the deaths it would have
+  prevented recurred in the same shape (`dropped_reread` up to 5, window
+  peaks riding the budget); the pin telemetry reads `{count: 0, refused: 0}`
+  on every death row.
+- **Prediction 1 of SLICE-033 is refuted as written** (N1 ≥1/3 green with
+  PIN load-bearing: no green, no PIN). Prediction 3 held — N3 2/3, no
+  regression, so unlike 0.3.0 there is nothing to revert *for correctness*;
+  whether an unused surface stays is a scoping ruling, recorded open in the
+  slice.
+- **This is the ruler doing its job** — same as 0.3.0 (a search prompt rule
+  whose target task did not move): one variable on the rung, the number
+  answered, the investment does not compound on hope. What it says about the
+  axis: on this model class, the missing piece is not the *ability* to
+  retain but the *disposition* to plan retention — which is exactly what the
+  set was built to measure, now with the excuse removed.
 
 ## The capability v3 first reading (2026-08-19)
 

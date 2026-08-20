@@ -1,7 +1,17 @@
 # SLICE-033 — 窗管理投資:模型自控 retention(PIN),agent 0.6.0
 
-> 狀態:**DRAFT(0819,裁 (a) 立案)**——方向已裁(用 v3 尺量下一個
-> loop 投資),本檔是 rung 設計;實作未開始,實測未跑。
+> 狀態:**已實測(0820,35b 格)——rung 未動,PIN 零使用;處置留裁**。
+> 實作 shipped(`63a220f`,agent **0.6.0**,無 pin 時窗組裝與 0.5.0 逐
+> byte 相同);35b 官方讀數 22%→22%,九 run 零 PIN 嘗試(`bench-runs/
+> 20260820-capability-v3-qwen3.6-35b.json`)。預測結果:P1 落空(無綠、
+> 無 PIN——不是 pin 錯,是根本沒伸手);P2 未觸發(N4 無綠);P3 成立
+> (N3 2/3 無回歸);P4 依自訂判準=**rung 失敗**(35b 不動)。14b 格
+> 0820 裁定不跑(rung 判定掛 35b;當日該格 ollama runner 卡死 6h14m
+> 一次,重跑至 2h10m 時裁停)。**留裁:PIN 表面去留**——(i) 留着:無
+> 回歸、是未來 rung(提示/範例教用法)的地基,但「有表面沒人用」進
+> 可比鍵;(ii) revert 照 0.3.0 先例:一 rung 一變數,乾淨回 0.5.0。
+> 讀數本身的教訓照登:缺的不是 retention 的能力面,是**規劃 retention
+> 的傾向**——正是這把尺要量的軸,如今藉口已拆除。
 > 依據:capability-v3 首個官方讀數(`bench-runs/20260819-capability-v3-*.json`,
 > 35b 22% / 14b 11%)與其死法表;SLICE-032 的 N1/N4 設計敘事;
 > SLICE-031 的證據累積機制(`driver.rs` retained_evidence)。
