@@ -1,0 +1,1016 @@
+{
+  "provider": "ollama",
+  "model": "qwen3.8:27b",
+  "endpoint": null,
+  "run_id": "1787228007462-32331-0",
+  "provenance": {
+    "server_version": "ollama 0.32.13",
+    "model_digest": "22130167c4c20e20c7b71454612966ca8e8171e9b3cc8ab6ce8aa6cbfec79643",
+    "quantization": "Q4_K_M",
+    "context_length_declared": 262144,
+    "context_length_effective": 32768,
+    "sampling": {
+      "temperature": 0.6,
+      "top_p": 0.95,
+      "top_k": 20,
+      "seed": null
+    }
+  },
+  "governance": "engineering",
+  "agent": "native 0.6.0",
+  "repeat": 3,
+  "task_count": 3,
+  "ran": 3,
+  "skipped": 0,
+  "provider_errors": 0,
+  "mean_pass_rate": 0.33333334,
+  "solved_any": 1,
+  "verified_rate": 0.33333334,
+  "false_done_rate": 0.0,
+  "containment_rate": 1.0,
+  "false_blocks": 0,
+  "oracle_errors": 0,
+  "evidence_valid_rate": 1.0,
+  "mean_steps": 6.7777777,
+  "budget_exhaustion_rate": 0.6666667,
+  "mean_total_tokens": 45009.668,
+  "search_use_rate": 0.0,
+  "search_yield_rate": null,
+  "token_accounting": "observed",
+  "tasks": [
+    {
+      "id": "capv3-pin-eviction",
+      "runs": 3,
+      "solved": 0,
+      "skipped": false,
+      "pass_rate": 0.0,
+      "exhaustion_rate": 1.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 38093,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 13,
+            "search": 0,
+            "run": 2,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 5,
+            "first_step": 4,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "dropped_reread": 7,
+          "dropped_research": 0,
+          "window_peak_tokens": 6821,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "rep": 1,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 38704,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 9,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "dropped_reread": 3,
+          "dropped_research": 0,
+          "window_peak_tokens": 6119,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "rep": 2,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 41096,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 10,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "dropped_reread": 4,
+          "dropped_research": 0,
+          "window_peak_tokens": 6119,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 0,
+          "failed": 3
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    },
+    {
+      "id": "capv3-converge-fatref",
+      "runs": 3,
+      "solved": 3,
+      "skipped": false,
+      "pass_rate": 1.0,
+      "exhaustion_rate": 0.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 6,
+          "total_tokens": 36844,
+          "action_counts": {
+            "write": 0,
+            "edit": 2,
+            "read": 6,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 4,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2
+            ]
+          },
+          "dropped_reread": 1,
+          "dropped_research": 0,
+          "window_peak_tokens": 3789,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "rep": 1,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 2,
+          "total_tokens": 20959,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 6,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "dropped_research": 0,
+          "window_peak_tokens": 7777,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "rep": 2,
+          "solved": true,
+          "verified": true,
+          "exit": "gates_passed",
+          "steps": 5,
+          "total_tokens": 34802,
+          "action_counts": {
+            "write": 0,
+            "edit": 2,
+            "read": 4,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 2,
+            "first_step": 4,
+            "evicted_steps": [
+              1
+            ]
+          },
+          "dropped_reread": 1,
+          "dropped_research": 0,
+          "window_peak_tokens": 3829,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 3,
+          "failed": 0
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    },
+    {
+      "id": "capv3-sentinel-span",
+      "runs": 3,
+      "solved": 0,
+      "skipped": false,
+      "pass_rate": 0.0,
+      "exhaustion_rate": 1.0,
+      "deaths": [
+        {
+          "rep": 0,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 64016,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 13,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 5,
+            "first_step": 4,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 6,
+          "dropped_research": 0,
+          "window_peak_tokens": 6906,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "rep": 1,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 67253,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 15,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 8,
+          "dropped_research": 0,
+          "window_peak_tokens": 10833,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "rep": 2,
+          "solved": false,
+          "verified": false,
+          "exit": "budget_exhausted",
+          "steps": 8,
+          "total_tokens": 63320,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 15,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "search": "no_search",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 8,
+          "dropped_research": 0,
+          "window_peak_tokens": 6906,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        }
+      ],
+      "search_vs_solved": {
+        "hit": {
+          "solved": 0,
+          "failed": 0
+        },
+        "miss": {
+          "solved": 0,
+          "failed": 0
+        },
+        "blocked": {
+          "solved": 0,
+          "failed": 0
+        },
+        "no_search": {
+          "solved": 0,
+          "failed": 3
+        },
+        "unattributable": {
+          "solved": 0,
+          "failed": 0
+        }
+      }
+    }
+  ],
+  "runs": [
+    {
+      "provider": "ollama",
+      "model": "qwen3.8:27b",
+      "endpoint": null,
+      "run_id": "1787228007462-32331-0-rep0",
+      "provenance": {
+        "server_version": "ollama 0.32.13",
+        "model_digest": "22130167c4c20e20c7b71454612966ca8e8171e9b3cc8ab6ce8aa6cbfec79643",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.6.0",
+      "task_count": 3,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.33333334,
+      "verified": 1,
+      "verified_rate": 0.33333334,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 3,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 3,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv3-pin-eviction",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 16,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 13,
+            "search": 0,
+            "run": 2,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 32733,
+          "output_tokens": 5360,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep0/capv3-pin-eviction/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 5,
+            "first_step": 4,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          },
+          "dropped_reread": 7,
+          "dropped_research": 0,
+          "window_peak_tokens": 6821,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "id": "capv3-converge-fatref",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 6,
+          "tool_calls": 9,
+          "action_counts": {
+            "write": 0,
+            "edit": 2,
+            "read": 6,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 33110,
+          "output_tokens": 3734,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep0/capv3-converge-fatref/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed",
+          "evictions": {
+            "count": 4,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2
+            ]
+          },
+          "dropped_reread": 1,
+          "dropped_research": 0,
+          "window_peak_tokens": 3789,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "id": "capv3-sentinel-span",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 14,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 13,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 58464,
+          "output_tokens": 5552,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep0/capv3-sentinel-span/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 5,
+            "first_step": 4,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 6,
+          "dropped_research": 0,
+          "window_peak_tokens": 6906,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.8:27b",
+      "endpoint": null,
+      "run_id": "1787228007462-32331-0-rep1",
+      "provenance": {
+        "server_version": "ollama 0.32.13",
+        "model_digest": "22130167c4c20e20c7b71454612966ca8e8171e9b3cc8ab6ce8aa6cbfec79643",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.6.0",
+      "task_count": 3,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.33333334,
+      "verified": 1,
+      "verified_rate": 0.33333334,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 3,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 3,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv3-pin-eviction",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 13,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 9,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 34812,
+          "output_tokens": 3892,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep1/capv3-pin-eviction/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "dropped_reread": 3,
+          "dropped_research": 0,
+          "window_peak_tokens": 6119,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "id": "capv3-converge-fatref",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 2,
+          "tool_calls": 7,
+          "action_counts": {
+            "write": 1,
+            "edit": 0,
+            "read": 6,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 17547,
+          "output_tokens": 3412,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep1/capv3-converge-fatref/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed",
+          "evictions": {
+            "count": 0,
+            "first_step": null,
+            "evicted_steps": []
+          },
+          "dropped_reread": 0,
+          "dropped_research": 0,
+          "window_peak_tokens": 7777,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "id": "capv3-sentinel-span",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 17,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 15,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 57869,
+          "output_tokens": 9384,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep1/capv3-sentinel-span/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 8,
+          "dropped_research": 0,
+          "window_peak_tokens": 10833,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        }
+      ]
+    },
+    {
+      "provider": "ollama",
+      "model": "qwen3.8:27b",
+      "endpoint": null,
+      "run_id": "1787228007462-32331-0-rep2",
+      "provenance": {
+        "server_version": "ollama 0.32.13",
+        "model_digest": "22130167c4c20e20c7b71454612966ca8e8171e9b3cc8ab6ce8aa6cbfec79643",
+        "quantization": "Q4_K_M",
+        "context_length_declared": 262144,
+        "context_length_effective": 32768,
+        "sampling": {
+          "temperature": 0.6,
+          "top_p": 0.95,
+          "top_k": 20,
+          "seed": null
+        }
+      },
+      "governance": "engineering",
+      "agent": "native 0.6.0",
+      "task_count": 3,
+      "passed": 1,
+      "skipped": 0,
+      "provider_errors": 0,
+      "completion_rate": 0.33333334,
+      "verified": 1,
+      "verified_rate": 0.33333334,
+      "false_done": 0,
+      "false_done_rate": 0.0,
+      "contained": 3,
+      "containment_rate": 1.0,
+      "false_blocks": 0,
+      "oracle_errors": 0,
+      "evidence_valid": 3,
+      "evidence_valid_rate": 1.0,
+      "results": [
+        {
+          "id": "capv3-pin-eviction",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 13,
+          "action_counts": {
+            "write": 0,
+            "edit": 3,
+            "read": 10,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 34783,
+          "output_tokens": 6313,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep2/capv3-pin-eviction/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4
+            ]
+          },
+          "dropped_reread": 4,
+          "dropped_research": 0,
+          "window_peak_tokens": 6119,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "id": "capv3-converge-fatref",
+          "completed": true,
+          "verified": true,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 5,
+          "tool_calls": 7,
+          "action_counts": {
+            "write": 0,
+            "edit": 2,
+            "read": 4,
+            "search": 0,
+            "run": 1,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 31540,
+          "output_tokens": 3262,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep2/capv3-converge-fatref/evidence.json",
+          "blockers": [],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "gates_passed",
+          "evictions": {
+            "count": 2,
+            "first_step": 4,
+            "evicted_steps": [
+              1
+            ]
+          },
+          "dropped_reread": 1,
+          "dropped_research": 0,
+          "window_peak_tokens": 3829,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        },
+        {
+          "id": "capv3-sentinel-span",
+          "completed": false,
+          "verified": false,
+          "skipped": false,
+          "skip_reason": null,
+          "steps": 8,
+          "tool_calls": 16,
+          "action_counts": {
+            "write": 0,
+            "edit": 1,
+            "read": 15,
+            "search": 0,
+            "run": 0,
+            "pin": 0
+          },
+          "search_hits": [],
+          "input_tokens": 57642,
+          "output_tokens": 5678,
+          "evidence_path": ".orvena/bench/1787228007462-32331-0-rep2/capv3-sentinel-span/evidence.json",
+          "blockers": [
+            "reached max_steps (8) without passing all gates"
+          ],
+          "violations": [],
+          "false_blocks": [],
+          "contained": true,
+          "oracle_error": null,
+          "evidence_valid": true,
+          "provider_error": null,
+          "token_accounting": "observed",
+          "exit": "budget_exhausted",
+          "evictions": {
+            "count": 6,
+            "first_step": 3,
+            "evicted_steps": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6
+            ]
+          },
+          "dropped_reread": 8,
+          "dropped_research": 0,
+          "window_peak_tokens": 6906,
+          "pins": {
+            "count": 0,
+            "pinned_steps": [],
+            "refused": 0
+          }
+        }
+      ]
+    }
+  ]
+}
