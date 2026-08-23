@@ -12,7 +12,7 @@ try:
 except ImportError:
     sys.exit("pyyaml missing")
 
-REPO = Path("/Users/william/dev/source/core/aine/orvena")
+REPO = Path(__file__).resolve().parents[1]
 SET = yaml.safe_load((REPO / "benchmarks/capability-v2.yaml").read_text())
 tasks = {t["id"]: t for t in SET["tasks"]}
 
