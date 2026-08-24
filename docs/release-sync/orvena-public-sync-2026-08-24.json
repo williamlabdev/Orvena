@@ -1,0 +1,103 @@
+{
+  "baseline": {
+    "goal_managed_paths": [
+      "CHANGELOG.md",
+      "README.md",
+      "docs/ARCHITECTURE.md",
+      "docs/PUBLIC-POSITIONING.md",
+      "docs/release-sync/orvena-public-sync-2026-08-24.json",
+      "manifest.yaml",
+      "scripts/check-public-sync.py"
+    ],
+    "new_goal_paths_detected": [
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "docs/PUBLIC-POSITIONING.md",
+      "docs/release-sync/orvena-public-sync-2026-08-24.json",
+      "manifest.yaml",
+      "scripts/check-public-sync.py"
+    ],
+    "overlap_paths": [
+      "README.md",
+      "docs/ARCHITECTURE.md"
+    ],
+    "pre_goal_dirty_paths": [
+      ".aine/registry.json",
+      "README.md",
+      "bench-runs/20260820-capability-v3-agent-claude-claude-opus-4-8.json",
+      "crates/orvena-core/src/adapter/mod.rs",
+      "docs/ARCHITECTURE.md"
+    ]
+  },
+  "checks": {
+    "local_and_origin_refs_resolved": true,
+    "no_push_or_settings_mutation": true,
+    "public_claim_is_narrower_than_generic_coding_agent_label": true,
+    "remote_probe_read_only": true
+  },
+  "commit_delta": {
+    "local_commits_not_in_origin_main": 4,
+    "origin_main_commits_not_in_local": 0
+  },
+  "dirty_paths": [
+    ".aine/registry.json",
+    "CHANGELOG.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "README.md",
+    "bench-runs/20260820-capability-v3-agent-claude-claude-opus-4-8.json",
+    "crates/orvena-core/src/adapter/mod.rs",
+    "docs/ARCHITECTURE.md",
+    "docs/PUBLIC-POSITIONING.md",
+    "docs/release-sync/orvena-public-sync-2026-08-24.json",
+    "manifest.yaml",
+    "scripts/check-public-sync.py"
+  ],
+  "generated_at": "2026-08-24T07:02:15.895620+00:00",
+  "local_head": "bf0afa7dc1ea96ff2e7b1132859c8d44e8360dc3",
+  "local_only_committed_files": [
+    "CHANGELOG.md",
+    "bench-runs/20260820-capability-v3-agent-codex-gpt-5.6-luna.json",
+    "bench-runs/20260820-capability-v3-qwen3.8-27b.json",
+    "crates/orvena-cli/src/commands/bench.rs",
+    "crates/orvena-cli/tests/adapter_containment.rs",
+    "crates/orvena-core/src/adapter/aider.rs",
+    "crates/orvena-core/src/adapter/claude.rs",
+    "crates/orvena-core/src/adapter/codex.rs",
+    "crates/orvena-core/src/adapter/continue_cli.rs",
+    "crates/orvena-core/src/adapter/mod.rs",
+    "crates/orvena-core/src/adapter/opencode.rs",
+    "crates/orvena-core/src/adapter/openhands.rs",
+    "crates/orvena-core/src/benchmark/runner.rs",
+    "docs/slices/SLICE-033-window-retention.md",
+    "scripts/bench-capv3-adapter.sh",
+    "scripts/validate-capv2-checks.py"
+  ],
+  "origin_main": "20df38bcad5d18846b5d730d20d0fe6b68b6b0be",
+  "positioning": {
+    "about_text": "OS-enforced task-scope governance runtime for AI coding agents — bounded execution, verify gates, and frozen evidence.",
+    "not_a": [
+      "AINE methodology/reference-runtime owner",
+      "portfolio registry/control-plane authority",
+      "Organon virtual-team/business runtime",
+      "standalone multi-agent executor"
+    ],
+    "product_boundary": "OS-enforced task-scope governance runtime",
+    "verdict": "CORE_POSITION_ALIGNED"
+  },
+  "public_url": "https://github.com/williamlabdev/Orvena",
+  "release_claims": {
+    "github_settings_changed": false,
+    "local_only_changes_are_unreleased": true,
+    "push_performed": false,
+    "remote_mutation_attempted": false
+  },
+  "remote_head": {
+    "commit": "20df38bcad5d18846b5d730d20d0fe6b68b6b0be",
+    "status": "PASS"
+  },
+  "repository": "aine.orvena",
+  "schema": "orvena.public-sync-evidence.v1",
+  "sync_state": "LOCAL_AHEAD_UNRELEASED"
+}

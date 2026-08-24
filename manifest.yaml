@@ -1,8 +1,8 @@
 name: orvena
-layer: 產生器
+layer: 執行治理產品
 line: 選擇權
 status: active
-summary: AINE 第一個對外產品——config-first governed terminal coding agent(Rust, clean-room,與 lab 無 git 關係)。治理線的對外產品證明。
+summary: AINE 第一個對外產品——OS-enforced task-scope governance runtime（Rust、clean-room、與 lab 無 git 關係）。它負責 bounded execution、scope/sandbox enforcement、verifiable gates 與 frozen evidence；不是 AINE 方法論、portfolio control plane 或 virtual-team runtime。
 depends_on:
   - repo: aine-lab
     what: 方法論(roles/gates/context-budgets 配置模型)——概念繼承,非程式碼依賴
@@ -12,5 +12,5 @@ produces:
   - 已發表第一個誠實(弱)benchmark
 architecture:
   - docs/ARCHITECTURE.md
-notes: MVP-exit 已達成;crash recovery/多 agent 編排明列 defer;更強 benchmark 需真實 repo 快照。advanced 子系統(RAG/委派)明列 out of scope——都在 lab runtime。0731 合線收斂(OD-006 增補):與 organon(design-time)+aine-lab 同一條域框架線;line 由治理線收斂至組織域現值=選擇權(90 天商業主力=robot/現金線,本線 founder notes ≤10% 帶寬)。
-updated: 2026-07-31
+notes: MVP-exit 已達成;crash recovery/多 agent 編排明列 defer;更強 benchmark 需真實 repo 快照。advanced 子系統(RAG/委派)明列 out of scope——都在 lab runtime。與 AINE 維持 methodology_product 邊界；與 airt 是互補的 inside-the-LLM/tool-call boundary；與 Organon、aine-registry、aine-control-plane 維持各自 source-of-truth 與 report-only integration boundary。0731 合線收斂(OD-006 增補):line 由治理線收斂至組織域現值=選擇權(90 天商業主力=robot/現金線,本線 founder notes ≤10% 帶寬)。
+updated: 2026-08-24

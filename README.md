@@ -17,6 +17,20 @@ what was attempted — enforcement plus an audit trail, not a promise you have t
 > **Status: early & evolving.** v0.1 is a minimal core. The native loop + containment oracle work;
 > advanced subsystems (multiple agents, policy composition) are intentionally out of scope for now.
 
+## Product boundary
+
+Orvena is the productized execution and OS/filesystem containment layer for AI
+coding agents. It owns bounded runs, scope locks, sandbox enforcement,
+verifiable gates, and frozen evidence; it does not own the AINE methodology,
+portfolio registry/control-plane decisions, or Organon's virtual-team/business
+semantics. `airt` is a complementary inside-the-LLM/tool-call boundary, while
+Orvena remains the outside-the-process enforcement boundary.
+
+An explicitly supplied report may be projected into a portfolio's report-only
+observation ledger. That integration does not grant the ledger authority to
+run agents, shells, Git, or deployments, and it does not replace Orvena's
+native evidence schema.
+
 ## Why Orvena
 
 AI agents are getting more capable, but "capable" can mean "goes places you didn't ask it to go."
@@ -179,6 +193,17 @@ enforces, the suite says so loudly and does not report a pass.
 
 - **airt** — governs tool calls (LLM says "read this file"). Orvena governs actual syscalls (binary tries to write). Different boundary, complementary. airt is inside-the-LLM; Orvena is OS-level.
 - **Your agent** (Aider, Claude, finetune, etc.) — Orvena doesn't care what's inside the box. It just enforces the box. A better agent = harder containment test = more confidence your boundary is real.
+
+**Portfolio integration boundary:** the standalone `aine-registry` may provide
+read-only project context and preflight evidence, and `aine-control-plane` now
+has a report-only adapter contract for an explicitly supplied Orvena report.
+The shared `integration-observation.v1` record links the native `run_id` to a
+portable `correlation_id` and Registry snapshot while carrying only a digest
+and normalized claims. It does not rewrite Orvena's evidence schema, read a
+private run store, or grant authority to execute an agent, shell, Git, or
+deployment operation. A report-only live trace is an integration probe, not
+an Orvena native exporter or production-ingestion guarantee; native exporter
+work remains separately evidence-gated.
 
 ## Benchmarks
 

@@ -1,0 +1,34 @@
+{
+  "project": {
+    "id": "aine.orvena",
+    "owner": "william",
+    "ownership": {"team": "orvena", "owners": ["william"], "delegates": []},
+    "kind": "governed_agent_runtime",
+    "capabilities": ["scope_enforcement", "os_containment", "gated_execution", "evidence_export"],
+    "risk": {"default": "critical", "high_risk_paths": ["crates/orvena-core/src/governance/", "crates/orvena-core/src/exec/", "crates/orvena-cli/src/sandbox_shim.rs", "schemas/"]},
+    "approval_required": true,
+    "policy": {"mode": "advisory", "require_approval_for": ["critical", "sandbox", "scope", "evidence"], "deny_unknown_changes": false, "required_checks": ["test", "verify"]},
+    "commands": {
+      "test": {"command": "cargo test --workspace", "evidence": "Cargo.toml"},
+      "verify": {"command": "cargo test --workspace", "evidence": "Cargo.toml"},
+      "lint": {"command": "cargo fmt --all -- --check", "evidence": "Cargo.toml"}
+    }
+  },
+  "artifacts": [
+    {"id": "orvena-project-manifest", "path": ".aine/registry.json", "kind": "project_manifest", "role": "config", "status": "present", "risk": "high", "approval_required": true},
+    {"id": "orvena-readme", "path": "README.md", "kind": "product_contract", "role": "source", "status": "present", "source_of_truth": "orvena.product_contract", "risk": "high", "approval_required": true},
+    {"id": "orvena-architecture", "path": "docs/ARCHITECTURE.md", "kind": "architecture", "role": "source", "source_of_truth": "orvena.architecture", "status": "present", "risk": "high", "approval_required": true},
+    {"id": "orvena-mvp-scope", "path": "MVP-SCOPE.md", "kind": "scope", "role": "source", "source_of_truth": "orvena.scope", "status": "present", "risk": "high", "approval_required": true},
+    {"id": "orvena-evidence-schema", "path": "schemas/evidence.v1.json", "kind": "evidence_schema", "role": "schema", "source_of_truth": "orvena.evidence_schema", "status": "present", "risk": "critical", "approval_required": true}
+  ],
+  "relationships": [
+    {"target": "aine.airt", "relationship_type": "complementary_boundary", "kind": "portfolio", "strength": "complementary", "status": "active"},
+    {"target": "tools.aine-registry", "relationship_type": "portfolio_snapshot_consumer", "kind": "governance", "strength": "planned", "status": "planned"}
+  ],
+  "source_of_truth": [
+    {"domain": "orvena.product_contract", "authority": {"project_id": "aine.orvena", "artifact": "orvena-readme"}, "status": "declared"},
+    {"domain": "orvena.architecture", "authority": {"project_id": "aine.orvena", "artifact": "orvena-architecture"}, "status": "declared"},
+    {"domain": "orvena.scope", "authority": {"project_id": "aine.orvena", "artifact": "orvena-mvp-scope"}, "status": "declared"},
+    {"domain": "orvena.evidence_schema", "authority": {"project_id": "aine.orvena", "artifact": "orvena-evidence-schema"}, "status": "declared"}
+  ]
+}

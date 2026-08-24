@@ -6,6 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-24
+
+### Documentation
+
+- **Product positioning and public sync gate** — Orvena is explicitly
+  documented as the OS-enforced task-scope governance runtime; AINE, airt,
+  Organon, and portfolio tools remain separate boundaries. A local-vs-public
+  release comparison and proposed GitHub About wording are retained under
+  `docs/release-sync/` and `docs/PUBLIC-POSITIONING.md`.
+
 ### Added
 
 - **Claude Code adapter profile** (`--agent claude`,
@@ -29,6 +39,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   adapter profile authenticates itself, no orvena builder ever runs, and a
   key exported only to satisfy the check could leak into the child and
   silently switch its auth path (subscription → metered API).
+
+### Fixed
+
+- Capability validation now derives the repository root instead of relying on
+  the caller's current directory.
+
+### Benchmarks
+
+- Added the first official capability-v3 readings for `qwen3.8:27b` and the
+  Codex ceiling probe, with their full run evidence retained under
+  `bench-runs/`.
 
 ## [0.6.0] — 2026-08-20
 

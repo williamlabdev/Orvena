@@ -126,10 +126,11 @@ pub struct AdapterSpec {
 /// The operator's home directory, for profiles that must grant the agent's
 /// real state location ([`AdapterSpec::state_writable`]).
 pub fn home_dir() -> crate::Result<PathBuf> {
-    std::env::var_os("HOME")
-        .filter(|h| !h.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| crate::Error::Config("HOME is not set — cannot locate the agent's own state directory".into()))
+    std::env::var_os("HOME").filter(|h| !h.is_empty()).map(PathBuf::from).ok_or_else(|| {
+        crate::Error::Config(
+            "HOME is not set — cannot locate the agent's own state directory".into(),
+        )
+    })
 }
 
 /// Which agent drives a run: Orvena's own bounded loop, or a wrapped external
@@ -699,7 +700,7 @@ mod tests {
             env: vec![],
             version_args: vec!["--version".into()],
             config_files: vec![],
-        state_writable: vec![],
+            state_writable: vec![],
         }
     }
 

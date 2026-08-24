@@ -1,9 +1,11 @@
 # Architecture
 
-**What Orvena is:** a config-first, governed coding agent — an LLM run as a
-*bounded team member* inside a trust envelope of scope locks, role/tool
-boundaries, context budgets, verifiable gates, and evidence-by-default
-([README](../README.md)).
+**What Orvena is:** a config-first, governed execution runtime — an LLM run as
+a *bounded team member* inside a trust envelope of scope locks, role/tool
+boundaries, context budgets, verifiable gates, OS/filesystem containment, and
+evidence-by-default ([README](../README.md)). Orvena is the product boundary;
+the AINE methodology, portfolio control plane, and Organon virtual-team
+semantics remain separate owners.
 
 **Shape:** a Rust cargo workspace of two crates — `orvena-core` (embeddable
 library, all logic) and `orvena-cli` (thin frontend) — shipped as a single
@@ -11,6 +13,7 @@ static binary ([`Cargo.toml`](../Cargo.toml), [README §Embedding](../README.md)
 
 Related documents: [MVP-SCOPE.md](../MVP-SCOPE.md) ·
 [benchmark.md](benchmark.md) · [provider-parity.md](provider-parity.md) ·
+[PUBLIC-POSITIONING.md](PUBLIC-POSITIONING.md) ·
 ADRs and slices indexed in [§7](#7-architecture-decision-index).
 
 ---
@@ -244,6 +247,20 @@ plan and rulings (D1–D6):
   ([MVP-SCOPE.md §5](../MVP-SCOPE.md)).
 
 ---
+
+## 6.1 Portfolio integration boundary
+
+Orvena is the execution and OS/filesystem containment boundary. It consumes a
+task envelope and emits its native frozen run report; it does not become a
+Registry scanner or a Control Plane execution engine. The Control Plane now
+defines a report-only `integration-observation.v1` consumer contract: an
+external exporter may project run metadata, patch metadata, and validation
+outcomes into the ledger, linked by a shared `correlation_id` and native
+`run_id`. The adapter stores a digest plus normalized claims, not the native
+payload or local paths. It must not rewrite the native evidence schema, invoke
+Control Plane internals, or weaken the fail-closed scope and sandbox decisions;
+the report-only live trace is an integration probe rather than production
+ingestion, and a native exporter remains separately evidence-gated.
 
 ## 7. Architecture decision index
 
