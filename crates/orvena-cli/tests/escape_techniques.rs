@@ -27,7 +27,7 @@
 //! stops being tested without anyone noticing.
 
 use orvena_core::exec::sandbox::{
-    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxPolicy, SandboxStatus,
+    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxBackend, SandboxPolicy, SandboxStatus,
 };
 
 /// Why this suite lives in `orvena-cli` rather than next to the sandbox it
@@ -151,6 +151,7 @@ impl Fixture {
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![],
             on_unavailable: OnUnavailable::FailClosed,
+            backend: SandboxBackend::Seatbelt,
         }
     }
 

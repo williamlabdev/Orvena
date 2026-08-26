@@ -23,6 +23,9 @@ pub struct SandboxConfig {
     /// Master switch. `Default` is `false`; the scaffold sets it `true`.
     #[serde(default)]
     pub enabled: bool,
+    /// OS backend. Seatbelt remains the default; `sandbox_runtime` is opt-in.
+    #[serde(default)]
+    pub backend: SandboxBackendMode,
     /// Whether a confined child may open the network. Defaults to `deny`.
     #[serde(default)]
     pub network: NetworkMode,
@@ -38,6 +41,14 @@ pub struct SandboxConfig {
     /// `warn` (see [`SandboxConfig::to_policy`]).
     #[serde(default)]
     pub on_unavailable: Option<OnUnavailableMode>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxBackendMode {
+    #[default]
+    Seatbelt,
+    SandboxRuntime,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -117,7 +128,14 @@ impl SandboxConfig {
             let t = std::env::temp_dir();
             vec![t.canonicalize().unwrap_or(t)]
         };
-        Some(SandboxPolicy { root, network, filesystem, extra_writable, on_unavailable })
+        Some(SandboxPolicy {
+            root,
+            network,
+            filesystem,
+            extra_writable,
+            on_unavailable,
+            backend: self.backend.into(),
+        })
     }
 }
 

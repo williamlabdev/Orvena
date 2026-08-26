@@ -24,10 +24,12 @@ wait-timeout.workspace = true
 # filesystem, seccompiler denies AF_INET/AF_INET6 sockets; both are pure Rust
 # (no C toolchain), so they cross-compile cleanly. macOS uses `sandbox-exec` and
 # pulls none of these.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4"
 seccompiler = "0.4"
-libc = "0.2"
 
 [dev-dependencies]
 jsonschema = "0.26"

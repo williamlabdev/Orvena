@@ -343,6 +343,10 @@ fn run_external_task(
         _ => vec![verify_gate(task)],
     };
 
+    // A wrapped headless agent already owns its internal turn loop. Re-launching
+    // it once per Orvena step discards that session and multiplies auth/startup
+    // latency, so one external invocation is the bounded unit; its own
+    // `--max-turns` remains the inner ceiling.
     let mut report = adapter::run(
         adapter::AdapterRun {
             spec,
@@ -351,7 +355,7 @@ fn run_external_task(
             writes: &task.writes,
             gates: &gates,
             gate_sandbox: &gate_sandbox,
-            max_steps: MAX_STEPS,
+            max_steps: 1,
             timeout: adapter::agent_timeout(),
         },
         &sandbox,

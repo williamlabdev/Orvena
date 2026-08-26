@@ -11,7 +11,7 @@
 //! enforced run refuses to spawn rather than run a child unconfined.
 
 use orvena_core::exec::sandbox::{
-    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxPolicy, SandboxStatus,
+    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxBackend, SandboxPolicy, SandboxStatus,
 };
 use orvena_core::exec::CommandRunner;
 #[cfg(not(target_os = "macos"))]
@@ -63,6 +63,7 @@ impl Fixture {
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![],
             on_unavailable: OnUnavailable::FailClosed,
+            backend: SandboxBackend::Seatbelt,
         }
     }
 

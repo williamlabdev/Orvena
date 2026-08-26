@@ -19,7 +19,7 @@ use orvena_core::adapter::{AdapterSpec, AgentSelection};
 use orvena_core::benchmark::{self, BenchTask, BenchTaskSet, GovernanceMode, SeedFile};
 use orvena_core::config::agent::ProviderSelection;
 use orvena_core::exec::sandbox::{
-    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxPolicy, SandboxStatus,
+    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxBackend, SandboxPolicy, SandboxStatus,
 };
 use std::path::{Path, PathBuf};
 
@@ -97,6 +97,7 @@ fn enforcement_available(root: &Path) -> bool {
         filesystem: FsPolicy::Strict { writable: vec![] },
         extra_writable: vec![],
         on_unavailable: OnUnavailable::FailClosed,
+        backend: SandboxBackend::Seatbelt,
     })
     .status()
         == SandboxStatus::Enforced

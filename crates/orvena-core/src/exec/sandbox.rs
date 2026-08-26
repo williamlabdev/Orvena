@@ -45,6 +45,24 @@ pub enum OnUnavailable {
     Warn,
 }
 
+/// Selects the OS process wrapper. Seatbelt is the stable default; the
+/// Anthropic runtime is explicit opt-in until compatibility is proven.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SandboxBackend {
+    #[default]
+    Seatbelt,
+    SandboxRuntime,
+}
+
+impl From<crate::config::sandbox::SandboxBackendMode> for SandboxBackend {
+    fn from(value: crate::config::sandbox::SandboxBackendMode) -> Self {
+        match value {
+            crate::config::sandbox::SandboxBackendMode::Seatbelt => Self::Seatbelt,
+            crate::config::sandbox::SandboxBackendMode::SandboxRuntime => Self::SandboxRuntime,
+        }
+    }
+}
+
 /// The fully-resolved, runtime sandbox policy (built from `SandboxConfig`).
 /// Paths here are absolute and canonicalized.
 #[derive(Debug, Clone)]
@@ -56,6 +74,7 @@ pub struct SandboxPolicy {
     /// Always-writable extras (e.g. system temp).
     pub extra_writable: Vec<PathBuf>,
     pub on_unavailable: OnUnavailable,
+    pub backend: SandboxBackend,
 }
 
 impl SandboxPolicy {
@@ -68,6 +87,25 @@ impl SandboxPolicy {
         v.extend(self.extra_writable.iter().cloned());
         v
     }
+}
+
+/// Render the explicit configuration expected by Anthropic's `srt` wrapper.
+/// This is deliberately a pure helper: selecting `SandboxRuntime` remains
+/// opt-in until the process runner can provision the file atomically.
+pub fn sandbox_runtime_settings(policy: &SandboxPolicy, allowed_domains: &[String]) -> String {
+    let writes: Vec<String> =
+        policy.writable_paths().iter().map(|p| p.display().to_string()).collect();
+    serde_json::json!({
+        "filesystem": {"allowWrite": writes, "denyRead": [], "denyWrite": []},
+        "network": {"allowedDomains": allowed_domains, "deniedDomains": []}
+    })
+    .to_string()
+}
+
+/// Fixed argv prefix for an `srt`-wrapped process. The caller owns provisioning
+/// the settings file; keeping this pure prevents implicit writes at spawn time.
+pub fn sandbox_runtime_argv_prefix(settings_path: &std::path::Path) -> Vec<String> {
+    vec!["srt".into(), "-s".into(), settings_path.display().to_string()]
 }
 
 /// A record of whether this run's children were actually confined — written into
@@ -194,6 +232,12 @@ enum Availability {
 fn backend_availability(_policy: &SandboxPolicy) -> Availability {
     #[cfg(target_os = "macos")]
     {
+        if _policy.backend == SandboxBackend::SandboxRuntime {
+            return Availability::Unavailable(
+                "sandbox-runtime backend is opt-in and not wired into the process runner yet"
+                    .into(),
+            );
+        }
         if super::sandbox_macos::available() {
             Availability::Available
         } else {
@@ -272,7 +316,28 @@ mod tests {
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![PathBuf::from("/tmp")],
             on_unavailable,
+            backend: SandboxBackend::Seatbelt,
         }
+    }
+
+    #[test]
+    fn sandbox_runtime_settings_are_explicit_and_scoped() {
+        let value: serde_json::Value = serde_json::from_str(&sandbox_runtime_settings(
+            &policy(OnUnavailable::FailClosed),
+            &["api.anthropic.com".into()],
+        ))
+        .unwrap();
+        assert!(value["filesystem"]["allowWrite"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p.as_str().unwrap() != "/"));
+        assert_eq!(value["network"]["allowedDomains"][0], "api.anthropic.com");
+        assert!(value["filesystem"]["denyRead"].is_array());
+        assert_eq!(
+            sandbox_runtime_argv_prefix(Path::new("/tmp/srt.json")),
+            vec!["srt", "-s", "/tmp/srt.json"]
+        );
     }
 
     #[test]

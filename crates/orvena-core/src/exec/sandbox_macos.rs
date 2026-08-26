@@ -77,7 +77,7 @@ fn sbpl_string(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::super::sandbox::{FsPolicy, OnUnavailable};
+    use super::super::sandbox::{FsPolicy, OnUnavailable, SandboxBackend};
     use super::*;
     use std::path::PathBuf;
 
@@ -88,6 +88,7 @@ mod tests {
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![PathBuf::from("/private/tmp")],
             on_unavailable: OnUnavailable::FailClosed,
+            backend: SandboxBackend::Seatbelt,
         }
     }
 

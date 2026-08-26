@@ -212,6 +212,7 @@ mod tests {
             filesystem: super::super::sandbox::FsPolicy::RootWrite,
             extra_writable: vec![PathBuf::from("/tmp")],
             on_unavailable: OnUnavailable::FailClosed,
+            backend: super::super::sandbox::SandboxBackend::Seatbelt,
         };
         let pre = argv_prefix(&policy).unwrap();
         std::env::remove_var("ORVENA_SANDBOX_SHIM");

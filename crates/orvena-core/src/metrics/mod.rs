@@ -132,6 +132,12 @@ pub struct RunReport {
     /// bundles written before it existed read back as `None` (they were native).
     #[serde(default)]
     pub agent: Option<String>,
+    /// The wrapped agent's process terminal state when it differs from
+    /// Orvena's authoritative gate outcome. Kept separate from `blockers` so
+    /// an agent that edits successfully but exits non-zero after its own turn
+    /// budget is not presented as an incomplete task.
+    #[serde(default)]
+    pub agent_terminal: Option<String>,
     /// Where the token counts above came from. The native loop *observes* them
     /// (it makes the model calls). A wrapped external agent makes its own calls,
     /// so Orvena can only relay what the agent prints — or nothing at all. A
@@ -308,6 +314,7 @@ impl RunReport {
             sandbox: crate::exec::sandbox::SandboxStatus::default(),
             provider_error: None,
             agent: None,
+            agent_terminal: None,
             token_accounting: TokenAccounting::default(),
             max_steps: 0,
             exit: ExitReason::default(),

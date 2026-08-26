@@ -57,6 +57,20 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
         args: vec![
             "-p".to_string(),
             "--dangerously-skip-permissions".into(),
+            // Orvena supplies the outer OS sandbox. Disable Claude Code's
+            // nested sandbox so its tool subprocesses do not double-apply
+            // macOS Seatbelt restrictions and spin until max-turns.
+            "--settings".into(),
+            r#"{"sandbox":{"enabled":false}}"#.into(),
+            // Keep a wrapped headless invocation bounded independently of
+            // Orvena's outer step ceiling. Without this, a single Claude
+            // process can continue indefinitely while Orvena waits for it.
+            "--max-turns".into(),
+            // A multi-file edit needs enough inner turns to inspect both files,
+            // apply atomic replacements, and run its own check. Twelve remains
+            // a hard bound; Orvena still permits only one outer invocation and
+            // the task timeout remains the outer wall-clock ceiling.
+            "12".into(),
             "--model".into(),
             model,
             "{instruction}".into(),
@@ -64,8 +78,27 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
         env: vec![],
         version_args: vec!["--version".into()],
         config_files: vec![],
-        state_writable: vec![home.join(".claude"), home.join(".claude.json")],
+        // Claude Code creates an account-scoped session temp directory and a
+        // node cache outside its configurable state folder. These are explicit,
+        // narrow process prerequisites — never a grant of the whole home.
+        state_writable: vec![
+            home.join(".claude"),
+            home.join(".claude.json"),
+            home.join("Library/Caches/claude-cli-nodejs"),
+            claude_session_temp_dir(),
+        ],
     })
+}
+
+fn claude_session_temp_dir() -> std::path::PathBuf {
+    #[cfg(unix)]
+    {
+        std::path::PathBuf::from(format!("/private/tmp/claude-{}", unsafe { libc::getuid() }))
+    }
+    #[cfg(not(unix))]
+    {
+        std::env::temp_dir().join("claude")
+    }
 }
 
 fn model_for(provider: &ProviderSelection) -> Result<String> {
@@ -108,6 +141,8 @@ mod tests {
         let s = spec(&sel("anthropic", "claude-opus-4-8")).unwrap();
         assert!(s.args.iter().any(|a| a == "--dangerously-skip-permissions"));
         assert!(s.args.iter().any(|a| a == "-p"), "headless, one shot per step");
+        let turns = s.args.iter().position(|a| a == "--max-turns").map(|i| s.args[i + 1].as_str());
+        assert_eq!(turns, Some("12"), "inner loop stays explicitly bounded");
     }
 
     #[test]
@@ -124,9 +159,11 @@ mod tests {
         // not touch CLAUDE_CONFIG_DIR at all.
         let s = spec(&sel("anthropic", "claude-opus-4-8")).unwrap();
         assert!(s.env.iter().all(|(k, _)| k != "CLAUDE_CONFIG_DIR"));
-        assert_eq!(s.state_writable.len(), 2);
+        assert_eq!(s.state_writable.len(), 4);
         assert!(s.state_writable[0].ends_with(".claude"));
         assert!(s.state_writable[1].ends_with(".claude.json"));
+        assert!(s.state_writable[2].ends_with("Library/Caches/claude-cli-nodejs"));
+        assert!(s.state_writable[3].to_string_lossy().contains("/private/tmp/claude-"));
     }
 
     #[test]

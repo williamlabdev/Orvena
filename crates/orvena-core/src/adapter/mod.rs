@@ -46,7 +46,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::config::gates::Gate;
-use crate::exec::sandbox::{FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxPolicy};
+use crate::exec::sandbox::{
+    FsPolicy, NetworkPolicy, OnUnavailable, Sandbox, SandboxBackend, SandboxPolicy,
+};
 use crate::exec::{CommandOutput, CommandRunner, RunError};
 use crate::governance::gate::GateRunner;
 use crate::metrics::{ExitReason, GateRecord, RunReport, TokenAccounting};
@@ -245,15 +247,15 @@ pub fn build_argv(spec: &AdapterSpec, instruction: &str, files: &[String]) -> Ve
 /// The sandbox policy that confines a wrapped agent, plus any **widening notes**
 /// the caller must surface.
 ///
-/// Writable = exactly the declared write paths (+ the agent scratch dir + the
+/// Writable = parents of declared write paths (+ the agent scratch dir + the
 /// caller's extras). Two honest limits, both reported rather than hidden:
 ///
-/// - A declared path that does not exist yet cannot be granted on its own: the
-///   OS grants "you may write in this directory", not "you may create exactly
-///   this name". Such a path widens to its **parent directory**, and the
-///   widening is returned as a note. The independent git oracle still catches
-///   anything else the agent touches there — detection, not prevention, for that
-///   one task.
+/// - Both creating a declared path and atomically replacing an existing one
+///   require a sibling temporary file. The OS grants directory writes, not a
+///   portable "only this filename and its random temp sibling" capability, so
+///   every declared write widens to its **parent directory**. The independent
+///   git oracle still catches anything else the agent touches there —
+///   detection, not prevention, for that one task.
 /// - `network: allow`, always. The agent must reach its own model; confining
 ///   that would confine the agent out of existence. Filesystem containment is
 ///   the guarantee on offer here, and it is the only one.
@@ -268,14 +270,12 @@ pub fn sandbox_policy(
     let mut notes = Vec::new();
     for w in writes {
         let p = root.join(w);
-        if p.exists() {
-            writable.push(p.canonicalize().unwrap_or(p));
-        } else if let Some(parent) = p.parent() {
+        if let Some(parent) = p.parent() {
             let parent = parent.canonicalize().unwrap_or_else(|_| parent.to_path_buf());
             notes.push(format!(
-                "sandbox widened: '{w}' does not exist yet, so its parent directory \
-                 '{}' had to be made writable (creating a file needs write on its \
-                 directory) — containment for that path falls back to the oracle",
+                "sandbox widened: '{w}' grants its parent directory '{}' so the agent \
+                 can create the declared file or atomically replace it through a sibling \
+                 temporary file — containment for sibling writes falls back to the oracle",
                 parent.strip_prefix(&root).unwrap_or(&parent).display()
             ));
             writable.push(parent);
@@ -295,6 +295,7 @@ pub fn sandbox_policy(
             } else {
                 OnUnavailable::Warn
             },
+            backend: SandboxBackend::Seatbelt,
         },
         notes,
     )
@@ -319,6 +320,7 @@ pub fn baseline_sandbox_policy(workdir: &Path, extra_writable: Vec<PathBuf>) -> 
         filesystem: FsPolicy::RootWrite,
         extra_writable: extras,
         on_unavailable: OnUnavailable::FailClosed,
+        backend: SandboxBackend::Seatbelt,
     }
 }
 
@@ -460,6 +462,8 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
             report.output_tokens += received;
             report.token_accounting = TokenAccounting::AgentReported;
         }
+        let mut agent_nonzero = None;
+        let mut agent_diagnostic = None;
         if out.timed_out {
             report.blockers.push(format!(
                 "agent '{}' outran its {}s timeout and was killed",
@@ -467,11 +471,19 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
                 cfg.timeout.as_secs()
             ));
         } else if !out.success() {
-            report.blockers.push(format!(
+            agent_nonzero = Some(format!(
                 "agent '{}' exited {}",
                 cfg.spec.name,
                 out.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "killed".into())
             ));
+            // Keep a small, redacted diagnostic so wrapped headless failures are
+            // explainable without retaining an unbounded transcript or secrets.
+            if cfg.spec.name == claude::NAME {
+                agent_diagnostic = Some(match diagnostic_excerpt(&transcript) {
+                    Some(excerpt) => format!("agent transcript (redacted): {excerpt}"),
+                    None => "agent transcript unavailable: wrapped process returned no captured stdout/stderr".into(),
+                });
+            }
         }
         // An agent that hit the write boundary says so on its own stderr. Keep
         // that line: it is the auditable trace of enforcement doing its job on a
@@ -489,6 +501,12 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
         if ungoverned {
             // Exit 0 is the agent's own, unverified claim of done; a non-zero
             // exit is the agent failing outright, not a budget artifact.
+            if let Some(issue) = agent_nonzero {
+                report.blockers.push(issue);
+            }
+            if let Some(diagnostic) = agent_diagnostic {
+                report.blockers.push(diagnostic);
+            }
             report.exit =
                 if out.success() { ExitReason::ClaimedDone } else { ExitReason::AgentError };
             return Ok(report.finished(out.success()));
@@ -519,8 +537,20 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
             }
         }
         if all_passed {
+            // The gate is authoritative for governed execution. Claude Code can
+            // reach its own turn budget after it has already made the correct
+            // edit, so preserve that terminal state as structured provenance,
+            // not an apparently contradictory completion blocker.
+            report.agent_terminal =
+                agent_nonzero.map(|issue| format!("{issue} after gates passed"));
             report.exit = ExitReason::GatesPassed;
             return Ok(report.finished(true));
+        }
+        if let Some(issue) = agent_nonzero {
+            report.blockers.push(issue);
+        }
+        if let Some(diagnostic) = agent_diagnostic {
+            report.blockers.push(diagnostic);
         }
         if needs_human {
             report
@@ -550,6 +580,32 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
     report.blockers.push(exhausted);
     report.exit = ExitReason::BudgetExhausted;
     Ok(report.finished(false))
+}
+
+/// Bounded diagnostic for a failed wrapped CLI. Home paths are removed because
+/// Claude's transcript may mention its login/session location; the tail is
+/// capped so evidence size is independent of agent verbosity.
+fn diagnostic_excerpt(transcript: &str) -> Option<String> {
+    let mut text = transcript.trim().to_string();
+    if text.is_empty() {
+        return None;
+    }
+    if let Ok(home) = home_dir() {
+        let home = home.to_string_lossy();
+        if !home.is_empty() {
+            text = text.replace(home.as_ref(), "<home>");
+        }
+    }
+    const LIMIT: usize = 2000;
+    if text.len() > LIMIT {
+        let start = text
+            .char_indices()
+            .find(|(idx, _)| *idx >= text.len() - LIMIT)
+            .map(|(idx, _)| idx)
+            .unwrap_or(0);
+        text = format!("…{}", &text[start..]);
+    }
+    Some(text.replace('\n', "\\n"))
 }
 
 /// The message handed to the agent. The scope contract is stated in the prompt —
@@ -691,6 +747,59 @@ pub fn agent_timeout() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::gates::Gatekeeper;
+
+    #[test]
+    fn passed_gate_records_nonzero_agent_terminal_without_a_completion_blocker() {
+        let dir =
+            std::env::temp_dir().join(format!("orvena-agent-terminal-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let spec = AdapterSpec {
+            name: "stub".into(),
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), "printf ok > done; exit 1".into()],
+            env: vec![],
+            version_args: vec![],
+            config_files: vec![],
+            state_writable: vec![],
+        };
+        let gate = Gate {
+            name: "done".into(),
+            condition: "stub writes done".into(),
+            verify: Some("test -f done".into()),
+            gatekeeper: Gatekeeper::Automated,
+            timeout_secs: Some(10),
+        };
+        let sandbox = Sandbox::disabled();
+        let report = run(
+            AdapterRun {
+                spec: &spec,
+                workdir: &dir,
+                instruction: "ignored",
+                writes: &[],
+                gates: &[gate],
+                gate_sandbox: &sandbox,
+                max_steps: 1,
+                timeout: Duration::from_secs(10),
+            },
+            &sandbox,
+        )
+        .unwrap();
+        assert!(report.completed);
+        assert_eq!(report.exit, ExitReason::GatesPassed);
+        assert!(report.agent_terminal.as_deref().unwrap_or_default().contains("exited 1"));
+        assert!(report.blockers.iter().all(|b| !b.contains("agent 'stub' exited")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn failed_wrapped_diagnostic_is_bounded_and_line_safe() {
+        let input = format!("first\n{}", "x".repeat(2500));
+        let out = diagnostic_excerpt(&input).unwrap();
+        assert!(out.len() <= 2100, "excerpt must stay bounded");
+        assert!(!out.contains('\n'), "newlines are encoded for one-line evidence");
+    }
 
     fn spec() -> AdapterSpec {
         AdapterSpec {
@@ -773,7 +882,7 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_write_path_is_granted_exactly_and_nothing_else() {
+    fn an_existing_write_path_widens_to_its_parent_for_atomic_replace() {
         let dir =
             std::env::temp_dir().join(format!("orvena-adapter-policy-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -781,13 +890,10 @@ mod tests {
         std::fs::write(dir.join("src/a.rs"), "x").unwrap();
 
         let (policy, notes) = sandbox_policy(&dir, &["src/a.rs".into()], true, vec![]);
-        assert!(notes.is_empty(), "an existing path needs no widening");
+        assert_eq!(notes.len(), 1, "atomic replacement must be an explicit widening");
         let writable = policy.writable_paths();
-        assert!(writable.iter().any(|p| p.ends_with("src/a.rs")));
-        assert!(
-            !writable.iter().any(|p| p.ends_with("src") && p.is_dir()),
-            "the sibling directory must NOT be writable: {writable:?}"
-        );
+        assert!(writable.iter().any(|p| p.ends_with("src") && p.is_dir()));
+        assert!(notes[0].contains("atomically replace"), "{notes:?}");
         assert_eq!(policy.network, NetworkPolicy::Allow, "the agent must reach its own model");
         assert_eq!(policy.on_unavailable, OnUnavailable::FailClosed);
 

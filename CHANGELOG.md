@@ -6,6 +6,39 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-26
+
+### Added
+
+- **Explicit sandbox-backend selection** — Seatbelt remains the default for
+  enforced macOS runs. The experimental Sandbox Runtime settings/argv surface
+  is opt-in and deliberately fails closed until process-runner integration is
+  proven; it cannot silently replace the enforced backend.
+- **Auditable wrapped-agent terminal provenance** — `RunReport.agent_terminal`
+  retains a wrapped CLI's non-zero terminal state separately from completion
+  blockers when an independent gate has already passed.
+
+### Changed
+
+- **Claude Code headless profile** now disables Claude's nested sandbox only
+  inside Orvena's outer OS sandbox, bounds the inner invocation to 12 turns,
+  and declares the narrow session/cache paths the authenticated CLI requires.
+- **Declared write scope** grants each path's parent directory so both new-file
+  creation and atomic replacement can use a sibling temporary file. The
+  independent oracle remains responsible for detecting sibling writes outside
+  the declared task scope.
+
+### Fixed
+
+- A verified governed task is no longer reported as incomplete solely because
+  the wrapped Claude process reaches a non-zero inner terminal state after the
+  independent gates pass.
+
+### Security
+
+- Outside-root writes remain OS-refused under Seatbelt; unsupported sandbox
+  backends fail closed rather than running a child unconfined.
+
 ## [0.7.0] — 2026-08-24
 
 ### Documentation
