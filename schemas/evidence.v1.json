@@ -109,6 +109,44 @@
     "provider_error": {
       "type": ["string", "null"],
       "description": "Set when the run ended because the model provider failed (outage, bad key, exhausted quota) rather than because of anything the agent or the enforcement layer did. The prose also appears in blockers; this is the structured flag, so a consumer never pattern-matches prose to tell 'the model misbehaved' from 'the model never answered'. A run carrying this measures the provider, not the agent — the benchmark excludes it from its denominators. Additive optional field; absent in bundles written before slice-017 (read back as null)."
+    },
+    "outcome_contract": {
+      "type": "object",
+      "description": "Optional native ProductCell outcome contract. It is additive to evidence v1 and must never be inferred when absent.",
+      "required": ["schema", "value_signal", "execution_provenance", "rollback"],
+      "additionalProperties": false,
+      "properties": {
+        "schema": { "const": "orvena-product-cell-outcome-v1" },
+        "value_signal": {
+          "type": "object",
+          "required": ["result", "source_evidence_refs"],
+          "additionalProperties": false,
+          "properties": {
+            "result": { "enum": ["PASS", "FAIL", "INCONCLUSIVE", "BLOCKED"] },
+            "source_evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+          }
+        },
+        "execution_provenance": {
+          "type": "object",
+          "required": ["provider", "model", "run_count", "source_evidence_refs"],
+          "additionalProperties": false,
+          "properties": {
+            "provider": { "type": "string", "minLength": 1 },
+            "model": { "type": "string", "minLength": 1 },
+            "run_count": { "type": "integer", "minimum": 1 },
+            "source_evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+          }
+        },
+        "rollback": {
+          "type": "object",
+          "required": ["rehearsed", "evidence_ref"],
+          "additionalProperties": false,
+          "properties": {
+            "rehearsed": { "type": "boolean" },
+            "evidence_ref": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
     }
   }
 }

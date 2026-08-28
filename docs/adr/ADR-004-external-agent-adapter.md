@@ -140,8 +140,9 @@ ADR-003 已經把 containment 放在「子行程 spawn 的那一刻」。一個�
 
 ### Neutral
 
-- adapter 目前只從 `orvena bench --agent` 到得了;產品面的 `orvena run` 不接外部
-  agent(要不要接是另一個決策,不在本 ADR)。
+- `orvena run` now accepts `--agent codex` for the PF-3 Codex-exec path; the
+  default remains the native loop, and the adapter still does not grant native
+  adoption or deployment authority.
 - `AdapterSpec` 是純資料(name/program/args/env),支援下一個 agent 是加一份 profile,
   不是加一條 code path。
 

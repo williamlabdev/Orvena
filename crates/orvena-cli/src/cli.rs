@@ -52,6 +52,36 @@ enum Command {
         /// API key or network.
         #[arg(short = 'p', long = "provider")]
         provider: Option<String>,
+        /// Which agent drives the run: `native` (Orvena's bounded loop) or
+        /// `codex` (the installed Codex CLI invoked as `codex exec`, wrapped
+        /// by Orvena's sandbox, gates, and evidence capture).
+        #[arg(long = "agent", default_value = "native")]
+        agent: String,
+        /// Attach an explicit ProductCell outcome contract to this run:
+        /// PASS|FAIL|INCONCLUSIVE|BLOCKED. Omit to write the ordinary run
+        /// evidence only.
+        #[arg(long = "outcome-value")]
+        outcome_value: Option<String>,
+        /// Portable evidence refs supporting the value signal. Repeat the flag
+        /// for multiple refs (for example an AIRT run and an acceptance ref).
+        #[arg(long = "outcome-evidence-ref")]
+        outcome_evidence_refs: Vec<String>,
+        /// Portable run refs of the earlier runs an aggregate contract
+        /// covers (for example orvena://runs/<id>). This run's own ref is
+        /// added automatically. Repeat the flag for multiple runs.
+        #[arg(long = "outcome-run-ref")]
+        outcome_run_refs: Vec<String>,
+        /// Number of bounded native runs this outcome contract aggregates.
+        /// Values above 1 require at least that many distinct
+        /// --outcome-evidence-ref entries (one per aggregated run).
+        #[arg(long = "outcome-run-count", default_value_t = 1)]
+        outcome_run_count: u32,
+        /// Portable ref for rollback rehearsal evidence.
+        #[arg(long = "rollback-evidence-ref")]
+        rollback_evidence_ref: Option<String>,
+        /// Mark the supplied rollback evidence as rehearsed.
+        #[arg(long = "rollback-rehearsed", default_value_t = false)]
+        rollback_rehearsed: bool,
     },
     /// Run the benchmark task set and report a completion rate.
     Bench {
@@ -103,7 +133,34 @@ pub async fn run() -> i32 {
                 non_interactive,
             )
         }
-        Command::Run { task, write, provider } => commands::run::run(task, write, provider).await,
+        Command::Run {
+            task,
+            write,
+            provider,
+            agent,
+            outcome_value,
+            outcome_evidence_refs,
+            outcome_run_refs,
+            outcome_run_count,
+            rollback_evidence_ref,
+            rollback_rehearsed,
+        } => {
+            commands::run::run(
+                task,
+                write,
+                provider,
+                agent,
+                commands::run::OutcomeArgs {
+                    value: outcome_value,
+                    evidence_refs: outcome_evidence_refs,
+                    run_refs: outcome_run_refs,
+                    run_count: outcome_run_count,
+                    rollback_evidence_ref,
+                    rollback_rehearsed,
+                },
+            )
+            .await
+        }
         Command::Bench { provider, tasks, out, repeat, governance, agent, all_tasks } => {
             commands::bench::run(provider, tasks, out, repeat, governance, agent, all_tasks).await
         }

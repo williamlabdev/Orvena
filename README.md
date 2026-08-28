@@ -69,7 +69,7 @@ Requires a recent stable Rust toolchain (`rustup` recommended).
 **The model provider**, pick at init time — **no default is forced**:
 
 ```bash
-orvena init --provider ollama --model qwen3:14b
+orvena init --provider openai --model gpt-5.6-luna
 orvena init --provider openai_compat --model <id> \
   --base-url http://localhost:8000/v1 --api-key-env MY_KEY
 ```
@@ -79,20 +79,23 @@ An unknown provider or `openai_compat` without `base_url` is an error, safe for 
 **Run a bounded task:**
 
 ```bash
-orvena run "add a hello module" --scope src/hello.rs
-# The agent can only read/write src/hello.rs, and stops at max_steps (default 8).
-# Report lands in .orvena/bench/<timestamp>/report.json
+orvena run "add a hello module" --write src/hello.rs
+# Native is the default. To drive the installed Codex CLI through `codex exec`:
+orvena run --agent codex "summarize the repository" \
+  --outcome-value INCONCLUSIVE
+# The wrapped agent stays inside Orvena's scope/sandbox envelope and leaves
+# evidence in .orvena/runs/<timestamp>/evidence.json.
 ```
 
 ## Model providers
 
 | Provider | Notes | Tested |
 |---|---|---|
-| **Ollama** | Local / offline / private. You run Ollama and pull a model. | ✅ `qwen3:14b` |
+| **Ollama** | Local / offline / private. You run Ollama and pull a model. | available, not PF-3 primary |
 | **openai_compat** | Generic OpenAI-compatible endpoint — vLLM, llama.cpp, LM Studio, SGLang, Groq, Together, etc. Needs `base_url`; `api_key_env` names your key var, or omit for no-auth local servers. | ✅ via Ollama |
 | **Gemini** | Hosted. Use `openai_compat` with Google's base_url and `api_key_env: GEMINI_API_KEY`. | ✅ `gemini-2.5-flash` |
 | **Anthropic** | Hosted Claude. | ◻ not yet tested |
-| **OpenAI** | Hosted. | ◻ not yet tested |
+| **OpenAI** | Hosted; PF-3 Codex-exec runtime uses `gpt-5.6-luna`. | ✅ Codex wrapper probe; native run pending |
 | **OpenRouter** | Hosted. | ◻ not yet tested |
 | **offline** | Deterministic stub for tests and regression baselines (no network). | n/a |
 
@@ -113,7 +116,7 @@ Orvena is **config-first**: a scaffold deployed by `orvena init` drives behavior
 Run a task with `orvena run <description> --scope <files>`:
 
 1. **Scope declaration** — you list which files are writable; Orvena restricts the agent's filesystem to exactly those paths
-2. **Agent invocation** — Orvena hands the task to the agent (native loop, Aider, or any model)
+2. **Agent invocation** — Orvena hands the task to the native loop or, with `--agent codex`, to `codex exec`
 3. **Boundary enforcement** — any attempt to read/write outside the declared scope is blocked and logged
 4. **Evidence collection** — Orvena records every syscall violation, every step, and the final outcome
 5. **Report** — frozen JSON against [`schemas/evidence.v1.json`](schemas/evidence.v1.json): task, completion, steps, tool calls, input/output tokens, gate outcomes, blockers, scope refusals, sandbox state. It records what the run *did*, not what it was told — there is no prompt or transcript in the bundle

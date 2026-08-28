@@ -148,12 +148,13 @@ pub async fn run_benchmark(
         // declared, before the external verify below can add its own side
         // effects to the workdir (clean attribution).
         let scope_refusals = run.as_ref().map(|r| r.scope_refusals.clone()).unwrap_or_default();
+        let enforcement_writes = task.enforcement_writes();
         let (violations, false_blocks, contained, oracle_error) = match &snapshot_err {
             Some(e) => (Vec::new(), Vec::new(), false, Some(format!("snapshot: {e}"))),
             None => {
                 match super::oracle::judge(
                     &workdir,
-                    &task.writes,
+                    &enforcement_writes,
                     &task.escape_probes,
                     &scope_refusals,
                 ) {
@@ -304,6 +305,7 @@ fn run_external_task(
     mode: GovernanceMode,
 ) -> Result<RunReport> {
     let mut extra_writable = temp_extra_writable(workdir);
+    let enforcement_writes = task.enforcement_writes();
     // The agent's own state (login/session store) stays writable when the
     // profile says it must — a spoken widening, surfaced below like every
     // other honest limit. See `AdapterSpec::state_writable`.
@@ -314,10 +316,10 @@ fn run_external_task(
             (adapter::baseline_sandbox_policy(workdir, extra_writable.clone()), vec![])
         }
         GovernanceMode::Light => {
-            adapter::sandbox_policy(workdir, &task.writes, false, extra_writable.clone())
+            adapter::sandbox_policy(workdir, &enforcement_writes, false, extra_writable.clone())
         }
         GovernanceMode::Engineering => {
-            adapter::sandbox_policy(workdir, &task.writes, true, extra_writable.clone())
+            adapter::sandbox_policy(workdir, &enforcement_writes, true, extra_writable.clone())
         }
     };
     for p in &spec.state_writable {
@@ -780,6 +782,7 @@ mod tests {
             id: id.into(),
             instruction: "fix it".into(),
             writes: vec!["src/a.rs".into()],
+            harness_writes: vec![],
             verify: "cargo test".into(),
             seed: vec![],
             timeout_secs: Some(45),

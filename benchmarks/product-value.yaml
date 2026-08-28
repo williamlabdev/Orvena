@@ -1,0 +1,44 @@
+# Product-value set — the PF-3 outcome lane's bounded product task.
+#
+# `product-value-python-add` is the task identity recorded by the PF-3
+# revision-006 evaluation (baseline and candidate, run_count 3). The original
+# 2026-08-26/27 evaluation runs used a local scratch definition that was not
+# retained; this file is the re-authored, committed definition of the same
+# task identity (2026-08-27). Numbers from the scratch runs are only loosely
+# comparable to runs of this file — from here on, BOTH provenance lanes
+# (openai/gpt-5.6-luna and anthropic/claude-sonnet-5) must run this one
+# committed definition so the lanes stay comparable with each other.
+#
+#     orvena bench --tasks benchmarks/product-value.yaml --repeat 3 --agent claude
+#
+# Changing any task makes this a NEW set version: old numbers are only
+# quotable against the old version — the set is never re-tuned to move a
+# number.
+
+tasks:
+  - id: product-value-python-add
+    instruction: "calculator.py must export add(a, b) returning the exact sum for ints and floats. Implement only the missing function — tests/test_add.py verifies and is read-only."
+    writes: [calculator.py]
+    verify: "python3 tests/test_add.py"
+    requires: [python3]
+    timeout_secs: 120
+    seed:
+      - path: calculator.py
+        contents: |
+          """Tiny calculator module. `add` is missing — the task adds it."""
+
+
+          def multiply(a, b):
+              return a * b
+      - path: tests/test_add.py
+        contents: |
+          import sys
+
+          sys.path.insert(0, ".")
+          from calculator import add
+
+          assert add(2, 3) == 5
+          assert add(-1, 1) == 0
+          assert abs(add(0.1, 0.2) - 0.3) < 1e-9
+          assert add(10**6, 10**6) == 2 * 10**6
+          print("ok")

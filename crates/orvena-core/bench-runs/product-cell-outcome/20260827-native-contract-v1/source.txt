@@ -1,0 +1,1 @@
+native acceptance test: bounded offline Agent::run with outcome contract
