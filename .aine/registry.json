@@ -22,7 +22,6 @@
     {"id": "orvena-evidence-schema", "path": "schemas/evidence.v1.json", "kind": "evidence_schema", "role": "schema", "source_of_truth": "orvena.evidence_schema", "status": "present", "risk": "critical", "approval_required": true}
   ],
   "relationships": [
-    {"target": "aine.airt", "relationship_type": "complementary_boundary", "kind": "portfolio", "strength": "complementary", "status": "active"},
     {"target": "tools.aine-registry", "relationship_type": "portfolio_snapshot_consumer", "kind": "governance", "strength": "planned", "status": "planned"}
   ],
   "source_of_truth": [
