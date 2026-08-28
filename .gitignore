@@ -20,3 +20,8 @@
 # rots silently, and in a public repo the two are indistinguishable at a
 # glance. They live in the private notes repo alongside their index instead.
 HANDOFF_*.md
+
+# Local portfolio governance descriptor; not published with the public repo.
+# Its layer/line taxonomy and decision notes come from the private portfolio
+# documents, so publishing it publishes those. Kept in the working tree.
+/manifest.yaml
