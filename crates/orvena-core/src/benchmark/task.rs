@@ -21,6 +21,13 @@ pub struct BenchTask {
     pub instruction: String,
     #[serde(default)]
     pub writes: Vec<String>,
+    /// Paths written by trusted harness instrumentation, not by the agent.
+    /// These paths are added to the OS sandbox and independent oracle scope,
+    /// but are deliberately not included in the agent's writable-file prompt.
+    /// AIRT native evidence is one example: a hook may create a database,
+    /// signing key, and public key beneath one declared evidence directory.
+    #[serde(default)]
+    pub harness_writes: Vec<String>,
     pub verify: String,
     #[serde(default)]
     pub seed: Vec<SeedFile>,
@@ -48,6 +55,15 @@ pub struct BenchTask {
     /// agent could `cat` for itself.
     #[serde(default)]
     pub commands: Vec<Command>,
+}
+
+impl BenchTask {
+    /// Return the complete write scope used by enforcement and the oracle.
+    /// Product writes and trusted harness evidence writes stay distinct in the
+    /// task contract, while the OS must allow both to complete.
+    pub fn enforcement_writes(&self) -> Vec<String> {
+        self.writes.iter().chain(self.harness_writes.iter()).cloned().collect()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,6 +109,7 @@ mod tests {
             id: id.into(),
             instruction: "x".into(),
             writes: vec![],
+            harness_writes: vec![],
             verify: "true".into(),
             seed: vec![],
             timeout_secs: None,
@@ -107,6 +124,16 @@ mod tests {
         let mut set = BenchTaskSet { tasks: vec![task("a"), task("b")], frozen: vec![] };
         set.apply_frozen_selection().unwrap();
         assert_eq!(set.tasks.len(), 2);
+    }
+
+    #[test]
+    fn enforcement_scope_adds_harness_paths_without_changing_product_writes() {
+        let mut value = task("a");
+        value.writes = vec!["src/calc.py".into()];
+        value.harness_writes = vec![".airt".into()];
+
+        assert_eq!(value.writes, vec!["src/calc.py"]);
+        assert_eq!(value.enforcement_writes(), vec!["src/calc.py", ".airt"]);
     }
 
     #[test]

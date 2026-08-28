@@ -8,7 +8,7 @@
 //! their process in ours:
 //!
 //! ```text
-//!   task scope  ──▶ OS sandbox (strict writable = the declared paths)
+//!   task scope  ──▶ OS sandbox (strict writable = product + harness paths)
 //!   instruction ──▶ `<agent> --message …`   (headless, one shot per step)
 //!   "done"      ──▶ Orvena's gate, re-run externally after the agent stops
 //!   evidence    ──▶ the same RunReport / evidence.json every native run leaves
@@ -166,8 +166,9 @@ pub struct AdapterRun<'a> {
     /// The task's isolated working directory (also the sandbox root).
     pub workdir: &'a Path,
     pub instruction: &'a str,
-    /// Paths the task may modify. Handed to the agent as its file list *and*
-    /// enforced as the sandbox's writable set.
+    /// Product paths the agent may modify. Handed to the agent as its file list
+    /// and used by the caller for the product portion of the scope. Trusted
+    /// harness evidence paths are enforced separately by the benchmark task.
     pub writes: &'a [String],
     /// Gates that define "done". Empty = the ungoverned baseline: one invocation,
     /// and the agent's own exit status is its unverified claim.

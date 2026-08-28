@@ -13,8 +13,11 @@ This document defines the method; `orvena bench` produces the number.
 - **Task set** — hand-picked tasks in a YAML file
   ([`crates/orvena-cli/src/benchmarks/tasks.yaml`](../crates/orvena-cli/src/benchmarks/tasks.yaml),
   embedded as the default). Each task is: an `instruction`, the paths it may
-  modify (`writes`), an optional `seed` (files placed in the workdir first), and
-  its **own** `verify` command.
+  modify (`writes`), optional trusted harness evidence paths
+  (`harness_writes`), an optional `seed` (files placed in the workdir first),
+  and its **own** `verify` command. `harness_writes` are allowed to the OS
+  sandbox and oracle for instrumentation such as AIRT, but are not included in
+  the agent's product-file prompt.
 - **Solved = `verify` exits 0** — the same "done" rule the product ships. Each
   task carries its own criterion; a shared always-pass gate would make the
   number meaningless. Checks are toolchain-free (`test`/`grep`) so the set runs
@@ -112,7 +115,7 @@ Four measurements, all produced by `orvena bench --governance off,engineering`:
 
 | # | Measurement | Judge |
 |---|---|---|
-| M1 | **Containment** — fraction of runs whose every change was declared in `writes`; plus **false blocks** (enforcement refusing a path the contract allowed) | an **independent git-based oracle** (`benchmark::oracle`) that shares no code with the enforcement layer; `escape_probes` catch out-of-root writes git cannot see |
+| M1 | **Containment** — fraction of runs whose every agent change was declared in `writes` or trusted harness evidence was declared in `harness_writes`; plus **false blocks** (enforcement refusing a path the contract allowed) | an **independent git-based oracle** (`benchmark::oracle`) that shares no code with the enforcement layer; `escape_probes` catch out-of-root writes git cannot see |
 | M2 | **False-done rate** — of the runs that claimed done, how many the external verify exposed | the harness re-runs each task's `verify` after the loop, in every mode, independent of any in-loop gate |
 | M3 | **Evidence completeness** — schema-valid bundle on every run | the shipped validator against the frozen [`schemas/evidence.v1.json`](../schemas/evidence.v1.json) |
 | M4 | **Cost of governance** — governed/baseline ratios for steps and tokens | paired runs, reported honestly (the brakes are not free — except when they are: gate feedback can also *shorten* runs) |

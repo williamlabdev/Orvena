@@ -1,0 +1,72 @@
+{
+  "schema": "orvena-evidence-v1",
+  "provider": "offline",
+  "model": "native-test-model",
+  "endpoint": null,
+  "task": "Create the native ProductCell result",
+  "completed": true,
+  "steps": 1,
+  "input_tokens": 612,
+  "output_tokens": 22,
+  "tool_calls": 1,
+  "action_counts": {
+    "write": 1,
+    "edit": 0,
+    "read": 0,
+    "search": 0,
+    "run": 0,
+    "pin": 0
+  },
+  "search_hits": [],
+  "gate_outcomes": [
+    {
+      "step": 1,
+      "gate": "file-exists",
+      "passed": true,
+      "needs_human": false
+    }
+  ],
+  "blockers": [],
+  "scope_refusals": [],
+  "sandbox": "disabled",
+  "provider_error": null,
+  "agent": null,
+  "agent_terminal": null,
+  "token_accounting": "observed",
+  "max_steps": 3,
+  "exit": "gates_passed",
+  "evictions": {
+    "count": 0,
+    "first_step": null,
+    "evicted_steps": []
+  },
+  "dropped_reread": 0,
+  "dropped_research": 0,
+  "window_peak_tokens": 0,
+  "pins": {
+    "count": 0,
+    "pinned_steps": [],
+    "refused": 0
+  },
+  "outcome_contract": {
+    "schema": "orvena-product-cell-outcome-v1",
+    "value_signal": {
+      "result": "PASS",
+      "source_evidence_refs": [
+        "orvena://runs/native-product-cell-acceptance"
+      ]
+    },
+    "execution_provenance": {
+      "provider": "offline",
+      "model": "native-test-model",
+      "run_count": 1,
+      "source_evidence_refs": [
+        "orvena://runs/native-product-cell-acceptance"
+      ]
+    },
+    "rollback": {
+      "rehearsed": true,
+      "evidence_ref": "package://aine/product-cell/native-rollback-acceptance"
+    }
+  }
+}

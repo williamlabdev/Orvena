@@ -224,7 +224,7 @@ fn print_manual_next_steps() {
         "\nNot prompting (no terminal to read, or this process is not in its \
          foreground) — next steps:\n  \
          1. Set the provider without prompting, e.g.\n     \
-              orvena init --provider ollama --model qwen3:14b\n     \
+              orvena init --provider openai --model gpt-5.6-luna\n     \
             (or edit {}/orvena.yaml and set provider.kind + provider.model).\n  \
          2. Put the matching key in .env (see .env.example).\n  \
          3. Run `orvena doctor` to verify, then `orvena run \"<task>\"`.",

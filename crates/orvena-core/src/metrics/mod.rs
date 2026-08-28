@@ -5,8 +5,14 @@
 
 pub mod baseline;
 pub mod evidence;
+pub mod outcome;
 
 pub use baseline::{BaselineRecord, GoldenTask};
+pub use outcome::{
+    validate_outcome_contract_value, ExecutionProvenance, ProductCellOutcomeContract,
+    RollbackEvidence, RollbackJournal, ValueSignal, ValueSignalResult,
+    PRODUCT_CELL_OUTCOME_SCHEMA_V1,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -202,6 +208,11 @@ pub struct RunReport {
     /// "no pins". Additive — stays v1.
     #[serde(default)]
     pub pins: Option<Pins>,
+    /// Optional ProductCell outcome contract. It is absent until a caller has
+    /// supplied explicit value evidence and rollback evidence; absence never
+    /// means PASS.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_contract: Option<ProductCellOutcomeContract>,
 }
 
 /// Eviction telemetry for the native evidence window — see
@@ -325,6 +336,7 @@ impl RunReport {
             dropped_research: None,
             window_peak_tokens: None,
             pins: None,
+            outcome_contract: None,
         }
     }
 
@@ -344,5 +356,40 @@ impl RunReport {
 
     pub fn total_tokens(&self) -> u32 {
         self.input_tokens + self.output_tokens
+    }
+
+    /// Attach an explicit ProductCell outcome contract to this native report.
+    pub fn with_product_cell_outcome(
+        mut self,
+        value_signal: ValueSignal,
+        rollback: RollbackEvidence,
+        source_evidence_refs: Vec<String>,
+    ) -> crate::Result<Self> {
+        self.outcome_contract = Some(ProductCellOutcomeContract::from_native_run(
+            &self,
+            value_signal,
+            rollback,
+            source_evidence_refs,
+        )?);
+        Ok(self)
+    }
+
+    /// Attach an outcome contract that honestly aggregates `run_count` bounded
+    /// native runs sharing this report's provider/model provenance.
+    pub fn with_product_cell_outcome_runs(
+        mut self,
+        value_signal: ValueSignal,
+        rollback: RollbackEvidence,
+        source_evidence_refs: Vec<String>,
+        run_count: u32,
+    ) -> crate::Result<Self> {
+        self.outcome_contract = Some(ProductCellOutcomeContract::from_native_runs(
+            &self,
+            value_signal,
+            rollback,
+            source_evidence_refs,
+            run_count,
+        )?);
+        Ok(self)
     }
 }

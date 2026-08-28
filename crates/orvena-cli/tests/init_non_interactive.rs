@@ -32,15 +32,15 @@ fn temp_dir(tag: &str) -> PathBuf {
 fn provider_flag_sets_the_provider_without_prompting() {
     let dir = temp_dir("flag");
     let out = Command::new(BIN)
-        .args(["init", "--provider", "ollama", "--model", "qwen3:14b"])
+        .args(["init", "--provider", "openai", "--model", "gpt-5.6-luna"])
         .current_dir(&dir)
         .output()
         .expect("init runs");
     assert!(out.status.success(), "stderr: {}", String::from_utf8_lossy(&out.stderr));
 
     let cfg = std::fs::read_to_string(dir.join(".orvena/orvena.yaml")).unwrap();
-    assert!(cfg.contains("kind: ollama"), "provider not written:\n{cfg}");
-    assert!(cfg.contains("qwen3:14b"), "model not written:\n{cfg}");
+    assert!(cfg.contains("kind: openai"), "provider not written:\n{cfg}");
+    assert!(cfg.contains("gpt-5.6-luna"), "model not written:\n{cfg}");
 }
 
 #[test]

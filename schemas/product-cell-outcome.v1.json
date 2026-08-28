@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/williamlabdev/Orvena/schemas/product-cell-outcome.v1.json",
+  "title": "Orvena native ProductCell outcome contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "value_signal", "execution_provenance", "rollback"],
+  "properties": {
+    "schema": { "const": "orvena-product-cell-outcome-v1" },
+    "value_signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "source_evidence_refs"],
+      "properties": {
+        "result": { "enum": ["PASS", "FAIL", "INCONCLUSIVE", "BLOCKED"] },
+        "source_evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "execution_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "run_count", "source_evidence_refs"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "run_count": { "type": "integer", "minimum": 1 },
+        "source_evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rehearsed", "evidence_ref"],
+      "properties": {
+        "rehearsed": { "type": "boolean" },
+        "evidence_ref": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

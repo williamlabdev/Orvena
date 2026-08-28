@@ -131,6 +131,9 @@ pub fn validate_bundle_value(value: &serde_json::Value) -> Vec<String> {
             ));
         }
     }
+    if let Some(contract) = obj.get("outcome_contract") {
+        problems.extend(crate::metrics::validate_outcome_contract_value(contract));
+    }
     if let Some(gates) = obj.get("gate_outcomes").and_then(Value::as_array) {
         for (i, g) in gates.iter().enumerate() {
             let Some(g) = g.as_object() else {
