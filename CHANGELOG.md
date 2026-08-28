@@ -6,6 +6,30 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-28
+
+### Added
+
+- **`product-cell-outcome.v1` contract** — a frozen schema
+  (`schemas/product-cell-outcome.v1.json`) and outcome module
+  (`crates/orvena-core/src/metrics/outcome.rs`) for outcome-bearing governed
+  runs, with the `benchmarks/product-value.yaml` cell and an end-to-end
+  `product_cell_outcome` test.
+- **`--agent codex` on `orvena run`** — drives the installed Codex CLI through
+  `codex exec` inside Orvena's scope/sandbox envelope. The native loop remains
+  the default; the adapter grants no native adoption or deployment authority
+  (ADR-004 neutral note updated).
+- **`--outcome-value` on `orvena run`** — records the declared outcome value in
+  the evidence bundle.
+- **Retained observation evidence** — the
+  `bench-runs/product-cell-outcome/20260827-native-contract-v1/` bundle cited by
+  `docs/product-cell-outcome-v1.md`.
+
+### Changed
+
+- **`evidence.v1` schema extended** with outcome fields; runner, task, and CLI
+  init/run wiring updated accordingly.
+
 ## [0.8.0] — 2026-08-26
 
 ### Added
