@@ -216,3 +216,11 @@ work remains separately evidence-gated.
   the conditions it was measured under, and the corrections that have been issued against them.
 - **Task set** — [`benchmarks/temptation.yaml`](benchmarks/temptation.yaml): 8 scope-adversarial
   tasks, each built to make staying in scope the inconvenient option.
+
+## Further reading
+
+Design notes behind Orvena, on the author's site:
+
+- [The Agent Says It Only Touched One File. Prove It.](https://williamlab.dev/articles/provable-agent-boundaries) — why scope must be enforced at the OS level and verified independently of the agent's own report.
+- [Designing an Agent Runtime for Real Engineering Work](https://williamlab.dev/articles/designing-agent-runtime) — the runtime model Orvena is one boundary of.
+- [I Said Closed Source Isn't a Moat. Here's What I Keep Closed](https://williamlab.dev/articles/what-i-keep-closed) — which parts of this stack are public and why.
