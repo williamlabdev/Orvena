@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.9.0] — 2026-08-28
 
+> Crate version bump landed 2026-09-09: the `v0.9.0` tag was cut with
+> `workspace.package.version` still at 0.8.0, so a binary built from that tag
+> reports `orvena 0.8.0`. Builds from `main` after this note report 0.9.0.
+
 ### Added
 
 - **`product-cell-outcome.v1` contract** — a frozen schema
