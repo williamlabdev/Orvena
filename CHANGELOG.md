@@ -16,6 +16,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enforced envelope inside the repo you are standing in, for day-to-day
   dogfooding. See `docs/dogfood-claude.md`.
 
+### Fixed
+
+- **`orvena run` handed the adapter a relative project root (`.`)**, so the
+  agent's and the gate's `TMPDIR`/`XDG_CACHE_HOME` were relative paths. Any
+  toolchain that changes directory resolved them against the wrong cwd — Go's
+  cgo step failed every gate with ENOENT, and the loop re-invoked the agent
+  eight times against a harness error. The CLI now resolves the root to an
+  absolute path and the adapter absolutizes its scratch dir regardless.
+  Found on the first `dogfood-claude.sh` run.
+- **`dogfood-claude.sh`** redirects Go's build cache and link scratch into
+  the agent scratch dir, fills the scaffold gate from the visible toolchain,
+  and gitignores the scaffold.
+
 ### Documentation
 
 - **`docs/next/README.md`** — index of the follow-up tickets with their

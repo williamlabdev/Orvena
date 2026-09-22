@@ -135,6 +135,19 @@ pub fn home_dir() -> crate::Result<PathBuf> {
     })
 }
 
+/// The agent scratch directory for `workdir`, always as an absolute path.
+///
+/// Every redirect handed to the agent and the gate (`TMPDIR`, `XDG_CACHE_HOME`,
+/// `{scratch}` in a profile) is derived from this path. A relative one is only
+/// right for a child that never changes directory; Go's `cgo` step runs inside
+/// each package directory and resolved `./.orvena-agent/gate-tmp` against it,
+/// failing every gate with ENOENT (first Claude Code dogfood run, 2026-09-22).
+/// Symlinks are left alone — `/tmp` stays `/tmp` — so the oracle's
+/// workdir-relative comparisons are unaffected.
+pub fn scratch_dir(workdir: &Path) -> std::io::Result<PathBuf> {
+    std::path::absolute(workdir.join(AGENT_SCRATCH_DIR))
+}
+
 /// Which agent drives a run: Orvena's own bounded loop, or a wrapped external
 /// CLI agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -363,7 +376,7 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
     // (Python, tokenizer caches) that expects *somewhere* to scribble, and the
     // alternative — granting the system temp — would quietly re-open the
     // writable set whenever the workdir itself lives under temp.
-    let scratch = cfg.workdir.join(AGENT_SCRATCH_DIR);
+    let scratch = scratch_dir(cfg.workdir)?;
     let scratch_tmp = scratch.join("tmp");
     let scratch_cache = scratch.join("cache");
     std::fs::create_dir_all(&scratch_tmp)?;
@@ -967,6 +980,18 @@ mod tests {
     #[test]
     fn a_refusal_without_a_path_yields_none_rather_than_a_guess() {
         assert_eq!(refused_path("[Errno 1] Operation not permitted:", Path::new("/x")), None);
+    }
+
+    #[test]
+    fn scratch_dir_is_absolute_even_for_a_relative_workdir() {
+        // `orvena run` used to hand the adapter `.` as the workdir; every
+        // TMPDIR derived from it was relative and broke any toolchain that
+        // chdirs (cgo). The scratch path must come back absolute regardless.
+        let rel = scratch_dir(Path::new(".")).unwrap();
+        assert!(rel.is_absolute(), "{}", rel.display());
+        assert!(rel.ends_with(AGENT_SCRATCH_DIR));
+        let abs = scratch_dir(Path::new("/tmp/orvena-root")).unwrap();
+        assert_eq!(abs, PathBuf::from("/tmp/orvena-root").join(AGENT_SCRATCH_DIR));
     }
 
     #[test]

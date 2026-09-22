@@ -21,7 +21,12 @@ pub fn config_dir() -> PathBuf {
 }
 
 pub fn project_root() -> PathBuf {
-    PathBuf::from(".")
+    // Absolute on purpose. A relative root leaks into every path derived from
+    // it — the sandbox writable set, the agent's `TMPDIR`, the gate's `TMPDIR` —
+    // and a toolchain that changes directory (Go runs cgo inside each package
+    // dir) then resolves `./.orvena-agent/gate-tmp` against the wrong cwd and
+    // fails with ENOENT. Found on the first Claude Code dogfood run (2026-09-22).
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// Embedded default scaffold (deployed verbatim by `orvena init`). Kept neutral —
