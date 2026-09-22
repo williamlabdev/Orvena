@@ -6,6 +6,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Version/CHANGELOG consistency test** — `cargo test` now fails when
+  `workspace.package.version` does not match the newest released entry in
+  this file, so a tag can no longer be cut against a stale crate version
+  (the 0.9.0 mistake). CI is not the gate here; the local test is.
+- **`scripts/dogfood-claude.sh`** — wrap one Claude Code task in Orvena's
+  enforced envelope inside the repo you are standing in, for day-to-day
+  dogfooding. See `docs/dogfood-claude.md`.
+
+### Documentation
+
+- **`docs/next/README.md`** — index of the follow-up tickets with their
+  status; all nine are closed, and the directory no longer reads as backlog.
+
 ## [0.9.0] — 2026-08-28
 
 > Crate version bump landed 2026-09-09: the `v0.9.0` tag was cut with
