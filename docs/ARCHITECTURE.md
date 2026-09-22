@@ -78,7 +78,7 @@ Top-level assets: [`benchmarks/`](../benchmarks) (opt-in task sets:
 `projects.yaml`, `realworld.yaml`, `temptation.yaml`),
 [`schemas/evidence.v1.json`](../schemas/evidence.v1.json) (frozen evidence
 schema), [`scripts/`](../scripts) (bench + boundary-check helpers),
-[`docs/next/`](next) (tickets).
+[`docs/next/`](next) (follow-up tickets; all closed as of 2026-09-22, see its README).
 
 ---
 
@@ -275,7 +275,7 @@ ingestion, and a native exporter remains separately evidence-gated.
 | [SLICE-os-sandbox-linux.md](slices/SLICE-os-sandbox-linux.md) | Linux backend — Landlock + seccomp re-exec shim | IMPLEMENTED |
 | [MVP-SCOPE.md](../MVP-SCOPE.md) | what v0.1 must deliver vs. explicitly defer | working draft |
 | [benchmark-governance-differential-plan.md](benchmark-governance-differential-plan.md) | differential benchmark rulings D1–D6 (headline metrics, bench-only baseline, oracle independence, schema freeze, BYO-agent route, model matrix) | decided 2026-07-11 |
-| [docs/next/](next) | narrower follow-up tickets (evidence exit paths, scope-lock escape, bench validity) | per-ticket |
+| [docs/next/](next) | narrower follow-up tickets (evidence exit paths, scope-lock escape, bench validity); index in [next/README.md](next/README.md) | all closed 2026-09-22 |
 
 ---
 
