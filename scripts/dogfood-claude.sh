@@ -34,7 +34,22 @@ if [ "${1:-}" = "--init" ]; then
   # measure nothing.
   sed -i.bak -E 's/^tier: .*/tier: engineering/' "$CFG" && rm -f "$CFG.bak"
   grep -q '^tier: engineering' "$CFG" || die "could not set tier: engineering in $CFG"
-  printf 'scaffolded %s (provider anthropic, tier engineering)\n' "$CFG"
+  # The scaffold's gate is `true`, which measures nothing. Fill in the obvious
+  # check for the toolchain we can see; edit .orvena/gates.yaml to taste.
+  gate=""
+  [ -f go.mod ]       && gate="go build ./... && go vet ./..."
+  [ -f package.json ] && gate="pnpm test"
+  [ -f Cargo.toml ]   && gate="cargo test"
+  if [ -n "$gate" ]; then
+    # `&` is special in a sed replacement; escape it.
+    sed -i.bak -E "s|^([[:space:]]*verify:) \"true\".*|\\1 \"${gate//&/\\&}\"|" .orvena/gates.yaml && rm -f .orvena/gates.yaml.bak
+    grep -qF "verify: \"$gate\"" .orvena/gates.yaml || die "could not write the gate into .orvena/gates.yaml"
+  fi
+  # Keep the scaffold and the agent scratch dir out of the repo's diff.
+  for ignore in .orvena/ .orvena-agent/; do
+    grep -qxF "$ignore" .gitignore 2>/dev/null || printf '%s\n' "$ignore" >> .gitignore
+  done
+  printf 'scaffolded %s (provider anthropic, tier engineering, gate: %s)\n' "$CFG" "${gate:-true — edit .orvena/gates.yaml}"
   exit 0
 fi
 
@@ -50,5 +65,16 @@ grep -Eq '^tier:\s*engineering' "$CFG" || die "$CFG tier is not engineering — 
 
 args=()
 for p in "$@"; do args+=(--write "$p"); done
+
+# Go writes its build cache and link scratch outside the repo by default
+# (~/Library/Caches/go-build, $TMPDIR), which the sandbox refuses. Point both
+# at the agent scratch dir, which is always writable. Go creates GOCACHE itself
+# but not GOTMPDIR. The first build in a repo is cold (~10s on a mid-size Go
+# service); later runs reuse it. Deps must already be in the module cache —
+# the sandbox has no network for the toolchain.
+if [ -f go.mod ]; then
+  mkdir -p .orvena-agent/go-cache .orvena-agent/go-tmp
+  export GOCACHE="$PWD/.orvena-agent/go-cache" GOTMPDIR="$PWD/.orvena-agent/go-tmp" GOPROXY=off
+fi
 
 exec "$ORVENA" run --agent claude "$task" "${args[@]}"

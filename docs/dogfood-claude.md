@@ -26,6 +26,17 @@ What to look at after a week of runs, in this order:
 3. `sandbox` state — confirm every run says enforced. An advisory run measures
    nothing.
 
+Toolchain notes the script handles for you:
+
+- **Go** — the build cache and link scratch default to `~/Library/Caches/go-build`
+  and `$TMPDIR`, both outside the writable set. The script points `GOCACHE`
+  and `GOTMPDIR` into `.orvena-agent/` and sets `GOPROXY=off` (no network for
+  the toolchain; deps must already be in the module cache). First build per
+  repo is cold.
+- **`--init`** fills the scaffold's gate with the obvious check for the
+  toolchain it sees (`go build ./... && go vet ./...`, `pnpm test`,
+  `cargo test`) and adds `.orvena/` and `.orvena-agent/` to `.gitignore`.
+
 Hard rules the script enforces:
 
 - `ANTHROPIC_API_KEY` must be unset. The Claude profile inherits the
