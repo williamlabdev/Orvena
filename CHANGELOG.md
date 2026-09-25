@@ -30,6 +30,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and gitignores the scaffold. It also accepts writable paths spelled either
   bare or as `--write <path>` — the second form is what a user copies from
   `orvena run --help`, and it used to collapse into a missing-value error.
+  It refuses to run outside a git repository root or against the placeholder
+  `verify: "true"` gate: a scaffold left in `$HOME` let a run wander the
+  filesystem, get refused on the real repo, and still report `completed`.
 
 ### Documentation
 
