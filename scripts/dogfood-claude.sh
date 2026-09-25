@@ -63,8 +63,14 @@ shift
 grep -Eq '^\s*kind:\s*anthropic' "$CFG" || die "$CFG provider.kind is not anthropic — the Claude profile only drives Anthropic models"
 grep -Eq '^tier:\s*engineering' "$CFG" || die "$CFG tier is not engineering — only that tier enforces the sandbox"
 
+# Paths may be given bare (`dir1 dir2`) or already flagged (`--write dir1`);
+# both spell the same declaration.
 args=()
-for p in "$@"; do args+=(--write "$p"); done
+for p in "$@"; do
+  [ "$p" = "--write" ] && continue
+  args+=(--write "$p")
+done
+[ ${#args[@]} -gt 0 ] || die "declare at least one writable path — everything else is read-only"
 
 # Go writes its build cache and link scratch outside the repo by default
 # (~/Library/Caches/go-build, $TMPDIR), which the sandbox refuses. Point both

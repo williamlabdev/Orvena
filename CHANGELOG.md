@@ -27,7 +27,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Found on the first `dogfood-claude.sh` run.
 - **`dogfood-claude.sh`** redirects Go's build cache and link scratch into
   the agent scratch dir, fills the scaffold gate from the visible toolchain,
-  and gitignores the scaffold.
+  and gitignores the scaffold. It also accepts writable paths spelled either
+  bare or as `--write <path>` — the second form is what a user copies from
+  `orvena run --help`, and it used to collapse into a missing-value error.
 
 ### Documentation
 
