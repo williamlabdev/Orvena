@@ -58,6 +58,11 @@ shift
 [ $# -gt 0 ] || die "declare at least one writable path — everything else is read-only"
 
 [ -e "$CFG" ] || die "no $CFG — run \`$0 --init\` first"
+# A stray scaffold in $HOME turns a run into a fishing trip: the agent wanders
+# the filesystem, hits the sandbox on the real repo, and a `verify: "true"`
+# gate then reports the nothing it did as completed. Refuse both up front.
+[ -d .git ] || die "$PWD is not a git repository root — cd into the project you mean to govern"
+grep -Eq '^[[:space:]]*verify:[[:space:]]*"true"' .orvena/gates.yaml && die ".orvena/gates.yaml still has the placeholder gate (verify: \"true\") — set a real test command or re-run --init"
 # `--provider anthropic` at run time would override only the kind and keep the
 # configured model, so the config itself must already point at Claude.
 grep -Eq '^\s*kind:\s*anthropic' "$CFG" || die "$CFG provider.kind is not anthropic — the Claude profile only drives Anthropic models"
