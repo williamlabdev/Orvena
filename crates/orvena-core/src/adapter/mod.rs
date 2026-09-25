@@ -919,6 +919,7 @@ mod tests {
             version_args: vec![],
             config_files: vec![],
             state_writable: vec![],
+            state_writable_patterns: vec![],
             config_probe: vec![
                 ".claude/settings.json".to_string(),
                 ".claude/settings.local.json".to_string(),
@@ -965,6 +966,7 @@ mod tests {
             version_args: vec![],
             config_files: vec![],
             state_writable: vec![],
+            state_writable_patterns: vec![],
             config_probe: vec![],
         };
         let sandbox = Sandbox::disabled();
