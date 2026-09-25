@@ -33,6 +33,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   It refuses to run outside a git repository root or against the placeholder
   `verify: "true"` gate: a scaffold left in `$HOME` let a run wander the
   filesystem, get refused on the real repo, and still report `completed`.
+- **Claude leg: sandbox refusals and the agent's own words now reach the
+  evidence** (#38). Three gaps from the same dogfood run. (1) `scope_refusals`
+  was structurally empty for `--agent claude`: the refusal text lives in tool
+  results, and plain `claude -p` prints only the final message. The profile
+  now runs with `--output-format stream-json --verbose`, and the adapter folds
+  the event stream back into a text transcript (tool results, assistant text,
+  final result) before the refusal scan, so an `EPERM: operation not
+  permitted, open '…'` on the Write tool's temp file lands in
+  `scope_refusals` and as an `agent write refused:` blocker. Other profiles'
+  plain output passes through unchanged. (2) The agent's final message —
+  the only place "I did the in-scope edit and skipped the other one" or "the
+  path does not exist" is stated — is recorded as `agent_final_text`
+  (home-redacted, 600 chars) and printed as `agent said:`; the agent's own
+  turn count is recorded as `agent_turns` and the usage it reports as
+  `agent_reported` tokens. `completed` remains the gate's verdict; whether a
+  self-declared half-done task should fail is a separate ruling. (3)
+  `agent_terminal` (e.g. `agent 'claude' exited 1 after gates passed`) was in
+  the bundle only; the run report now prints it. All three fields are
+  additive under evidence v1 and documented in `schemas/evidence.v1.json`.
 
 ### Documentation
 

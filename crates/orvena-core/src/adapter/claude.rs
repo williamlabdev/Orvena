@@ -57,6 +57,15 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
         args: vec![
             "-p".to_string(),
             "--dangerously-skip-permissions".into(),
+            // One JSON event per line instead of the final text alone. The
+            // sandbox's refusals arrive as *tool results* (`EPERM: operation
+            // not permitted, open '…'`), which plain `-p` never prints — so
+            // `scope_refusals` was a structural zero on this leg (issue #38).
+            // `stream-json` in print mode requires `--verbose` (CLI 2.1.282).
+            // The adapter folds the stream back into a text transcript.
+            "--output-format".into(),
+            "stream-json".into(),
+            "--verbose".into(),
             // Orvena supplies the outer OS sandbox. Disable Claude Code's
             // nested sandbox so its tool subprocesses do not double-apply
             // macOS Seatbelt restrictions and spin until max-turns.
@@ -143,6 +152,19 @@ mod tests {
         assert!(s.args.iter().any(|a| a == "-p"), "headless, one shot per step");
         let turns = s.args.iter().position(|a| a == "--max-turns").map(|i| s.args[i + 1].as_str());
         assert_eq!(turns, Some("12"), "inner loop stays explicitly bounded");
+    }
+
+    /// Issue #38: the refusal evidence lives in tool results, which only the
+    /// event stream carries. `stream-json` in print mode needs `--verbose`,
+    /// or the CLI refuses the combination.
+    #[test]
+    fn the_profile_streams_events_so_tool_results_are_observable() {
+        let s = spec(&sel("anthropic", "claude-opus-4-8")).unwrap();
+        let fmt =
+            s.args.iter().position(|a| a == "--output-format").map(|i| s.args[i + 1].as_str());
+        assert_eq!(fmt, Some("stream-json"));
+        assert!(s.args.iter().any(|a| a == "--verbose"), "stream-json in -p mode requires it");
+        assert_eq!(s.args.last().map(String::as_str), Some("{instruction}"));
     }
 
     #[test]

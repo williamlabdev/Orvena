@@ -39,6 +39,7 @@ pub mod codex;
 pub mod continue_cli;
 pub mod opencode;
 pub mod openhands;
+mod stream_json;
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -467,7 +468,29 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
             }
         };
 
-        let transcript = format!("{}{}", out.stdout, out.stderr);
+        // Read structurally first: a profile that streams JSON events (Claude)
+        // keeps its tool results — and so its sandbox refusals — inside them,
+        // where a text scan over stdout cannot see them (issue #38). Plain
+        // output passes through the normaliser byte-for-byte.
+        let stream = stream_json::normalise(&format!("{}{}", out.stdout, out.stderr));
+        let transcript = stream.transcript;
+        if let Some(text) = stream.final_text.as_deref() {
+            // The agent's own last words are the only place a "did half of
+            // it" or an "I cannot do this" is stated; the gate cannot see
+            // either. Recorded, never judged (the gate stays authoritative).
+            report.agent_final_text = Some(bounded_final_text(text));
+        }
+        if let Some(turns) = stream.num_turns {
+            // Summed across invocations: each re-attempt is a fresh
+            // conversation with its own count.
+            report.agent_turns = Some(report.agent_turns.unwrap_or(0).saturating_add(turns));
+        }
+        if let Some((input, output)) = stream.usage {
+            // Relayed, not observed — the accounting field says which.
+            report.input_tokens += input;
+            report.output_tokens += output;
+            report.token_accounting = TokenAccounting::AgentReported;
+        }
         if let Some((sent, received)) =
             (cfg.spec.name == aider::NAME).then(|| aider::parse_tokens(&transcript)).flatten()
         {
@@ -600,15 +623,9 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
 /// Claude's transcript may mention its login/session location; the tail is
 /// capped so evidence size is independent of agent verbosity.
 fn diagnostic_excerpt(transcript: &str) -> Option<String> {
-    let mut text = transcript.trim().to_string();
+    let mut text = redact_home(transcript.trim());
     if text.is_empty() {
         return None;
-    }
-    if let Ok(home) = home_dir() {
-        let home = home.to_string_lossy();
-        if !home.is_empty() {
-            text = text.replace(home.as_ref(), "<home>");
-        }
     }
     const LIMIT: usize = 2000;
     if text.len() > LIMIT {
@@ -620,6 +637,34 @@ fn diagnostic_excerpt(transcript: &str) -> Option<String> {
         text = format!("…{}", &text[start..]);
     }
     Some(text.replace('\n', "\\n"))
+}
+
+/// The operator's home path replaced with `<home>`: a wrapped CLI's output
+/// may mention its login/session location, and that must not land in an
+/// evidence bundle that is meant to be shared.
+fn redact_home(text: &str) -> String {
+    match home_dir() {
+        Ok(home) if !home.as_os_str().is_empty() => {
+            text.replace(home.to_string_lossy().as_ref(), "<home>")
+        }
+        _ => text.to_string(),
+    }
+}
+
+/// Longest final text the bundle keeps, in characters. Enough for "I did the
+/// in-scope edit and not the other one, because …"; not a transcript.
+const FINAL_TEXT_LIMIT: usize = 600;
+
+/// The agent's final text as the bundle records it: home-redacted like
+/// `diagnostic_excerpt`, capped at [`FINAL_TEXT_LIMIT`] chars (head kept —
+/// the claim of what was done comes first, the caveats follow it).
+fn bounded_final_text(text: &str) -> String {
+    let text = redact_home(text.trim());
+    let mut kept: String = text.chars().take(FINAL_TEXT_LIMIT).collect();
+    if text.chars().count() > FINAL_TEXT_LIMIT {
+        kept.push('…');
+    }
+    kept
 }
 
 /// The message handed to the agent. The scope contract is stated in the prompt —
@@ -805,6 +850,86 @@ mod tests {
         assert!(report.agent_terminal.as_deref().unwrap_or_default().contains("exited 1"));
         assert!(report.blockers.iter().all(|b| !b.contains("agent 'stub' exited")));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Issue #38: a Claude tool result carrying the sandbox's EPERM must reach
+    /// `scope_refusals`, and the agent's final text must reach the bundle —
+    /// exercised through the real loop with a stub that replays the stream.
+    #[test]
+    fn a_stream_json_tool_result_refusal_is_recorded_with_the_agents_final_text() {
+        let dir = std::env::temp_dir().join(format!("orvena-stream-json-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let root = dir.canonicalize().unwrap();
+        let refused = root.join("apps/x/y.go.tmp.123");
+        let stream = format!(
+            "{}\n{}\n{}\n{}\n",
+            r#"{"type":"system","subtype":"init","session_id":"s","tools":["Write"]}"#,
+            serde_json::json!({"type":"assistant","message":{"role":"assistant","content":[
+                {"type":"text","text":"Writing the file."},
+                {"type":"tool_use","id":"t1","name":"Write","input":{}}]}}),
+            serde_json::json!({"type":"user","message":{"role":"user","content":[
+                {"type":"tool_result","tool_use_id":"t1","is_error":true,
+                 "content":format!("EPERM: operation not permitted, open '{}'", refused.display())}]}}),
+            serde_json::json!({"type":"result","subtype":"success","is_error":false,"num_turns":3,
+                "result":"I could not write apps/x/y.go: the sandbox refused it. Nothing was changed.",
+                "usage":{"input_tokens":5,"output_tokens":7}}),
+        );
+        std::fs::write(root.join("stream.jsonl"), stream).unwrap();
+        let spec = AdapterSpec {
+            name: "stub".into(),
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), "cat stream.jsonl".into()],
+            env: vec![],
+            version_args: vec![],
+            config_files: vec![],
+            state_writable: vec![],
+        };
+        let sandbox = Sandbox::disabled();
+        let report = run(
+            AdapterRun {
+                spec: &spec,
+                workdir: &root,
+                instruction: "ignored",
+                writes: &[],
+                gates: &[],
+                gate_sandbox: &sandbox,
+                max_steps: 1,
+                timeout: Duration::from_secs(10),
+            },
+            &sandbox,
+        )
+        .unwrap();
+        assert_eq!(report.scope_refusals, vec!["apps/x/y.go.tmp.123".to_string()]);
+        assert!(
+            report.blockers.iter().any(|b| b.starts_with("agent write refused: EPERM")),
+            "{:?}",
+            report.blockers
+        );
+        assert_eq!(
+            report.agent_final_text.as_deref(),
+            Some("I could not write apps/x/y.go: the sandbox refused it. Nothing was changed.")
+        );
+        assert_eq!(report.agent_turns, Some(3));
+        assert_eq!((report.input_tokens, report.output_tokens), (5, 7));
+        assert_eq!(report.token_accounting, TokenAccounting::AgentReported);
+        // Not judged: the ungoverned exit-0 claim stands exactly as before.
+        assert!(report.completed);
+        assert_eq!(report.exit, ExitReason::ClaimedDone);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_final_text_is_bounded_and_home_redacted() {
+        let long = "y".repeat(FINAL_TEXT_LIMIT + 50);
+        let kept = bounded_final_text(&long);
+        assert_eq!(kept.chars().count(), FINAL_TEXT_LIMIT + 1, "capped plus an ellipsis");
+        assert!(kept.ends_with('…'));
+        assert_eq!(bounded_final_text("  short  "), "short");
+        if let Ok(home) = home_dir() {
+            let said = format!("wrote {}/.claude/x", home.display());
+            assert_eq!(bounded_final_text(&said), "wrote <home>/.claude/x");
+        }
     }
 
     #[test]
