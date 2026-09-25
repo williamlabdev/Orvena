@@ -16,9 +16,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `inherited_agent_config: Vec<String>` (workdir-relative paths that existed
   at run start), populated from a new `AdapterSpec::config_probe` list — the
   `claude` profile probes `.claude/settings.json`,
-  `.claude/settings.local.json`, `CLAUDE.md`, and `.claude/CLAUDE.md`; Codex
-  probes nothing (confirmed it does not read `AGENTS.md` anywhere in this
-  adapter). `orvena run` prints `inherited config: …` when the list is
+  `.claude/settings.local.json`, `CLAUDE.md`, and `.claude/CLAUDE.md`; the
+  `codex` profile probes `AGENTS.md` and `.codex/AGENTS.md`, which the Codex
+  CLI reads on its own. `orvena run` prints `inherited config: …` when the list is
   non-empty. Additive; documented in `schemas/evidence.v1.json`.
 - **Version/CHANGELOG consistency test** — `cargo test` now fails when
   `workspace.package.version` does not match the newest released entry in
