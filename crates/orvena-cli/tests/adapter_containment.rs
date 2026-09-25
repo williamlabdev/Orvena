@@ -59,6 +59,7 @@ fn stub_agent(dir: &Path) -> AdapterSpec {
         version_args: vec![],
         config_files: vec![],
         state_writable: vec![],
+        state_writable_patterns: vec![],
     }
 }
 
@@ -97,6 +98,7 @@ fn enforcement_available(root: &Path) -> bool {
         network: NetworkPolicy::Allow,
         filesystem: FsPolicy::Strict { writable: vec![] },
         extra_writable: vec![],
+        extra_writable_patterns: vec![],
         on_unavailable: OnUnavailable::FailClosed,
         backend: SandboxBackend::Seatbelt,
     })
@@ -392,6 +394,7 @@ async fn a_missing_agent_binary_fails_loudly_rather_than_scoring_a_zero() {
         version_args: vec![],
         config_files: vec![],
         state_writable: vec![],
+        state_writable_patterns: vec![],
     }));
     let provider = ProviderSelection {
         kind: "ollama".into(),

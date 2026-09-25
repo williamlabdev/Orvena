@@ -72,6 +72,7 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
         version_args: vec!["--version".into()],
         config_files: vec![],
         state_writable: vec![],
+        state_writable_patterns: vec![],
     })
 }
 

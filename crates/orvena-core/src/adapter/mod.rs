@@ -124,6 +124,16 @@ pub struct AdapterSpec {
     /// measures a login screen.
     #[serde(default)]
     pub state_writable: Vec<PathBuf>,
+    /// Regex patterns (POSIX-ERE source, matched against the full path) for
+    /// agent state whose exact path cannot be declared ahead of time — e.g.
+    /// Claude Code's per-session Bash cwd-tracking file
+    /// (`/tmp/claude-<random-hex>-cwd`, issue #40). Same spoken-widening
+    /// contract as [`AdapterSpec::state_writable`], carried as
+    /// [`crate::exec::sandbox::SandboxPolicy::extra_writable_patterns`] —
+    /// see that field for which backends actually enforce it. Empty for
+    /// profiles with no such state.
+    #[serde(default)]
+    pub state_writable_patterns: Vec<String>,
 }
 
 /// The operator's home directory, for profiles that must grant the agent's
@@ -305,6 +315,10 @@ pub fn sandbox_policy(
             network: NetworkPolicy::Allow,
             filesystem: FsPolicy::Strict { writable },
             extra_writable: extras,
+            // Callers that need pattern-matched writes (e.g. `state_writable_patterns`
+            // — see issue #40) set this on the returned policy directly, so this
+            // constructor's signature does not have to grow for a macOS-only need.
+            extra_writable_patterns: Vec::new(),
             on_unavailable: if tier_enforces {
                 OnUnavailable::FailClosed
             } else {
@@ -334,6 +348,7 @@ pub fn baseline_sandbox_policy(workdir: &Path, extra_writable: Vec<PathBuf>) -> 
         network: NetworkPolicy::Allow,
         filesystem: FsPolicy::RootWrite,
         extra_writable: extras,
+        extra_writable_patterns: Vec::new(),
         on_unavailable: OnUnavailable::FailClosed,
         backend: SandboxBackend::Seatbelt,
     }
@@ -822,6 +837,7 @@ mod tests {
             version_args: vec![],
             config_files: vec![],
             state_writable: vec![],
+            state_writable_patterns: vec![],
         };
         let gate = Gate {
             name: "done".into(),
@@ -884,6 +900,7 @@ mod tests {
             version_args: vec![],
             config_files: vec![],
             state_writable: vec![],
+            state_writable_patterns: vec![],
         };
         let sandbox = Sandbox::disabled();
         let report = run(
@@ -949,6 +966,7 @@ mod tests {
             version_args: vec!["--version".into()],
             config_files: vec![],
             state_writable: vec![],
+            state_writable_patterns: vec![],
         }
     }
 

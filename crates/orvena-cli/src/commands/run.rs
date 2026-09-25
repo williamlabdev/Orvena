@@ -121,12 +121,13 @@ fn run_wrapped_external(
 ) -> Result<orvena_core::RunReport> {
     println!("agent: {} (wrapped by Orvena; invocation: {invocation})", adapter::identity(&spec));
 
-    let (policy, mut widenings) = adapter::sandbox_policy(
+    let (mut policy, mut widenings) = adapter::sandbox_policy(
         root,
         write,
         config.agent.tier.enforces(),
         spec.state_writable.clone(),
     );
+    policy.extra_writable_patterns = spec.state_writable_patterns.clone();
     for path in &spec.state_writable {
         widenings.push(format!(
             "sandbox widened: agent state path '{}' is writable — {} login/session \
@@ -135,12 +136,20 @@ fn run_wrapped_external(
             spec.name,
         ));
     }
+    for pattern in &spec.state_writable_patterns {
+        widenings.push(format!(
+            "sandbox widened: agent state path pattern '{}' is writable — {} login/session \
+             state requires it; containment stays scoped to the project tree",
+            pattern, spec.name,
+        ));
+    }
     let sandbox = Sandbox::for_policy(policy);
     // Gates are harness measurement, not agent actions. Use the same
     // root-bounded baseline policy as external benchmark runs so a
     // build-based gate can create its own artifacts.
-    let gate_sandbox =
-        Sandbox::for_policy(adapter::baseline_sandbox_policy(root, spec.state_writable.clone()));
+    let mut gate_policy = adapter::baseline_sandbox_policy(root, spec.state_writable.clone());
+    gate_policy.extra_writable_patterns = spec.state_writable_patterns.clone();
+    let gate_sandbox = Sandbox::for_policy(gate_policy);
     let gates = config.gates.gates.clone();
     let mut report = adapter::run(
         AdapterRun {

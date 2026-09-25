@@ -96,6 +96,19 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
             home.join("Library/Caches/claude-cli-nodejs"),
             claude_session_temp_dir(),
         ],
+        // The Bash tool tracks its subprocess cwd in a second, unrelated temp
+        // file — `/tmp/claude-<random-hex>-cwd` — outside every directory
+        // above (smoke run, issue #40: `scope_refusals: ["/tmp/claude-66f6-cwd"]`).
+        // The hex suffix is randomized per session, so no literal path can be
+        // granted ahead of time; these patterns match the shape instead. Both
+        // spellings are listed for the same reason `claude_session_temp_dir`
+        // already uses the `/private/tmp` one: macOS resolves the `/tmp`
+        // symlink to `/private/tmp`, and which spelling reaches the sandbox
+        // check is not worth relying on.
+        state_writable_patterns: vec![
+            r"^/tmp/claude-[0-9a-f]+-cwd$".to_string(),
+            r"^/private/tmp/claude-[0-9a-f]+-cwd$".to_string(),
+        ],
     })
 }
 
@@ -186,6 +199,19 @@ mod tests {
         assert!(s.state_writable[1].ends_with(".claude.json"));
         assert!(s.state_writable[2].ends_with("Library/Caches/claude-cli-nodejs"));
         assert!(s.state_writable[3].to_string_lossy().contains("/private/tmp/claude-"));
+    }
+
+    /// Issue #40: the Bash cwd-tracking file's hex suffix is randomized per
+    /// session, so it can only be granted as a pattern, not a literal path —
+    /// and both the `/tmp` and `/private/tmp` spellings must be covered.
+    #[test]
+    fn the_bash_cwd_file_is_granted_as_a_pattern_not_a_literal() {
+        let s = spec(&sel("anthropic", "claude-opus-4-8")).unwrap();
+        assert_eq!(s.state_writable_patterns.len(), 2);
+        assert!(s.state_writable_patterns.iter().any(|p| p.contains("^/tmp/claude-")));
+        assert!(s.state_writable_patterns.iter().any(|p| p.contains("^/private/tmp/claude-")));
+        let re = regex::Regex::new(&s.state_writable_patterns[0]).unwrap();
+        assert!(re.is_match("/tmp/claude-66f6-cwd"), "must match the observed refusal path");
     }
 
     #[test]

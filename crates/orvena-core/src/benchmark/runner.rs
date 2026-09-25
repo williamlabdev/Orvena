@@ -311,7 +311,7 @@ fn run_external_task(
     // other honest limit. See `AdapterSpec::state_writable`.
     extra_writable.extend(spec.state_writable.iter().cloned());
 
-    let (policy, mut widenings) = match mode {
+    let (mut policy, mut widenings) = match mode {
         GovernanceMode::Off => {
             (adapter::baseline_sandbox_policy(workdir, extra_writable.clone()), vec![])
         }
@@ -322,12 +322,23 @@ fn run_external_task(
             adapter::sandbox_policy(workdir, &enforcement_writes, true, extra_writable.clone())
         }
     };
+    // See `AdapterSpec::state_writable_patterns` (issue #40) — agent state that
+    // cannot be pinned to a literal path (a per-session random suffix).
+    policy.extra_writable_patterns = spec.state_writable_patterns.clone();
     for p in &spec.state_writable {
         widenings.push(format!(
             "sandbox widened: agent state path '{}' is writable — the agent's login/session \
              store lives there and the agent cannot run without it; containment stays scoped \
              to the project tree the oracle judges",
             p.display()
+        ));
+    }
+    for p in &spec.state_writable_patterns {
+        widenings.push(format!(
+            "sandbox widened: agent state path pattern '{}' is writable — the agent's login/session \
+             store lives there and the agent cannot run without it; containment stays scoped \
+             to the project tree the oracle judges",
+            p
         ));
     }
     let sandbox = Sandbox::for_policy(policy);
@@ -339,7 +350,9 @@ fn run_external_task(
     // `AdapterRun::gate_sandbox`.
     let mut gate_extra = extra_writable;
     gate_extra.extend(toolchain_extra_writable());
-    let gate_sandbox = Sandbox::for_policy(adapter::baseline_sandbox_policy(workdir, gate_extra));
+    let mut gate_policy = adapter::baseline_sandbox_policy(workdir, gate_extra);
+    gate_policy.extra_writable_patterns = spec.state_writable_patterns.clone();
+    let gate_sandbox = Sandbox::for_policy(gate_policy);
     let gates = match mode {
         GovernanceMode::Off => vec![],
         _ => vec![verify_gate(task)],

@@ -73,6 +73,19 @@ pub struct SandboxPolicy {
     pub filesystem: FsPolicy,
     /// Always-writable extras (e.g. system temp).
     pub extra_writable: Vec<PathBuf>,
+    /// Extra writable paths expressed as **regex patterns** rather than literal
+    /// directories, for filenames whose exact path cannot be known ahead of
+    /// time — e.g. Claude Code's per-session Bash cwd-tracking file
+    /// (`/tmp/claude-<random-hex>-cwd`). Patterns are POSIX-ERE source strings
+    /// matched against the full path (no implicit anchoring — write `^...$`).
+    ///
+    /// Only the macOS backend honors this today: SBPL has a native `regex`
+    /// path predicate ([`super::sandbox_macos`]), while Linux confinement
+    /// (Landlock) anchors on directory file descriptors and has no equivalent
+    /// wildcard primitive. A pattern here is silently unenforced on Linux —
+    /// narrower than a literal grant would be, never broader, so this cannot
+    /// turn into a silent widening.
+    pub extra_writable_patterns: Vec<String>,
     pub on_unavailable: OnUnavailable,
     pub backend: SandboxBackend,
 }
@@ -315,6 +328,7 @@ mod tests {
             network: NetworkPolicy::Deny,
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![PathBuf::from("/tmp")],
+            extra_writable_patterns: vec![],
             on_unavailable,
             backend: SandboxBackend::Seatbelt,
         }

@@ -211,6 +211,7 @@ mod tests {
             network: NetworkPolicy::Deny,
             filesystem: super::super::sandbox::FsPolicy::RootWrite,
             extra_writable: vec![PathBuf::from("/tmp")],
+            extra_writable_patterns: vec![],
             on_unavailable: OnUnavailable::FailClosed,
             backend: super::super::sandbox::SandboxBackend::Seatbelt,
         };
