@@ -18,6 +18,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Claude profile: the Bash cwd-tracking file was refused by the sandbox**
+  (#40). Claude Code's Bash tool writes its own subprocess-cwd bookkeeping
+  to `/tmp/claude-<random-hex>-cwd`, outside every state path the `claude`
+  profile already grants — a smoke run recorded
+  `scope_refusals: ["/tmp/claude-66f6-cwd"]`. The hex suffix is randomized
+  per session, so no literal path can be declared ahead of time. macOS's
+  SBPL sandbox profile has a native `regex` path predicate alongside
+  `subpath`/`literal`, so `AdapterSpec` gained `state_writable_patterns`
+  (regex sources) and `SandboxPolicy` gained `extra_writable_patterns`,
+  which the macOS backend renders as `(allow file-write* (regex #"…"))`.
+  The `claude` profile lists both the `/tmp` and `/private/tmp` spellings,
+  matching the twin already used for its session temp directory. Linux
+  confinement (Landlock) has no equivalent wildcard primitive and does not
+  consume the new field yet — narrower than a literal grant, never broader.
 - **`orvena run` handed the adapter a relative project root (`.`)**, so the
   agent's and the gate's `TMPDIR`/`XDG_CACHE_HOME` were relative paths. Any
   toolchain that changes directory resolved them against the wrong cwd — Go's

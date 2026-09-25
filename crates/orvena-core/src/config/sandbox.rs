@@ -133,6 +133,7 @@ impl SandboxConfig {
             network,
             filesystem,
             extra_writable,
+            extra_writable_patterns: vec![],
             on_unavailable,
             backend: self.backend.into(),
         })

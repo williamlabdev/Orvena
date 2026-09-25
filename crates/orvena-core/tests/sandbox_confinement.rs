@@ -62,6 +62,7 @@ impl Fixture {
             network,
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![],
+            extra_writable_patterns: vec![],
             on_unavailable: OnUnavailable::FailClosed,
             backend: SandboxBackend::Seatbelt,
         }

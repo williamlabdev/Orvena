@@ -114,6 +114,7 @@ fn build(provider: &ProviderSelection, name: &str, nested: bool) -> Result<Adapt
         version_args: vec!["--version".into()],
         config_files: vec![],
         state_writable,
+        state_writable_patterns: vec![],
     })
 }
 

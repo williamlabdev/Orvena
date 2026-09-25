@@ -54,6 +54,13 @@ pub fn build_profile(policy: &SandboxPolicy) -> String {
         }
         p.push_str(&format!("(allow file-write* (subpath {}))\n", sbpl_string(&s)));
     }
+    // Pattern-matched writes (issue #40): a literal `subpath`/`literal` cannot
+    // express a path whose middle segment is only known at agent-runtime (a
+    // random per-session suffix). SBPL's `regex` predicate can, so these ride
+    // alongside the literal allows above rather than widening any of them.
+    for pat in &policy.extra_writable_patterns {
+        p.push_str(&format!("(allow file-write* (regex {}))\n", sbpl_regex_string(pat)));
+    }
     if policy.network == NetworkPolicy::Deny {
         p.push_str("(deny network*)\n");
     }
@@ -65,6 +72,25 @@ pub fn build_profile(policy: &SandboxPolicy) -> String {
 fn sbpl_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');
+    for c in s.chars() {
+        if c == '\\' || c == '"' {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out.push('"');
+    out
+}
+
+/// Quote a POSIX-ERE source string as an SBPL `regex` literal: `#"pattern"`.
+/// Same escaping as [`sbpl_string`] — the payload is still a double-quoted
+/// string, just parsed as a regex by the sandbox rather than compared
+/// literally — so `\` and `"` in the pattern source need the same backslash
+/// escaping and everything else (including regex metacharacters) passes
+/// through untouched.
+fn sbpl_regex_string(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 3);
+    out.push_str("#\"");
     for c in s.chars() {
         if c == '\\' || c == '"' {
             out.push('\\');
@@ -87,6 +113,7 @@ mod tests {
             network,
             filesystem: FsPolicy::RootWrite,
             extra_writable: vec![PathBuf::from("/private/tmp")],
+            extra_writable_patterns: vec![],
             on_unavailable: OnUnavailable::FailClosed,
             backend: SandboxBackend::Seatbelt,
         }
@@ -104,6 +131,30 @@ mod tests {
         let deny_at = prof.find("(deny file-write* (subpath \"/\"))").unwrap();
         let allow_at = prof.find("(allow file-write* (subpath \"/tmp/orvena-root\"))").unwrap();
         assert!(deny_at < allow_at, "deny-root must come before allow-root");
+    }
+
+    /// Issue #40: Claude Code's Bash tool tracks its subprocess cwd in
+    /// `/tmp/claude-<random-hex>-cwd` — a filename whose middle segment
+    /// changes per session, so it cannot be granted as a literal `subpath`.
+    /// The generated profile must carry a `regex` allow for it instead.
+    #[test]
+    fn extra_writable_patterns_become_regex_allows() {
+        let p = SandboxPolicy {
+            extra_writable_patterns: vec![
+                r"^/tmp/claude-[0-9a-f]+-cwd$".to_string(),
+                r"^/private/tmp/claude-[0-9a-f]+-cwd$".to_string(),
+            ],
+            ..policy(NetworkPolicy::Deny)
+        };
+        let prof = build_profile(&p);
+        assert!(
+            prof.contains(r#"(allow file-write* (regex #"^/tmp/claude-[0-9a-f]+-cwd$"))"#),
+            "{prof}"
+        );
+        assert!(
+            prof.contains(r#"(allow file-write* (regex #"^/private/tmp/claude-[0-9a-f]+-cwd$"))"#),
+            "{prof}"
+        );
     }
 
     #[test]
