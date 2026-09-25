@@ -134,6 +134,23 @@ pub struct AdapterSpec {
     /// profiles with no such state.
     #[serde(default)]
     pub state_writable_patterns: Vec<String>,
+    /// Project-relative paths this profile's agent is known to read as its own
+    /// config — e.g. Claude Code's `.claude/settings.json` and `CLAUDE.md`.
+    /// Behavior is unchanged either way: Orvena does not gate, strip, or
+    /// rewrite any of these files, the wrapped agent inherits them exactly as
+    /// a bare invocation of it would. This list only says which paths are
+    /// *worth checking for* — [`crate::adapter::run`] probes each one against
+    /// the workdir at run start and records which exist in
+    /// [`crate::metrics::RunReport::inherited_agent_config`], so a bundle can
+    /// answer "did this run's behavior have project config available to it"
+    /// without the operator having to reconstruct the agent's own doc-lookup
+    /// rules after the fact. Empty for a profile with no confirmed config
+    /// lookup (the native loop never populates this; an external profile
+    /// leaves it empty until its docs or source confirm a specific path — see
+    /// `codex.rs`, which does not reference `AGENTS.md` anywhere and so lists
+    /// none).
+    #[serde(default)]
+    pub config_probe: Vec<String>,
 }
 
 /// The operator's home directory, for profiles that must grant the agent's
@@ -385,6 +402,17 @@ pub fn run(cfg: AdapterRun<'_>, sandbox: &Sandbox) -> Result<RunReport> {
     if let Some(warning) = sandbox.warning() {
         report.blockers.push(warning);
     }
+    // Record which of this profile's own project-config files the agent will
+    // find in the workdir — Orvena does not gate, strip, or rewrite any of
+    // them, so this is observation only (see `AdapterSpec::config_probe`).
+    // Checked at run start, before the agent can create or remove any of them.
+    report.inherited_agent_config = cfg
+        .spec
+        .config_probe
+        .iter()
+        .filter(|rel| cfg.workdir.join(rel).exists())
+        .cloned()
+        .collect();
 
     // The agent's scratch dirs must exist before the sandbox confines it — a
     // confined child cannot create its own writable directory. `TMPDIR` and
@@ -838,6 +866,7 @@ mod tests {
             config_files: vec![],
             state_writable: vec![],
             state_writable_patterns: vec![],
+            config_probe: vec![],
         };
         let gate = Gate {
             name: "done".into(),
@@ -865,6 +894,95 @@ mod tests {
         assert_eq!(report.exit, ExitReason::GatesPassed);
         assert!(report.agent_terminal.as_deref().unwrap_or_default().contains("exited 1"));
         assert!(report.blockers.iter().all(|b| !b.contains("agent 'stub' exited")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Wrapped runs inherit whatever project config the agent finds in the
+    /// workdir; the evidence bundle must record which of a profile's known
+    /// config paths actually existed at run start — present ones only, and
+    /// only the ones the profile names.
+    #[test]
+    fn inherited_agent_config_records_only_the_paths_that_exist() {
+        let dir =
+            std::env::temp_dir().join(format!("orvena-inherited-config-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join(".claude")).unwrap();
+        std::fs::write(dir.join(".claude/settings.json"), "{}").unwrap();
+        std::fs::write(dir.join("CLAUDE.md"), "# notes").unwrap();
+        // `.claude/settings.local.json` and `.claude/CLAUDE.md` are deliberately
+        // absent — the probe must not report paths that are not there.
+        let spec = AdapterSpec {
+            name: "stub".into(),
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), "true".into()],
+            env: vec![],
+            version_args: vec![],
+            config_files: vec![],
+            state_writable: vec![],
+            config_probe: vec![
+                ".claude/settings.json".to_string(),
+                ".claude/settings.local.json".to_string(),
+                "CLAUDE.md".to_string(),
+                ".claude/CLAUDE.md".to_string(),
+            ],
+        };
+        let sandbox = Sandbox::disabled();
+        let report = run(
+            AdapterRun {
+                spec: &spec,
+                workdir: &dir,
+                instruction: "ignored",
+                writes: &[],
+                gates: &[],
+                gate_sandbox: &sandbox,
+                max_steps: 1,
+                timeout: Duration::from_secs(10),
+            },
+            &sandbox,
+        )
+        .unwrap();
+        assert_eq!(
+            report.inherited_agent_config,
+            vec![".claude/settings.json".to_string(), "CLAUDE.md".to_string()]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A profile with an empty `config_probe` (e.g. Codex, which does not
+    /// declare a known project-config path) must never report anything.
+    #[test]
+    fn empty_config_probe_never_populates_inherited_agent_config() {
+        let dir = std::env::temp_dir()
+            .join(format!("orvena-inherited-config-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("CLAUDE.md"), "# notes").unwrap();
+        let spec = AdapterSpec {
+            name: "stub".into(),
+            program: "/bin/sh".into(),
+            args: vec!["-c".into(), "true".into()],
+            env: vec![],
+            version_args: vec![],
+            config_files: vec![],
+            state_writable: vec![],
+            config_probe: vec![],
+        };
+        let sandbox = Sandbox::disabled();
+        let report = run(
+            AdapterRun {
+                spec: &spec,
+                workdir: &dir,
+                instruction: "ignored",
+                writes: &[],
+                gates: &[],
+                gate_sandbox: &sandbox,
+                max_steps: 1,
+                timeout: Duration::from_secs(10),
+            },
+            &sandbox,
+        )
+        .unwrap();
+        assert!(report.inherited_agent_config.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -901,6 +1019,7 @@ mod tests {
             config_files: vec![],
             state_writable: vec![],
             state_writable_patterns: vec![],
+            config_probe: vec![],
         };
         let sandbox = Sandbox::disabled();
         let report = run(
@@ -967,6 +1086,7 @@ mod tests {
             config_files: vec![],
             state_writable: vec![],
             state_writable_patterns: vec![],
+            config_probe: vec![],
         }
     }
 

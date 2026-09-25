@@ -93,6 +93,7 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
         config_files: vec![],
         state_writable: vec![],
         state_writable_patterns: vec![],
+        config_probe: vec![],
     })
 }
 

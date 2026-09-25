@@ -114,6 +114,11 @@
       "minimum": 0,
       "description": "A wrapped agent's own turn count, summed across Orvena's invocations. `tool_calls` on the wrapped leg counts invocations (always 1 for an ungoverned run) and cannot tell an honest two-turn stop from twelve turns burned mid-plan (issue #38). null = not attributable (native loop, or a profile that reports no turns). Additive optional field; absent in bundles written before it existed (read back as null)."
     },
+    "inherited_agent_config": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Workdir-relative paths of this profile's own project-config files (e.g. '.claude/settings.json', 'CLAUDE.md' for the claude profile) that existed in the workdir when this run started. A wrapped agent inherits whatever config it finds there exactly as a bare invocation would — Orvena does not gate, strip, or rewrite any of it; this only records which of the profile's known paths were present, checked once at run start. Empty for the native loop and for any profile with no confirmed config-lookup path. Additive optional field; absent in bundles written before it existed (read back as empty)."
+    },
     "token_accounting": {
       "type": "string",
       "enum": ["observed", "agent_reported", "unavailable"],

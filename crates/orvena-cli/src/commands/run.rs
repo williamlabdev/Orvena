@@ -309,4 +309,7 @@ fn print_report(report: &orvena_core::RunReport) {
             println!("  {line}");
         }
     }
+    if !report.inherited_agent_config.is_empty() {
+        println!("inherited config: {}", report.inherited_agent_config.join(", "));
+    }
 }

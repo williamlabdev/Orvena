@@ -115,6 +115,10 @@ fn build(provider: &ProviderSelection, name: &str, nested: bool) -> Result<Adapt
         config_files: vec![],
         state_writable,
         state_writable_patterns: vec![],
+        // Confirmed by reading this file: Codex is not driven to look for
+        // AGENTS.md anywhere in this adapter, so there is no project-config
+        // path to probe for. Left empty rather than guessed.
+        config_probe: vec![],
     })
 }
 

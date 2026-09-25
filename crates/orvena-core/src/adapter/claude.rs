@@ -109,6 +109,18 @@ pub fn spec(provider: &ProviderSelection) -> Result<AdapterSpec> {
             r"^/tmp/claude-[0-9a-f]+-cwd$".to_string(),
             r"^/private/tmp/claude-[0-9a-f]+-cwd$".to_string(),
         ],
+        // Claude Code reads project-scoped settings and memory from these four
+        // paths (root and `.claude/` copies of both `settings.json` and
+        // `CLAUDE.md`'s memory file), on top of whatever `~/.claude` supplies.
+        // Behavior is unchanged — the CLI inherits them exactly as it would
+        // outside Orvena — this list only drives the evidence probe that
+        // records which of them existed in the workdir at run start.
+        config_probe: vec![
+            ".claude/settings.json".to_string(),
+            ".claude/settings.local.json".to_string(),
+            "CLAUDE.md".to_string(),
+            ".claude/CLAUDE.md".to_string(),
+        ],
     })
 }
 
