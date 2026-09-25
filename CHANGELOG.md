@@ -8,6 +8,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Evidence records which project agent-config files a wrapped agent
+  inherited.** A wrapped run (Codex, Claude Code) inherits the project's own
+  config exactly as a bare invocation would — Orvena still does not gate,
+  strip, or rewrite any of it. What was missing was any record of *which*
+  files were actually there: `RunReport` gains
+  `inherited_agent_config: Vec<String>` (workdir-relative paths that existed
+  at run start), populated from a new `AdapterSpec::config_probe` list — the
+  `claude` profile probes `.claude/settings.json`,
+  `.claude/settings.local.json`, `CLAUDE.md`, and `.claude/CLAUDE.md`; the
+  `codex` profile probes `AGENTS.md` and `.codex/AGENTS.md`, which the Codex
+  CLI reads on its own. `orvena run` prints `inherited config: …` when the list is
+  non-empty. Additive; documented in `schemas/evidence.v1.json`.
 - **Version/CHANGELOG consistency test** — `cargo test` now fails when
   `workspace.package.version` does not match the newest released entry in
   this file, so a tag can no longer be cut against a stale crate version

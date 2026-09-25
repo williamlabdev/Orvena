@@ -60,6 +60,7 @@ fn stub_agent(dir: &Path) -> AdapterSpec {
         config_files: vec![],
         state_writable: vec![],
         state_writable_patterns: vec![],
+        config_probe: vec![],
     }
 }
 
@@ -395,6 +396,7 @@ async fn a_missing_agent_binary_fails_loudly_rather_than_scoring_a_zero() {
         config_files: vec![],
         state_writable: vec![],
         state_writable_patterns: vec![],
+        config_probe: vec![],
     }));
     let provider = ProviderSelection {
         kind: "ollama".into(),

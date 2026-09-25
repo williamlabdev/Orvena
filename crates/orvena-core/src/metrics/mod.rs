@@ -232,6 +232,17 @@ pub struct RunReport {
     /// means PASS.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_contract: Option<ProductCellOutcomeContract>,
+    /// Which of the wrapped agent's own project-config files existed in the
+    /// workdir when this run started (workdir-relative paths, e.g.
+    /// `".claude/settings.json"`). A wrapped agent inherits whatever config it
+    /// finds there — that behavior is unchanged and unenforced by Orvena — but
+    /// the evidence bundle is the only place recording *which* files were
+    /// present so a later "why did it do that" has something to check against.
+    /// Only the paths [`crate::adapter::AdapterSpec::config_probe`] names for
+    /// this profile are checked; a profile with an empty list (or the native
+    /// loop) always reads back empty. Additive — stays v1.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inherited_agent_config: Vec<String>,
 }
 
 /// Eviction telemetry for the native evidence window — see
@@ -358,6 +369,7 @@ impl RunReport {
             window_peak_tokens: None,
             pins: None,
             outcome_contract: None,
+            inherited_agent_config: Vec::new(),
         }
     }
 

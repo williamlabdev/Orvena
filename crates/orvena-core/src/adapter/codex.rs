@@ -115,6 +115,11 @@ fn build(provider: &ProviderSelection, name: &str, nested: bool) -> Result<Adapt
         config_files: vec![],
         state_writable,
         state_writable_patterns: vec![],
+        // The Codex CLI reads AGENTS.md from the project root on every run
+        // (and honours a nested one under .codex/); nothing in the args above
+        // disables that, so a run with either file present inherited project
+        // instructions Orvena did not write.
+        config_probe: vec!["AGENTS.md".into(), ".codex/AGENTS.md".into()],
     })
 }
 
@@ -246,5 +251,13 @@ mod tests {
         let err = spec(&sel("anthropic", "m", None)).unwrap_err();
         assert!(err.to_string().contains("no Codex model mapping"), "{err}");
         assert!(err.to_string().contains("aider"), "an error that names the way out: {err}");
+    }
+
+    #[test]
+    fn the_profile_probes_the_agents_md_files_codex_reads_on_its_own() {
+        // The Codex CLI picks up AGENTS.md from the project root without being
+        // asked; the evidence must be able to say whether one was there.
+        let s = spec(&sel("ollama", "qwen3:14b", None)).unwrap();
+        assert_eq!(s.config_probe, vec!["AGENTS.md", ".codex/AGENTS.md"]);
     }
 }
