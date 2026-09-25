@@ -144,6 +144,25 @@ pub struct RunReport {
     /// budget is not presented as an incomplete task.
     #[serde(default)]
     pub agent_terminal: Option<String>,
+    /// The wrapped agent's own final message, home-redacted and capped (600
+    /// chars). It is the only place a wrapped agent states "I did the
+    /// in-scope edit and skipped the other one" or "the path does not exist,
+    /// I cannot do this" — and the gate cannot see either, so without it a
+    /// half-done task and a finished one are indistinguishable in the bundle
+    /// (issue #38). Evidence only: `completed` stays the gate's verdict, never
+    /// this text's. `None` = native loop, or an agent whose output carried no
+    /// final text (a profile without structured output, a killed process).
+    /// Additive — stays v1.
+    #[serde(default)]
+    pub agent_final_text: Option<String>,
+    /// The wrapped agent's own turn count, summed across Orvena's invocations
+    /// (each re-attempt is a fresh conversation). `tool_calls` on this leg
+    /// counts *invocations* and is 1 for every ungoverned run, so it cannot
+    /// tell "two tool calls then an honest stop" from "twelve turns burned
+    /// mid-plan" — the two #38 data points. `None` = not attributable (native
+    /// loop, a profile that reports no turns). Additive — stays v1.
+    #[serde(default)]
+    pub agent_turns: Option<u32>,
     /// Where the token counts above came from. The native loop *observes* them
     /// (it makes the model calls). A wrapped external agent makes its own calls,
     /// so Orvena can only relay what the agent prints — or nothing at all. A
@@ -326,6 +345,8 @@ impl RunReport {
             provider_error: None,
             agent: None,
             agent_terminal: None,
+            agent_final_text: None,
+            agent_turns: None,
             token_accounting: TokenAccounting::default(),
             max_steps: 0,
             exit: ExitReason::default(),

@@ -285,4 +285,19 @@ fn print_report(report: &orvena_core::RunReport) {
             println!("  - {b}");
         }
     }
+    // Wrapped-agent provenance (issue #38). `agent_terminal` used to reach the
+    // bundle only, so a non-zero agent exit was invisible at the terminal; the
+    // agent's own final text is where a half-done task says it is half done.
+    if let Some(t) = &report.agent_terminal {
+        println!("agent terminal: {t}");
+    }
+    if let Some(n) = report.agent_turns {
+        println!("agent turns:   {n}");
+    }
+    if let Some(said) = &report.agent_final_text {
+        println!("agent said:");
+        for line in said.lines() {
+            println!("  {line}");
+        }
+    }
 }
