@@ -20,6 +20,15 @@
 #                pin a queue's output when it will cross midnight. The derived
 #                path is refused if it already exists — evidence is never
 #                overwritten, whatever the source of the name.
+#     SAMPLING   b1 | none                                    (default b1)
+#                b1 applies the repo's one calibration set (t0.6/p0.95/k20,
+#                scripts/lib/calibration-sampling.sh) so cells are comparable.
+#                none leaves the backend's defaults — the report then says
+#                `sampling: not recorded` and the cell is NOT B1-aligned; say so
+#                wherever the number is published. Required for Anthropic's
+#                5-series models, which reject non-default temperature/top_p/
+#                top_k with a 400; the script refuses b1 on them rather than
+#                fail an hour in.
 #     KEEP_SCRATCH  set to keep the scratch project (and every evidence bundle
 #                   and agent transcript in it) instead of deleting it on exit.
 #                   A run that times out or refuses in a way you cannot explain
@@ -43,6 +52,9 @@
 #     ORVENA_MIN_REQUEST_INTERVAL_MS=6000 \
 #       scripts/bench-differential.sh 3 gemini-2.5-flash
 #
+#   Anthropic 5-series (no sampling — see SAMPLING above):
+#     PROVIDER=anthropic SAMPLING=none scripts/bench-differential.sh 3 claude-sonnet-5-5
+#
 #   Self-hosted OSS server (vLLM, llama.cpp, LM Studio) with no auth:
 #     PROVIDER=openai_compat BASE_URL=http://localhost:8000/v1 \
 #       scripts/bench-differential.sh 3 <model-id>
@@ -65,6 +77,19 @@ PROVIDER="${PROVIDER:-ollama}"
 BASE_URL="${BASE_URL:-}"
 API_KEY_ENV="${API_KEY_ENV:-}"
 AGENT="${AGENT:-native}"
+SAMPLING="${SAMPLING:-b1}"
+case "$SAMPLING" in
+  b1|none) ;;
+  *) echo "SAMPLING must be b1 or none (got '$SAMPLING')" >&2; exit 1 ;;
+esac
+# Anthropic's 5-series returns 400 on any non-default sampling parameter, and
+# the provider forwards the config's sampling block verbatim. Fail at second
+# zero with the fix in the message, not at the first model call.
+if [ "$SAMPLING" = "b1" ] && [ "$PROVIDER" = "anthropic" ] && printf '%s' "$MODEL" | grep -qE '^claude-[a-z]+-5(-[0-9]+)?$'; then
+  echo "SAMPLING=b1 is not accepted by $MODEL (Anthropic 5-series rejects non-default sampling)." >&2
+  echo "Re-run with SAMPLING=none, and publish the cell as not B1-aligned." >&2
+  exit 1
+fi
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TASKS="$REPO/benchmarks/temptation.yaml"
@@ -140,8 +165,14 @@ fi
 
 # One set of sampling for every model (B1, 0806) — without it the backend
 # decides and the two calibration cells are not comparable. slice-029.
-. "$REPO/scripts/lib/calibration-sampling.sh"
-apply_calibration_sampling .orvena/orvena.yaml "$BIN"
+# SAMPLING=none is the documented exception (backends that reject it); the
+# report header records `sampling: not recorded` for such a run.
+if [ "$SAMPLING" = "b1" ]; then
+  . "$REPO/scripts/lib/calibration-sampling.sh"
+  apply_calibration_sampling .orvena/orvena.yaml "$BIN"
+else
+  echo "sampling: none — backend defaults; this cell is NOT B1-aligned"
+fi
 
 # The key lives in the repo's .env (git-ignored); the scratch project has none.
 [ -f "$REPO/.env" ] && cp "$REPO/.env" .env
@@ -155,7 +186,7 @@ else
 fi
 
 echo
-echo "== differential: ${AGENT} agent / ${PROVIDER} / ${MODEL} × ${REPEAT} runs × (off, engineering) =="
+echo "== differential: ${AGENT} agent / ${PROVIDER} / ${MODEL} × ${REPEAT} runs × (off, engineering) / sampling=${SAMPLING} =="
 if [ -n "${ORVENA_MIN_REQUEST_INTERVAL_MS:-}" ]; then
   echo "   (pacing: ${ORVENA_MIN_REQUEST_INTERVAL_MS}ms minimum between requests)"
 fi
