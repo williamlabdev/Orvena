@@ -40,9 +40,12 @@ run it explicitly, once per provider, and confirm each passes.
 ORVENA_PARITY_PROVIDER=ollama ORVENA_PARITY_MODEL=qwen3:14b \
   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 
-# Anthropic (hosted; needs a key in the environment).
+# Anthropic (hosted; needs a key in the environment). Note: the 5.5-series
+# models reject non-default temperature/top_p/top_k with a 400, and the
+# provider forwards whatever `sampling` the config sets — so run them with
+# no sampling block (or pick a 4.6-series model if you need B1 sampling).
 ANTHROPIC_API_KEY=sk-... \
-  ORVENA_PARITY_PROVIDER=anthropic ORVENA_PARITY_MODEL=claude-opus-4-8 \
+  ORVENA_PARITY_PROVIDER=anthropic ORVENA_PARITY_MODEL=claude-sonnet-5-5 \
   cargo test -p orvena-core --test provider_parity -- --ignored --nocapture
 
 # Gemini (hosted) via its OpenAI-compatible endpoint — the `openai_compat` kind
@@ -114,15 +117,16 @@ ORVENA_PARITY_PROVIDER=openai_compat \
 | **Ollama** (local model) | ✅ demonstrated · re-verified 2026-07-30 | golden task with `qwen3:14b` completes: gate `hello-exists` passes, real token usage reported (`steps=1`, 373 tok), evidence bundle round-trips |
 | **openai_compat** (generic, checked via Ollama's OpenAI-compat endpoint) | ✅ demonstrated 2026-07-31 | `qwen3:14b` via `http://localhost:11434/v1`, no `api_key_env` set (unauthenticated), passes the same contract (`steps=1`, gate `hello-exists` passes). **Committed artifact:** [`docs/parity-results/2026-07-31-openai_compat-qwen3-14b.json`](parity-results/2026-07-31-openai_compat-qwen3-14b.json) — the bundle names its own `provider`/`model`/`endpoint` |
 | **Gemini** (hosted, OpenAI-compat) | ✅ demonstrated · re-verified 2026-07-30 | `gemini-2.5-flash` via Google's OpenAI-compatible endpoint passes the same contract (`steps=1`, 281 tok). Run on the pre-`openai_compat` route — kind `openai` with the Gemini key in `OPENAI_API_KEY`. The recipe above now uses `openai_compat` + `api_key_env`; that cleaner path has **not** been re-run, so this row records what was actually executed |
-| **Anthropic** (hosted)   | ◻ **never run** | no `ANTHROPIC_API_KEY` has been available on a bench machine to date. The code path exists and is expected to work — but nobody has executed it, and this table will not imply otherwise |
+| **Anthropic** (hosted)   | ✅ demonstrated 2026-10-09 | `claude-sonnet-5-5` passes the same contract (`steps=1`, 914 tok, gate `hello-exists` passes), run with **no sampling block** (the 5.5 series rejects non-default sampling). The same day's temptation differential on this cell is in [`benchmark-results.md`](benchmark-results.md#the-first-hosted-frontier-cell-anthropic-sonnet-55-2026-10-09). No parity bundle was committed for this leg; the benchmark report JSON is the committed artifact |
 | **OpenAI** (hosted, native endpoint) | ◻ never run | exercised only via the base-URL override above (Gemini), never against OpenAI's own endpoint |
 | **OpenRouter** (hosted) | ◻ never run | — |
 | **openai_compat against a real self-hosted OSS server** (vLLM, llama.cpp server, LM Studio, ...) | ◻ never run | only checked so far against Ollama's own OpenAI-compat endpoint (a real server, but not a genuinely different backend from the `ollama` leg above) |
 
 **Cross-provider consistency is demonstrated:** the harness passes the same
-behavioral contract on **two genuinely distinct backends** — one local (Ollama)
-and one hosted (Gemini) — which satisfies the MVP-exit consistency check
-(Gemini stands in for Anthropic). Both were re-verified 2026-07-30.
+behavioral contract on **three genuinely distinct backends** — one local (Ollama)
+and two hosted (Gemini, Anthropic) — which satisfies the MVP-exit consistency
+check. Ollama and Gemini were re-verified 2026-07-30; Anthropic was first run
+2026-10-09 (Gemini no longer has to stand in for it).
 
 The `openai_compat` leg (2026-07-31) is deliberately **not** counted as a third
 provider: it drove the same Ollama daemon serving the same `qwen3:14b`, just
