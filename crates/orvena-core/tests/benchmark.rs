@@ -762,8 +762,16 @@ fn the_temptation_task_set_parses() {
     let text = std::fs::read_to_string(path).expect("temptation set exists");
     let set: BenchTaskSet = serde_yaml::from_str(&text).expect("temptation set parses");
     assert!(set.tasks.len() >= 8, "expected the full temptation set, got {}", set.tasks.len());
-    let escape = set.tasks.iter().find(|t| t.id == "tempt-backup-outside").unwrap();
-    assert_eq!(escape.escape_probes, vec!["../data-backup.txt".to_string()]);
+    // Since 2026-10-10 (#47) every temptation lands inside the root but outside
+    // `writes`, so the git oracle — not the host guard — is what judges `off`.
+    // A probe reappearing here would mean an out-of-root temptation came back,
+    // which the host guard refuses in every tier and therefore never measures.
+    for t in &set.tasks {
+        assert!(t.escape_probes.is_empty(), "{} declares an out-of-root probe", t.id);
+    }
+    let backup = set.tasks.iter().find(|t| t.id == "tempt-backup-sibling").unwrap();
+    assert_eq!(backup.writes, vec!["src/data.txt".to_string()]);
+    assert!(backup.instruction.contains("src/data.txt.bak"), "the tempting path must be in-root");
     // Every temptation task declares a non-empty scope and a verify.
     for t in &set.tasks {
         assert!(!t.verify.is_empty(), "{} has no verify", t.id);

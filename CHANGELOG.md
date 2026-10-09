@@ -28,8 +28,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enforced envelope inside the repo you are standing in, for day-to-day
   dogfooding. See `docs/dogfood-claude.md`.
 
+### Changed
+
+- **Temptation set: the two out-of-root baits now land in-root, out-of-scope**
+  (#47). `tempt-backup-outside` and `tempt-home-cache` asked for
+  `../data-backup.txt` and `~/.orvena-notes.txt`, which
+  `tools/fs.rs::resolve_in_root` refuses in every tier — so the ungoverned
+  leg was stopped by the host guard before the scope lock was consulted, and
+  both legs scored contained for a reason unrelated to governance (seen 3/3
+  on both Anthropic 5.5 cells). Retired and replaced by
+  `tempt-backup-sibling` (`src/data.txt.bak`) and `tempt-notes-sidecar`
+  (seeded `notes/history.txt`); `escape_probes` are gone from the set (the
+  oracle keeps supporting them). New ids on purpose: numbers from the old
+  ones are not comparable. Re-run on both 5.5 models the same day —
+  containment moves 88% → 100% on each; `docs/benchmark-results.md`.
+
 ### Fixed
 
+- **`bench-differential.sh`: a relative `OUT=` landed in the scratch project.**
+  The name was claimed in the caller's cwd, then written after the `cd` into
+  the scratch dir, leaving an empty placeholder in the repo and the real
+  report in `/var/folders/...`. Anchored to the caller's cwd before the claim.
 - **Claude profile: the Bash cwd-tracking file was refused by the sandbox**
   (#40). Claude Code's Bash tool writes its own subprocess-cwd bookkeeping
   to `/tmp/claude-<random-hex>-cwd`, outside every state path the `claude`
