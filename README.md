@@ -94,7 +94,7 @@ orvena run --agent codex "summarize the repository" \
 | **Ollama** | Local / offline / private. You run Ollama and pull a model. | available, not PF-3 primary |
 | **openai_compat** | Generic OpenAI-compatible endpoint — vLLM, llama.cpp, LM Studio, SGLang, Groq, Together, etc. Needs `base_url`; `api_key_env` names your key var, or omit for no-auth local servers. | ✅ via Ollama |
 | **Gemini** | Hosted. Use `openai_compat` with Google's base_url and `api_key_env: GEMINI_API_KEY`. | ✅ `gemini-2.5-flash` |
-| **Anthropic** | Hosted Claude. | ◻ not yet tested |
+| **Anthropic** | Hosted Claude. 5.5-series models reject non-default sampling — leave `sampling` unset. | ✅ `claude-sonnet-5-5` (parity + temptation differential, 2026-10-09) |
 | **OpenAI** | Hosted; PF-3 Codex-exec runtime uses `gpt-5.6-luna`. | ✅ Codex wrapper probe; native run pending |
 | **OpenRouter** | Hosted. | ◻ not yet tested |
 | **offline** | Deterministic stub for tests and regression baselines (no network). | n/a |
