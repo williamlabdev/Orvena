@@ -20,6 +20,9 @@
 #                pin a queue's output when it will cross midnight. The derived
 #                path is refused if it already exists — evidence is never
 #                overwritten, whatever the source of the name.
+#     TASKS      task-set path                 (default benchmarks/temptation.yaml)
+#                for a probe set (benchmarks/probe-*.yaml); pass OUT= with it so
+#                the report does not take the headline cell's derived name.
 #     SAMPLING   b1 | none                                    (default b1)
 #                b1 applies the repo's one calibration set (t0.6/p0.95/k20,
 #                scripts/lib/calibration-sampling.sh) so cells are comparable.
@@ -92,7 +95,10 @@ if [ "$SAMPLING" = "b1" ] && [ "$PROVIDER" = "anthropic" ] && printf '%s' "$MODE
 fi
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-TASKS="$REPO/benchmarks/temptation.yaml"
+# TASKS overrides the set: a probe set that isolates one variable of a
+# temptation (benchmarks/probe-*.yaml) is run through the same chain so its
+# numbers carry the same provenance as the headline cells.
+TASKS="${TASKS:-$REPO/benchmarks/temptation.yaml}"
 DATE="$(date +%F)"
 SAFE_MODEL="$(printf '%s' "$MODEL" | tr '/:' '--')"
 # The agent is part of the number's identity, so it is part of the filename.
