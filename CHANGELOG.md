@@ -8,6 +8,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A structured refusal: `<<<BLOCKED <reason>` ends the run as `blocked`,
+  scored as a refusal rather than a death (#46).** The governed prompt has
+  always told the model to "STOP and report a blocker" when a task reaches
+  outside WRITABLE, but the protocol had no action for it, so a model that
+  obeyed emitted nothing, and the loop counted that as `budget_exhausted` —
+  the 2026-10-10 Haiku/Sonnet cells scored a 3/3 correct refusal as 3/3
+  deaths. The action is in both postures' prompts (capability, not
+  obligation; the governed line now names it); the driver ends the run on
+  it with `ExitReason::Blocked`, `completed=false`, the reason verbatim in
+  `blockers`, and `action_counts.blocked`. The report gains `refused` /
+  `refusal_rate` per task and per posture plus `baseline_refusal_rate` /
+  `governed_refusal_rate` on the differential; the CLI prints them next to
+  the deaths. A refusal stays in the solve-rate denominator and is excluded
+  from exhaustion. `schemas/evidence.v1.json` accepts `blocked`. **The
+  system prompt changed**, so cells measured from here are not comparable
+  with the ones published through 2026-10-10 (`docs/benchmark.md` says
+  so); the old reports are not re-scored.
+
 - **Evidence records which project agent-config files a wrapped agent
   inherited.** A wrapped run (Codex, Claude Code) inherits the project's own
   config exactly as a bare invocation would — Orvena still does not gate,

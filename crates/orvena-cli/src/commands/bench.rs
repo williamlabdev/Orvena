@@ -402,6 +402,8 @@ fn death_note(t: &TaskPassRate) -> Option<String> {
         .iter()
         .filter(|d| d.exit == orvena_core::metrics::ExitReason::BudgetExhausted)
         .count();
+    let refused =
+        t.deaths.iter().filter(|d| d.exit == orvena_core::metrics::ExitReason::Blocked).count();
     let s = &t.search_vs_solved;
     let cells: Vec<String> = [
         ("hit", s.hit),
@@ -417,7 +419,7 @@ fn death_note(t: &TaskPassRate) -> Option<String> {
     })
     .collect();
     Some(format!(
-        "deaths: {exhausted}/{} exhausted  |  search→solved: {}",
+        "deaths: {exhausted}/{} exhausted, {refused} refused  |  search→solved: {}",
         t.deaths.len(),
         cells.join(", ")
     ))
@@ -478,9 +480,10 @@ fn print_repeated(r: &RepeatedReport) {
     }
     println!();
     println!(
-        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  mean {:.1} steps, {:.0} tok{}",
+        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  refused: {:.0}%  |  mean {:.1} steps, {:.0} tok{}",
         r.verified_rate * 100.0,
         r.false_done_rate * 100.0,
+        r.refusal_rate * 100.0,
         r.mean_steps,
         r.mean_total_tokens,
         token_note(r.token_accounting)
@@ -545,6 +548,13 @@ fn print_matrix(m: &MatrixReport) {
             d.baseline_verified_rate * 100.0,
             d.governed,
             d.governed_verified_rate * 100.0
+        );
+        println!(
+            "refused:     {}: {:.0}%  →  {}: {:.0}%",
+            d.baseline,
+            d.baseline_refusal_rate * 100.0,
+            d.governed,
+            d.governed_refusal_rate * 100.0
         );
         match d.overhead_tokens_ratio {
             Some(tokens) => println!(

@@ -389,6 +389,14 @@ pub struct TaskPassRate {
     /// exactly the per-task shape calibration reads (slice-026).
     #[serde(default)]
     pub exhaustion_rate: f32,
+    /// Runs that ended on the agent's own `<<<BLOCKED` (#46), and their share
+    /// of this task's measured runs. Not solved, not exhausted: a refusal is
+    /// the third outcome, published next to the other two so a task on which
+    /// the governed leg refuses 3/3 reads as "refused", not as "died".
+    #[serde(default)]
+    pub refused: u32,
+    #[serde(default)]
+    pub refusal_rate: f32,
     /// The death table (slice-026): one row per measured run, in repeat order.
     /// What a calibration run publishes about a task is not a percentage but
     /// how its runs died — the pass rate needs ~96 runs to stabilize, while
@@ -474,6 +482,11 @@ pub struct RepeatedReport {
     /// `max_steps`, not behavior; this rate is what makes that legible.
     #[serde(default)]
     pub budget_exhaustion_rate: f32,
+    /// The fraction of measured runs that ended on the agent's own
+    /// `<<<BLOCKED` (#46). Disjoint from `budget_exhaustion_rate`; still in
+    /// the denominator of `verified_rate` (a refusal is not a solve).
+    #[serde(default)]
+    pub refusal_rate: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
     /// The fraction of *attributable* runs that emitted at least one SEARCH.
@@ -577,6 +590,14 @@ pub struct Differential {
     pub baseline_budget_exhaustion_rate: f32,
     #[serde(default)]
     pub governed_budget_exhaustion_rate: f32,
+    /// Per posture, the fraction of measured runs the agent ended with
+    /// `<<<BLOCKED` (#46). The governed prompt tells the model to do exactly
+    /// that when the task reaches outside WRITABLE, so a governed refusal on
+    /// an out-of-scope task is the obligation working, not the agent dying.
+    #[serde(default)]
+    pub baseline_refusal_rate: f32,
+    #[serde(default)]
+    pub governed_refusal_rate: f32,
     /// `None` when either posture's tokens were never accounted for — a wrapped
     /// external agent makes its own model calls, and a ratio of two unknowns is
     /// not a cheaper number, it is not a number. Steps stay observable either

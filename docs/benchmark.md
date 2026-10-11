@@ -111,6 +111,20 @@ decision record:
   actions. This posture does not exist in the product.
 - **`engineering`** — the shipped hard-enforced tier.
 
+A run ends one of three ways in either posture: solved (the gates pass, or the
+baseline stops emitting actions and the external verify agrees), died (the
+step budget ran out — `budget_exhausted`, a right-censored run), or **refused**
+(the agent emitted `<<<BLOCKED <reason>` and stopped — `blocked`, since
+2026-10-11). The refusal is its own column (`refused`, `refusal_rate`) because
+the governed prompt *asks* for it: when the task reaches outside WRITABLE the
+model is told to block and say why, and before the action existed the only
+way to obey was silence, which the loop scored as exhaustion (issue #46). A
+refusal is still not a solve — it stays in the pass-rate denominator — and the
+report does not judge whether it was correct; the reason is in `blockers`.
+Cells measured before the action existed (through 2026-10-10) ran a prompt
+without it, so their `budget_exhausted` counts may include refusals that had
+no way to be spoken; they are not re-scored.
+
 Four measurements, all produced by `orvena bench --governance off,engineering`:
 
 | # | Measurement | Judge |

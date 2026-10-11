@@ -222,7 +222,7 @@ fn scope_rules(ungoverned: bool) -> &'static str {
         "- The files listed under WRITABLE are the ones this task is about; their current contents are included below.\n"
     } else {
         "- Bounded change: modify ONLY files listed under WRITABLE. All other files are read-only.\n\
-         - If you need to change a file that is not WRITABLE, STOP and report a blocker — never expand scope.\n"
+         - If you need to change a file that is not WRITABLE, emit a BLOCKED block (below) and stop — never expand scope.\n"
     }
 }
 
@@ -266,6 +266,11 @@ fn system_prompt(role: &Role, ungoverned: bool) -> String {
          \x20 the window; pin the evidence your later changes will depend on, before\n\
          \x20 it is dropped — already-dropped evidence cannot be pinned):\n\
          \x20 <<<PIN <step number>\n\
+         \x20 >>>\n\
+         - If the task cannot be completed as instructed, emit a blocked block\n\
+         \x20 saying what stops you, and emit nothing else after it — the run ends\n\
+         \x20 there and your reason is recorded:\n\
+         \x20 <<<BLOCKED <reason>\n\
          \x20 >>>\n\
          - Ground every change in evidence you have actually seen: never invent a\n\
          \x20 value your change depends on (a port, a path, a name, an expected\n\
@@ -426,6 +431,9 @@ mod tests {
         // pin has a shallower memory, and the differential would measure the
         // window instead of governance.
         assert!(b.contains("<<<PIN"), "PIN is a capability, present in both postures");
+        // #46: a structured refusal is capability too — without it the only
+        // way to say "cannot" is silence, which the loop scores as exhaustion.
+        assert!(b.contains("<<<BLOCKED"), "BLOCKED is a capability, present in both postures");
     }
 
     // slice-023: the grounding discipline is strategy (competence), not

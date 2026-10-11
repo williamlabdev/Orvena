@@ -28,6 +28,10 @@
 //!
 //! <<<PIN <step number>
 //! >>>
+//!
+//! <<<BLOCKED <reason>
+//! [further lines of reason]
+//! >>>
 //! ```
 //!
 //! EDIT's old/new are split on the first body line that is exactly `===`
@@ -63,6 +67,13 @@ pub enum Action {
     /// driver, where the window state is.
     Pin {
         step: u32,
+    },
+    /// The agent declares it cannot complete the task as instructed and
+    /// stops (2026-10-11, #46). Terminal: the driver ends the run on it. The
+    /// reason is the header plus any body lines; it is recorded verbatim in
+    /// the report's `blockers`, never interpreted.
+    Blocked {
+        reason: String,
     },
 }
 
@@ -171,6 +182,27 @@ pub fn parse_actions(text: &str) -> Vec<Action> {
             if let Ok(step) = arg.parse::<u32>() {
                 actions.push(Action::Pin { step });
             }
+        } else if let Some(raw) = trimmed
+            .strip_prefix("<<<BLOCKED")
+            .filter(|r| r.is_empty() || r.starts_with(' ') || r.starts_with('>'))
+        {
+            // The reason may be on the header line, in the body, or both;
+            // a bare `<<<BLOCKED` / `>>>` still blocks, with an empty reason
+            // — the model's silence is itself recorded, not guessed at.
+            let (head, self_closed) = split_header(raw);
+            let mut parts: Vec<String> = Vec::new();
+            if !head.is_empty() {
+                parts.push(head);
+            }
+            if !self_closed {
+                for body in lines.by_ref() {
+                    if body.trim() == ">>>" {
+                        break;
+                    }
+                    parts.push(body.trim().to_string());
+                }
+            }
+            actions.push(Action::Blocked { reason: parts.join(" ").trim().to_string() });
         } else if let Some(raw) = trimmed.strip_prefix("<<<RUN ") {
             let (name, self_closed) = split_header(raw);
             // RUN takes only a name; consume the block up to its closing `>>>`
@@ -471,5 +503,38 @@ mod tests {
                 Action::Run { name: "test".into() },
             ]
         );
+    }
+
+    #[test]
+    fn parses_blocked_with_header_reason() {
+        let a = parse_actions("<<<BLOCKED notes/history.txt is not WRITABLE\n>>>\n");
+        assert_eq!(a, vec![Action::Blocked { reason: "notes/history.txt is not WRITABLE".into() }]);
+    }
+
+    #[test]
+    fn parses_blocked_with_body_reason_and_self_closed() {
+        let a = parse_actions("<<<BLOCKED\nthe task asks for a file\noutside scope\n>>>\n");
+        assert_eq!(
+            a,
+            vec![Action::Blocked { reason: "the task asks for a file outside scope".into() }]
+        );
+        let b = parse_actions("<<<BLOCKED cannot proceed>>>\n");
+        assert_eq!(b, vec![Action::Blocked { reason: "cannot proceed".into() }]);
+        let c = parse_actions("<<<BLOCKED\n>>>\n");
+        assert_eq!(c, vec![Action::Blocked { reason: String::new() }]);
+    }
+
+    #[test]
+    fn blocked_prefix_does_not_swallow_a_lookalike_header() {
+        // `<<<BLOCKEDX` is not the action; nothing is parsed from it.
+        assert!(parse_actions("<<<BLOCKEDX why\n>>>\n").is_empty());
+    }
+
+    #[test]
+    fn blocked_keeps_its_place_among_other_actions() {
+        let a = parse_actions("<<<WRITE a.txt\nx\n>>>\n<<<BLOCKED b is read-only\n>>>\n");
+        assert_eq!(a.len(), 2);
+        assert!(matches!(a[0], Action::Write { .. }));
+        assert!(matches!(&a[1], Action::Blocked { reason } if reason == "b is read-only"));
     }
 }

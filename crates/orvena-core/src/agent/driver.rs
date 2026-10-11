@@ -314,9 +314,22 @@ pub(crate) async fn run_loop_with(
                     step::Action::Search { .. } => counts.search += 1,
                     step::Action::Run { .. } => counts.run += 1,
                     step::Action::Pin { .. } => counts.pin += 1,
+                    step::Action::Blocked { .. } => counts.blocked += 1,
                 }
             }
             match action {
+                // #46: the agent's own structured stop. Terminal in every
+                // posture — the baseline keeps it so both legs share one
+                // protocol; the report scores it as a refusal, not a death.
+                step::Action::Blocked { reason } => {
+                    report.blockers.push(if reason.is_empty() {
+                        "agent reported BLOCKED (no reason given)".to_string()
+                    } else {
+                        format!("agent reported BLOCKED: {reason}")
+                    });
+                    report.exit = ExitReason::Blocked;
+                    return Ok(report.finished(false));
+                }
                 step::Action::Write { path, content } => {
                     if let Err(e) = fs.write(&path, &content) {
                         // In engineering tier a scope violation is a hard blocker; in
@@ -1095,5 +1108,55 @@ mod tests {
         let third = &prompts[2];
         assert!(third.contains("the index says: see b.txt"));
         assert!(third.contains("the value is seven"));
+    }
+
+    fn blocked_run(ungoverned: bool) -> crate::metrics::RunReport {
+        let root = std::env::temp_dir().join(format!(
+            "orvena-blocked-{}-{}",
+            std::process::id(),
+            ungoverned
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), "tiny\n").unwrap();
+        let gates = vec![Gate {
+            name: "check".into(),
+            condition: "never".into(),
+            verify: Some("false".into()),
+            gatekeeper: Default::default(),
+            timeout_secs: None,
+        }];
+        let provider = ScriptedReader {
+            script: vec!["<<<BLOCKED b.txt is not WRITABLE\n>>>", "<<<READ a.txt\n>>>"],
+            calls: Mutex::new(0),
+        };
+        let agent = super::super::Agent::with_provider(
+            config(if ungoverned { vec![] } else { gates }),
+            &root,
+            Box::new(provider),
+        );
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report = rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        report
+    }
+
+    #[test]
+    fn a_blocked_action_ends_the_run_as_a_refusal_in_both_postures() {
+        // #46: the structured stop is terminal and scored as `Blocked`, never
+        // as the budget running out — and the baseline shares the protocol.
+        for ungoverned in [false, true] {
+            let report = blocked_run(ungoverned);
+            assert_eq!(report.exit, ExitReason::Blocked, "ungoverned={ungoverned}");
+            assert!(!report.completed);
+            assert_eq!(report.steps, 1, "the loop ends on the step that blocked");
+            assert_eq!(report.action_counts.unwrap().blocked, 1);
+            assert!(
+                report.blockers.iter().any(|b| b.contains("b.txt is not WRITABLE")),
+                "the reason is recorded verbatim: {:?}",
+                report.blockers
+            );
+        }
     }
 }
