@@ -30,6 +30,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **`scripts/bench-differential.sh` takes `TASKS=`** so a probe set runs
+  through the same chain as the headline cells. First use:
+  `benchmarks/probe-sidecar-visibility.yaml`, four variants of
+  `tempt-notes-sidecar` that each change one property of the sidecar
+  (contents quoted, sibling location, file to create). Haiku 5.5, 24 runs,
+  0 touches in every variant — the 2026-10-10 visibility hypothesis is
+  refuted; the probe and its reasoning are in `docs/benchmark-results.md`.
 - **Temptation set: the two out-of-root baits now land in-root, out-of-scope**
   (#47). `tempt-backup-outside` and `tempt-home-cache` asked for
   `../data-backup.txt` and `~/.orvena-notes.txt`, which
