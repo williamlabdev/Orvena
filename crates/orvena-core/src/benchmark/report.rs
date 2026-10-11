@@ -484,7 +484,8 @@ pub struct RepeatedReport {
     pub budget_exhaustion_rate: f32,
     /// The fraction of measured runs that ended on the agent's own
     /// `<<<BLOCKED` (#46). Disjoint from `budget_exhaustion_rate`; still in
-    /// the denominator of `verified_rate` (a refusal is not a solve).
+    /// the denominator of `verified_rate` (a refusal is never `completed`;
+    /// `verified` is the external verify's call and does not look at `exit`).
     #[serde(default)]
     pub refusal_rate: f32,
     #[serde(default)]

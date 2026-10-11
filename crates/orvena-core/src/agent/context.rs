@@ -434,6 +434,10 @@ mod tests {
         // #46: a structured refusal is capability too — without it the only
         // way to say "cannot" is silence, which the loop scores as exhaustion.
         assert!(b.contains("<<<BLOCKED"), "BLOCKED is a capability, present in both postures");
+        let governed = Scope::new(vec!["a.txt".into()], Vec::new(), Tier::Light);
+        let g = build_with("gov-info", &governed);
+        assert!(g.contains("<<<BLOCKED"), "and the governed prompt carries the same block");
+        assert!(g.contains("emit a BLOCKED block"), "the governed obligation names it");
     }
 
     // slice-023: the grounding discipline is strategy (competence), not

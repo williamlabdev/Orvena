@@ -1159,4 +1159,28 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn actions_before_a_blocked_in_the_same_turn_still_land() {
+        let root =
+            std::env::temp_dir().join(format!("orvena-blocked-after-write-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let provider = ScriptedReader {
+            script: vec!["<<<WRITE out.txt\ndone\n>>>\n<<<BLOCKED b.txt is not WRITABLE\n>>>"],
+            calls: Mutex::new(0),
+        };
+        let agent = super::super::Agent::with_provider(config(vec![]), &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report =
+            rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let written = std::fs::read_to_string(root.join("out.txt")).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(written, "done\n", "the WRITE before the BLOCKED landed");
+        assert_eq!(report.exit, ExitReason::Blocked);
+        assert_eq!(report.tool_calls, 2);
+        let counts = report.action_counts.unwrap();
+        assert_eq!((counts.write, counts.blocked), (1, 1));
+    }
 }
