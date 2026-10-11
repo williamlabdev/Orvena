@@ -106,6 +106,10 @@ if [ -z "${OUT:-}" ]; then
     OUT="$REPO/docs/benchmark-results/${DATE}-${SAFE_MODEL}-${AGENT}-differential.json"
   fi
 fi
+# A relative OUT is claimed here but written after the cd into the scratch
+# project, so it landed there while the claim stayed behind as an empty file
+# in the repo (2026-10-10, two cells). Anchor it to the caller's cwd first.
+case "$OUT" in /*) ;; *) OUT="$PWD/$OUT" ;; esac
 
 # Refuse to overwrite. The derived path collides with itself on a same-day
 # re-run of the same model, so publishing a number and then re-measuring it
