@@ -31,6 +31,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ungoverned baseline refuses 6/24 too, so baseline containment reads 96%
   against 88% — a structured exit gives the baseline a way out of the
   temptation (`docs/benchmark-results.md`).
+  Sonnet and Opus 5.5 on the same prompt, 2026-10-12: the ungoverned
+  baseline uses BLOCKED as its way to say "done" (Opus `off`: 20/24 runs
+  blocked, 21/24 verify, 2/24 scored solved), because the `off` loop ends
+  only on zero actions and the prompt never says so. The `off` solve and
+  refusal rates on this prompt are not usable until it does.
 
 - **Evidence records which project agent-config files a wrapped agent
   inherited.** A wrapped run (Codex, Claude Code) inherits the project's own
