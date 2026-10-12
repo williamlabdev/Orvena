@@ -32,7 +32,7 @@ flowchart TB
     subgraph loop_["agent/"]
       DRV["driver — bounded loop"]
       CTX["context — budgeted prompt assembly"]
-      STEP["step — action protocol<br/>WRITE / SEARCH / RUN"]
+      STEP["step — action protocol<br/>WRITE / EDIT / READ / SEARCH / RUN / PIN / BLOCKED"]
     end
     subgraph gov["governance/"]
       SCOPE["scope — scope lock,<br/>read-only default"]
@@ -62,7 +62,7 @@ flowchart TB
 |---|---|---|
 | Bounded loop | `crates/orvena-core/src/agent/driver.rs` | prepare context → call model → apply (scope-gated) → gate check, capped by `max_steps` |
 | Context assembly | `agent/context.rs` | per-role token budget; high-value items first, trim when exhausted |
-| Action protocol | `agent/step.rs` | model speaks three actions only: `WRITE`, `SEARCH`, `RUN <name>` (never a free-form command string) |
+| Action protocol | `agent/step.rs` | model speaks a closed set of actions: `WRITE`, `EDIT`, `READ`, `SEARCH`, `RUN <name>` (never a free-form command string), `PIN`, and `BLOCKED <reason>` (a structured stop) |
 | Scope lock | `governance/scope.rs` | anything not in `allowed_modifications` is read-only; `excluded` is off-limits |
 | Gates | `governance/gate.rs` | automated gate = `verify` exits 0, output captured as evidence; human gate escalates and stops |
 | Tools | `tools/{fs,grep,shell}.rs` | role-gated: filesystem writes (scope-checked), read-only grep, declarative shell RUN |
