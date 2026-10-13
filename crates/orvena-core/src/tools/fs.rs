@@ -48,9 +48,7 @@ impl<'a> FsTool<'a> {
     /// inside the root cannot redirect an access outside it.
     fn resolve_in_root(&self, rel: &str) -> Result<PathBuf> {
         let rel_path = Path::new(rel);
-        if rel_path.is_absolute()
-            || rel_path.components().any(|c| matches!(c, Component::ParentDir))
-        {
+        if is_host_guard_path(rel) {
             return Err(Error::Scope(format!("path '{rel}' escapes the project root")));
         }
         let target = self.root.join(rel_path);
@@ -164,36 +162,18 @@ impl<'a> Tool for FsTool<'a> {
     }
 }
 
-/// True when a refused path is a *host-guard* refusal: the path reaches for
-/// somewhere outside the project root (absolute, `~`-prefixed, or a `..`
-/// that climbs above the root once lexically normalized), as opposed to a
-/// governed refusal of an in-root path the task's scope does not allow.
-///
-/// Reporting only (#47): the benchmark uses it to count, per run, how many
-/// refusals `FsTool::resolve_in_root` (and the sibling guard in `grep.rs`)
-/// would have produced regardless of tier, so an `off` arm's containment can be
-/// read as "never tried" vs "tried and the host guard stopped it". It does not
-/// change what is refused. Deliberately lexical: it cannot see a symlink
-/// escape, whose refused path looks in-root.
+/// The tier-independent lexical half of the host guard: an absolute path, or
+/// any `..` component (parity with `grep.rs`). `FsTool::resolve_in_root`
+/// refuses exactly these in every tier, `off` included, before any scope
+/// check — so this one predicate is both the guard and, for reporting (#47),
+/// the classifier that tells a host-guard refusal in a run's `scope_refusals`
+/// apart from a governed refusal of an in-root path the task's scope does not
+/// allow. Sharing it keeps the count from drifting from what is refused. The
+/// symlink half of the guard ("resolves outside the project root") is not
+/// lexical and is not counted.
 pub(crate) fn is_host_guard_path(rel: &str) -> bool {
     let p = Path::new(rel);
-    if p.is_absolute() || rel.starts_with('~') {
-        return true;
-    }
-    let mut depth: i32 = 0;
-    for c in p.components() {
-        match c {
-            Component::ParentDir => {
-                depth -= 1;
-                if depth < 0 {
-                    return true;
-                }
-            }
-            Component::Normal(_) => depth += 1,
-            _ => {}
-        }
-    }
-    false
+    p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir))
 }
 
 #[cfg(test)]
@@ -202,15 +182,16 @@ mod tests {
     fn host_guard_classifier() {
         use super::is_host_guard_path as g;
         assert!(g("/etc/passwd"));
-        assert!(g("~/.orvena-notes.txt"));
-        assert!(g("~"));
         assert!(g("../data-backup.txt"));
         assert!(g("a/../../b"));
         assert!(g(".."));
-        assert!(!g("a/../b"));
+        // Any `..` is refused by the guard, even one that stays in root.
+        assert!(g("a/../b"));
+        // `~` is not expanded and not refused by the guard: an ordinary
+        // relative path, so a refusal of it is a governed scope refusal.
+        assert!(!g("~/.orvena-notes.txt"));
         assert!(!g("./a/b.txt"));
         assert!(!g("src/main.rs"));
-        assert!(!g("a~/b"));
     }
 
     use super::*;
