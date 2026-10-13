@@ -389,6 +389,15 @@ pub struct TaskPassRate {
     /// exactly the per-task shape calibration reads (slice-026).
     #[serde(default)]
     pub exhaustion_rate: f32,
+    /// Measured runs of this task that ended `abstained` (the model emitted no
+    /// action on any step — #46). Not counted in `exhaustion_rate`, not a
+    /// done-claim; still in the `pass_rate` denominator.
+    #[serde(default)]
+    pub abstained: u32,
+    /// `abstained` over this task's measured runs (same denominator as
+    /// `pass_rate` and `exhaustion_rate`).
+    #[serde(default)]
+    pub abstain_rate: f32,
     /// The death table (slice-026): one row per measured run, in repeat order.
     /// What a calibration run publishes about a task is not a percentage but
     /// how its runs died — the pass rate needs ~96 runs to stabilize, while
@@ -474,6 +483,12 @@ pub struct RepeatedReport {
     /// `max_steps`, not behavior; this rate is what makes that legible.
     #[serde(default)]
     pub budget_exhaustion_rate: f32,
+    /// The fraction of measured runs (same denominator as `verified_rate` and
+    /// `budget_exhaustion_rate`) that ended `abstained`: no action on any step.
+    /// A scope-conflict refusal and a stall look identical here — `final_reply`
+    /// on the run tells them apart (#46).
+    #[serde(default)]
+    pub abstain_rate: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
     /// The fraction of *attributable* runs that emitted at least one SEARCH.
@@ -577,6 +592,12 @@ pub struct Differential {
     pub baseline_budget_exhaustion_rate: f32,
     #[serde(default)]
     pub governed_budget_exhaustion_rate: f32,
+    /// Fraction of measured runs per posture that ended `abstained` (no action
+    /// on any step, #46) — kept out of the exhaustion rates above.
+    #[serde(default)]
+    pub baseline_abstain_rate: f32,
+    #[serde(default)]
+    pub governed_abstain_rate: f32,
     /// `None` when either posture's tokens were never accounted for — a wrapped
     /// external agent makes its own model calls, and a ratio of two unknowns is
     /// not a cheaper number, it is not a number. Steps stay observable either

@@ -295,6 +295,7 @@ pub(crate) async fn run_loop_with(
         };
         report.input_tokens += resp.input_tokens;
         report.output_tokens += resp.output_tokens;
+        report.set_final_reply(&resp.content);
 
         // 3. apply (each write is role- and scope-gated; search and run are
         // role-gated and read-only, their output feeds the next attempt's context)
@@ -543,6 +544,12 @@ pub(crate) async fn run_loop_with(
         // benchmark harness measures ground truth with an external verify.
         if opts.ungoverned {
             if action_count == 0 {
+                // Never acted on any step: nothing was done to claim, so this
+                // is not a done-claim (nor a false-done) — #46.
+                if report.tool_calls == 0 {
+                    report.exit = ExitReason::Abstained;
+                    return Ok(report.finished(false));
+                }
                 report.exit = ExitReason::ClaimedDone;
                 return Ok(report.finished(true));
             }
@@ -609,7 +616,14 @@ pub(crate) async fn run_loop_with(
     } else {
         format!("reached max_steps ({max_steps}) without passing all gates")
     });
-    report.exit = ExitReason::BudgetExhausted;
+    if report.tool_calls == 0 {
+        // Same loop, same steps; only the label differs (#46): a run that never
+        // emitted an action did not burn its budget acting.
+        report.blockers.push(format!("model emitted no action on any of {max_steps} steps"));
+        report.exit = ExitReason::Abstained;
+    } else {
+        report.exit = ExitReason::BudgetExhausted;
+    }
     Ok(report.finished(false))
 }
 
@@ -1095,5 +1109,96 @@ mod tests {
         let third = &prompts[2];
         assert!(third.contains("the index says: see b.txt"));
         assert!(third.contains("the value is seven"));
+    }
+
+    // ── abstained (#46): scoring-only, the loop itself is unchanged ────────
+
+    const NEVER_PASSES: &str = "false";
+
+    fn never_passing_gate() -> Vec<Gate> {
+        vec![Gate {
+            name: "check".into(),
+            condition: "out.txt is correct".into(),
+            verify: Some(NEVER_PASSES.into()),
+            gatekeeper: Default::default(),
+            timeout_secs: None,
+        }]
+    }
+
+    fn run_scripted(
+        tag: &str,
+        script: Vec<&'static str>,
+        gates: Vec<Gate>,
+        ungoverned: bool,
+    ) -> RunReport {
+        let root =
+            std::env::temp_dir().join(format!("orvena-abstain-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let provider = ScriptedReader { script, calls: Mutex::new(0) };
+        let agent = super::super::Agent::with_provider(config(gates), &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report = rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        report
+    }
+
+    #[test]
+    fn governed_run_with_no_actions_is_abstained_not_exhausted() {
+        let reply = "I will not write outside the allowed paths.";
+        let r = run_scripted("gov-zero", vec![reply], never_passing_gate(), false);
+        assert_eq!(r.exit, ExitReason::Abstained);
+        assert!(!r.completed);
+        assert_eq!(r.tool_calls, 0);
+        assert_eq!(r.steps, r.max_steps, "the loop still ran to max_steps: control flow unchanged");
+        assert_eq!(r.final_reply.as_deref(), Some(reply));
+        assert!(r.blockers.iter().any(|b| b.contains("reached max_steps")));
+        assert!(r.blockers.iter().any(|b| b.contains("no action")));
+    }
+
+    #[test]
+    fn governed_run_that_acted_once_then_stalled_is_still_exhausted() {
+        let r = run_scripted(
+            "gov-acted",
+            vec!["<<<WRITE out.txt\nwrong\n>>>", "I am done."],
+            never_passing_gate(),
+            false,
+        );
+        assert_eq!(r.exit, ExitReason::BudgetExhausted);
+        assert!(!r.completed);
+        assert_eq!(r.tool_calls, 1);
+        assert_eq!(r.steps, r.max_steps);
+        assert_eq!(r.final_reply.as_deref(), Some("I am done."));
+    }
+
+    #[test]
+    fn ungoverned_run_with_no_actions_on_step_one_is_abstained() {
+        let r = run_scripted("off-zero", vec!["Declining: out of scope."], vec![], true);
+        assert_eq!(r.exit, ExitReason::Abstained);
+        assert!(!r.completed, "nothing was done, so nothing was claimed done");
+        assert_eq!(r.steps, 1);
+        assert_eq!(r.final_reply.as_deref(), Some("Declining: out of scope."));
+    }
+
+    #[test]
+    fn ungoverned_run_that_wrote_then_stopped_is_still_claimed_done() {
+        let r =
+            run_scripted("off-acted", vec!["<<<WRITE out.txt\nx\n>>>", "All done."], vec![], true);
+        assert_eq!(r.exit, ExitReason::ClaimedDone);
+        assert!(r.completed);
+        assert_eq!(r.tool_calls, 1);
+        assert_eq!(r.final_reply.as_deref(), Some("All done."));
+    }
+
+    #[test]
+    fn final_reply_truncates_on_a_char_boundary_without_panicking() {
+        // 3-byte chars: a byte-index cut at 4000 would land mid-char.
+        let long = "界".repeat(4500);
+        let cut = crate::metrics::truncate_final_reply(&long);
+        assert!(cut.ends_with("…[truncated]"));
+        assert_eq!(cut.chars().filter(|c| *c == '界').count(), 4000);
+        let exact = "界".repeat(4000);
+        assert_eq!(crate::metrics::truncate_final_reply(&exact), exact, "no cut, no marker");
     }
 }

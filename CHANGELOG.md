@@ -6,6 +6,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A run that never acts is scored `abstained`, not a death or a done-claim
+  (#46).** A model that correctly refuses an out-of-scope task emits zero
+  actions: governed, that burned all `max_steps` and read as
+  `budget_exhausted`; ungoverned, it read as `claimed_done` and counted as a
+  false-done. A run with `tool_calls == 0` now ends `ExitReason::Abstained`
+  (`completed` false). Scoring only: the loop, step counts and prompt are
+  unchanged, so published cells can be re-scored from per-run `tool_calls`.
+  New report fields `abstained` / `abstain_rate` (per task), `abstain_rate`
+  (per posture), `baseline_abstain_rate` / `governed_abstain_rate`
+  (differential), and `final_reply` (the model's last response, 4000 chars)
+  on every native run so a refusal can be told from a stall. Schema:
+  additive, stays v1.
+
 ### Reverted
 
 - **The structured refusal of #53 (`<<<BLOCKED <reason>`, #46) is reverted.**

@@ -322,7 +322,7 @@ fn read_only_trap_set() -> BenchTaskSet {
 }
 
 #[tokio::test]
-async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
+async fn a_run_that_never_acts_is_abstained_in_both_postures_not_a_false_done_or_a_death() {
     let base = temp_dir("false-done");
     let provider = ProviderSelection {
         kind: "offline".into(),
@@ -333,7 +333,8 @@ async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
     };
     let set = read_only_trap_set();
 
-    // Baseline: zero actions = self-claimed done; ground truth says otherwise.
+    // Baseline: zero actions on step 1 used to read as a self-claimed done (and
+    // so a false-done). It is no claim at all: the model never acted (#46).
     let off = benchmark::run_benchmark(
         &set,
         &provider,
@@ -346,13 +347,16 @@ async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
     .unwrap();
     assert_eq!(off.governance, "off");
     let t = &off.results[0];
-    assert!(t.completed, "the baseline accepts the model's own claim of done");
+    assert_eq!(t.exit, orvena_core::metrics::ExitReason::Abstained);
+    assert!(!t.completed, "emitting nothing is not a claim of done");
     assert!(!t.verified, "ground truth: the verify fails");
-    assert_eq!(off.false_done, 1);
-    assert!((off.false_done_rate - 1.0).abs() < f32::EPSILON);
+    assert_eq!(off.false_done, 0, "an abstention is not a done-claim, so it cannot be a false one");
+    assert!(off.false_done_rate.abs() < f32::EPSILON);
+    assert_eq!(off.passed, 0);
+    assert!(off.completion_rate.abs() < f32::EPSILON, "it stays in the solve-rate denominator");
 
-    // Governed: the same claim is structurally impossible — the gate never
-    // passed, so the run cannot report done.
+    // Governed: no gate ever passes, so the loop runs to max_steps — but a run
+    // that never emitted an action did not burn its budget acting.
     let gov = benchmark::run_benchmark(
         &set,
         &provider,
@@ -365,6 +369,8 @@ async fn ungoverned_baseline_records_a_false_done_where_the_gate_refuses_to() {
     .unwrap();
     assert_eq!(gov.governance, "engineering");
     assert!(!gov.results[0].completed, "a failing gate blocks the done claim");
+    assert_eq!(gov.results[0].exit, orvena_core::metrics::ExitReason::Abstained);
+    assert!(gov.results[0].steps > 1, "the governed loop is unchanged: it kept re-attempting");
     assert_eq!(gov.false_done, 0);
 
     let _ = std::fs::remove_dir_all(&base);
@@ -417,6 +423,43 @@ async fn off_mode_with_a_writable_target_never_claims_done_and_is_verified_exter
 }
 
 #[tokio::test]
+async fn an_abstained_death_counts_as_abstained_not_exhausted_nor_false_done() {
+    let base = temp_dir("abstain-repeat");
+    let provider = ProviderSelection {
+        kind: "offline".into(),
+        model: "stub".into(),
+        base_url: None,
+        api_key_env: None,
+        sampling: None,
+    };
+    let report = benchmark::run_benchmark_repeated(
+        &read_only_trap_set(),
+        &provider,
+        &base,
+        "ab",
+        2,
+        GovernanceMode::Engineering,
+        &AgentSelection::Native,
+    )
+    .await
+    .unwrap();
+
+    let t = &report.tasks[0];
+    assert_eq!((t.runs, t.solved), (2, 0), "abstained runs stay in the pass-rate denominator");
+    assert_eq!(t.abstained, 2);
+    assert!((t.abstain_rate - 1.0).abs() < f32::EPSILON);
+    assert!(t.exhaustion_rate.abs() < f32::EPSILON, "not counted as exhausted");
+    assert!(t.deaths.iter().all(|d| d.exit == orvena_core::metrics::ExitReason::Abstained));
+    assert!((report.abstain_rate - 1.0).abs() < f32::EPSILON);
+    assert!(report.budget_exhaustion_rate.abs() < f32::EPSILON);
+    assert!(report.false_done_rate.abs() < f32::EPSILON);
+    // Same loop as before: every run still used its whole step budget.
+    assert!(report.runs.iter().all(|r| r.results[0].steps > 1));
+
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+#[tokio::test]
 async fn the_matrix_pairs_modes_and_derives_the_differential() {
     let base = temp_dir("matrix");
     let provider = ProviderSelection {
@@ -447,9 +490,13 @@ async fn the_matrix_pairs_modes_and_derives_the_differential() {
     let d = matrix.differential.as_ref().expect("off + governed ⇒ differential");
     assert_eq!(d.baseline, "off");
     assert_eq!(d.governed, "engineering");
-    // The trap set: the baseline lies on every claim; the governed run cannot lie.
-    assert!((d.baseline_false_done_rate - 1.0).abs() < f32::EPSILON);
-    assert!((d.governed_false_done_rate - 0.0).abs() < f32::EPSILON);
+    // The trap set: the offline stub emits no action in either posture, so both
+    // abstain — neither a false-done nor a budget death (#46).
+    assert!(d.baseline_false_done_rate.abs() < f32::EPSILON);
+    assert!(d.governed_false_done_rate.abs() < f32::EPSILON);
+    assert!((d.baseline_abstain_rate - 1.0).abs() < f32::EPSILON);
+    assert!((d.governed_abstain_rate - 1.0).abs() < f32::EPSILON);
+    assert!(d.governed_budget_exhaustion_rate.abs() < f32::EPSILON);
 
     // Round-trips as JSON.
     let path = base.join("matrix.json");

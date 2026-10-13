@@ -183,6 +183,14 @@ pub struct RunReport {
     /// written before it existed read back as `unrecorded`.
     #[serde(default)]
     pub exit: ExitReason,
+    /// Bench diagnostics: the raw text of the model's last response in the run,
+    /// truncated to [`FINAL_REPLY_MAX_CHARS`] chars (with a trailing marker when
+    /// cut). Lets a reader tell a refusal from a stall when `exit` is
+    /// `abstained`, which is classified from observables only. `None` = a
+    /// wrapped third-party agent, or a bundle that predates the field.
+    /// Additive — stays v1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_reply: Option<String>,
     /// Evidence-window eviction telemetry (SLICE-032 instrument). 0.5.0's
     /// death classification had to be reverse-read from action counts, which
     /// cannot answer "was the needle evicted before the re-read?" — the v3
@@ -279,6 +287,18 @@ pub struct Pins {
     pub refused: u32,
 }
 
+/// Max chars kept in [`RunReport::final_reply`].
+pub const FINAL_REPLY_MAX_CHARS: usize = 4000;
+
+/// Truncate to [`FINAL_REPLY_MAX_CHARS`] chars (never splitting a char), with a
+/// trailing marker when cut.
+pub fn truncate_final_reply(text: &str) -> String {
+    match text.char_indices().nth(FINAL_REPLY_MAX_CHARS) {
+        None => text.to_string(),
+        Some((idx, _)) => format!("{}…[truncated]", &text[..idx]),
+    }
+}
+
 /// Why a run's loop stopped — see [`RunReport::exit`]. An observation field:
 /// it must never feed back into loop behavior (measurement/policy separation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -292,6 +312,12 @@ pub enum ExitReason {
     /// The loop ran out of `max_steps` before any other terminal condition —
     /// the run is right-censored, and its `steps` is a budget artifact.
     BudgetExhausted,
+    /// The model emitted no action on any step (`tool_calls == 0`). Classified
+    /// from observables only: it cannot tell a refusal from a stall — read
+    /// [`RunReport::final_reply`] for that. Governed: the loop still ran to
+    /// `max_steps`. Ungoverned: the model's first reply carried no action.
+    /// Not a done-claim (`completed` is false) and not a budget death.
+    Abstained,
     /// A human gate stopped the run (tiered governance).
     NeedsHuman,
     /// Enforcement hard-stopped the run (engineering-tier scope violation).
@@ -361,6 +387,7 @@ impl RunReport {
             token_accounting: TokenAccounting::default(),
             max_steps: 0,
             exit: ExitReason::default(),
+            final_reply: None,
             // `None` until the native loop claims them on entry — same
             // attribution contract as `action_counts`.
             evictions: None,
@@ -379,6 +406,12 @@ impl RunReport {
         self.model = Some(sel.model.clone());
         self.endpoint = sel.endpoint_origin();
         self
+    }
+
+    /// Record the model's latest response text as [`RunReport::final_reply`],
+    /// truncated at a char boundary.
+    pub fn set_final_reply(&mut self, text: &str) {
+        self.final_reply = Some(truncate_final_reply(text));
     }
 
     /// Seal the report with its completion status.

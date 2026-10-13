@@ -529,6 +529,8 @@ pub async fn run_benchmark_repeated(
                 skipped: true,
                 pass_rate: 0.0,
                 exhaustion_rate: 0.0,
+                abstained: 0,
+                abstain_rate: 0.0,
                 deaths: Vec::new(),
                 search_vs_solved: SearchSolveTable::default(),
             });
@@ -556,6 +558,7 @@ pub async fn run_benchmark_repeated(
         let deaths: Vec<DeathRow> = measured.iter().map(|(rep, r)| DeathRow::of(*rep, r)).collect();
         let exhausted =
             deaths.iter().filter(|d| d.exit == ExitReason::BudgetExhausted).count() as u32;
+        let abstained = deaths.iter().filter(|d| d.exit == ExitReason::Abstained).count() as u32;
         tasks.push(TaskPassRate {
             id: t.id.clone(),
             runs: measured_runs,
@@ -563,6 +566,8 @@ pub async fn run_benchmark_repeated(
             skipped: false,
             pass_rate: rate(solved, measured_runs),
             exhaustion_rate: rate(exhausted, measured_runs),
+            abstained,
+            abstain_rate: rate(abstained, measured_runs),
             search_vs_solved: SearchSolveTable::tally(&deaths),
             deaths,
         });
@@ -623,6 +628,11 @@ pub async fn run_benchmark_repeated(
     } else {
         ran_results.iter().filter(|t| t.exit == ExitReason::BudgetExhausted).count() as f32 / n_ran
     };
+    let abstain_rate = if n_ran == 0.0 {
+        0.0
+    } else {
+        ran_results.iter().filter(|t| t.exit == ExitReason::Abstained).count() as f32 / n_ran
+    };
     let mean_total_tokens = if n_ran == 0.0 {
         0.0
     } else {
@@ -662,6 +672,7 @@ pub async fn run_benchmark_repeated(
         evidence_valid_rate,
         mean_steps,
         budget_exhaustion_rate,
+        abstain_rate,
         mean_total_tokens,
         search_use_rate,
         search_yield_rate,
