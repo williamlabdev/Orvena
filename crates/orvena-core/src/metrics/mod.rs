@@ -409,9 +409,10 @@ impl RunReport {
     }
 
     /// Record the model's latest response text as [`RunReport::final_reply`],
-    /// truncated at a char boundary.
+    /// home-redacted (like a wrapped agent's output) and truncated at a char
+    /// boundary.
     pub fn set_final_reply(&mut self, text: &str) {
-        self.final_reply = Some(truncate_final_reply(text));
+        self.final_reply = Some(truncate_final_reply(&crate::adapter::redact_home(text)));
     }
 
     /// Seal the report with its completion status.

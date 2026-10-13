@@ -226,6 +226,7 @@ mod tests {
             provider_error: None,
             token_accounting: TokenAccounting::Observed,
             exit: crate::metrics::ExitReason::GatesPassed,
+            final_reply: None,
             evictions: None,
             dropped_reread: None,
             dropped_research: None,
@@ -246,6 +247,7 @@ mod tests {
             blockers: vec!["provider error: 429 Too Many Requests".into()],
             provider_error: Some("429 Too Many Requests".into()),
             exit: crate::metrics::ExitReason::ProviderError,
+            final_reply: None,
             ..run(id, false, false)
         }
     }

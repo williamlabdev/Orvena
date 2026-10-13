@@ -84,6 +84,11 @@ pub struct TaskResult {
     /// `steps` is a budget artifact, not a convergence measurement.
     #[serde(default)]
     pub exit: ExitReason,
+    /// The model's last response text, carried from the run (native only;
+    /// home-redacted, capped). Lets a reader tell an abstention that was a
+    /// refusal from one that was a stall or a malformed action block (#46).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_reply: Option<String>,
     /// Evidence-window eviction telemetry, carried verbatim from the bundle
     /// (see [`crate::metrics::RunReport::evictions`]). `None` = unattributable
     /// (wrapped agent, or a pre-field report), never "no evictions".
@@ -280,6 +285,11 @@ pub struct DeathRow {
     /// Ground truth (the external `verify`).
     pub verified: bool,
     pub exit: ExitReason,
+    /// The model's last response text, carried from the run (native only;
+    /// home-redacted, capped). Lets a reader tell an abstention that was a
+    /// refusal from one that was a stall or a malformed action block (#46).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_reply: Option<String>,
     pub steps: u32,
     pub total_tokens: u32,
     /// `None` = unattributable, never "all zero" — same contract as
@@ -316,6 +326,7 @@ impl DeathRow {
             solved: r.completed,
             verified: r.verified,
             exit: r.exit,
+            final_reply: r.final_reply.clone(),
             steps: r.steps,
             total_tokens: r.input_tokens + r.output_tokens,
             action_counts: r.action_counts,
@@ -679,6 +690,7 @@ mod tests {
             solved,
             verified: solved,
             exit: ExitReason::GatesPassed,
+            final_reply: None,
             steps: 2,
             total_tokens: 100,
             action_counts: Some(counts(1)),

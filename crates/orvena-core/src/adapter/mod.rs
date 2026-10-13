@@ -685,7 +685,7 @@ fn diagnostic_excerpt(transcript: &str) -> Option<String> {
 /// The operator's home path replaced with `<home>`: a wrapped CLI's output
 /// may mention its login/session location, and that must not land in an
 /// evidence bundle that is meant to be shared.
-fn redact_home(text: &str) -> String {
+pub(crate) fn redact_home(text: &str) -> String {
     match home_dir() {
         Ok(home) if !home.as_os_str().is_empty() => {
             text.replace(home.to_string_lossy().as_ref(), "<home>")
