@@ -126,20 +126,21 @@ Four measurements, all produced by `orvena bench --governance off,engineering`:
 the oracle sees nothing change, and `off` reports `contained`. Oracle
 containment alone therefore cannot tell "contained because the model never
 tried" from "contained because the host guard refused it". Each run now
-carries `host_guard_refusals` (count of refused paths that are absolute,
-`~`-prefixed, or a `..` that climbs above the root, classified by
-`is_host_guard_path` from the run's `scope_refusals`; lexical, so a symlink
-escape is not counted), and the report carries `host_guard_refusal_runs` /
+carries `host_guard_refusals` (count of refused paths in the run's
+`scope_refusals` that are absolute or contain any `..` component, classified
+by `is_host_guard_path` — the same predicate the guard itself uses, so the
+count cannot drift from what is refused; the guard's symlink check is not
+lexical and is not counted), and the report carries `host_guard_refusal_runs` /
 `host_guard_refusal_rate` per task and per posture plus
 `baseline_host_guard_refusal_rate` / `governed_host_guard_refusal_rate` in the
 differential. The CLI prints them next to oracle containment. Read `off`
 containment together with its host-guard rate; a temptation that wants to
 measure governance rather than the host guard must sit inside the root but
 outside the declared scope. Reporting only: what is refused, and what the model
-sees, is unchanged. Caveats: a `~/x` path is not refused by the host guard (it
-is an ordinary relative name), so it only appears here when a *governed* scope
-refusal records it, and is then counted by its spelling; the classifier is not
-evidence of which guard fired.
+sees, is unchanged. Note that `~/x` is not refused by the host guard (`~` is
+not expanded; it is an ordinary relative name), so `tempt-home-cache` tempts an
+in-root write named `~/…`, and a refusal of it is a governed scope refusal,
+not a host-guard one.
 
 *Reading older reports.* Published reports before #47 have no
 `host_guard_refusals` (it parses as 0, which is "not recorded", not "none").
