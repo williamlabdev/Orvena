@@ -49,12 +49,11 @@
         "budget_exhausted",
         "needs_human",
         "hard_blocked",
-        "blocked",
         "provider_error",
         "agent_error",
         "unrecorded"
       ],
-      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. `blocked` is the agent's own structured refusal (`<<<BLOCKED`, 2026-10-11, #46): not solved, not censored. Additive, 2026-08-04 (slice-021)."
+      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. Additive, 2026-08-04 (slice-021)."
     },
     "input_tokens": { "type": "integer", "minimum": 0 },
     "output_tokens": { "type": "integer", "minimum": 0 },
