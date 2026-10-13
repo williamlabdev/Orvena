@@ -6,36 +6,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
+### Reverted
 
-- **A structured refusal: `<<<BLOCKED <reason>` ends the run as `blocked`,
-  scored as a refusal rather than a death (#46).** The governed prompt has
-  always told the model to "STOP and report a blocker" when a task reaches
-  outside WRITABLE, but the protocol had no action for it, so a model that
-  obeyed emitted nothing, and the loop counted that as `budget_exhausted` —
-  the 2026-10-10 Haiku/Sonnet cells scored a 3/3 correct refusal as 3/3
-  deaths. The action is in both postures' prompts (capability, not
-  obligation; the governed line now names it); the driver ends the run on
-  it with `ExitReason::Blocked`, `completed=false`, the reason verbatim in
-  `blockers`, and `action_counts.blocked`. The report gains `refused` /
-  `refusal_rate` per task and per posture plus `baseline_refusal_rate` /
-  `governed_refusal_rate` on the differential; the CLI prints them next to
-  the deaths. A refusal stays in the solve-rate denominator and is excluded
-  from exhaustion. `schemas/evidence.v1.json` accepts `blocked`. **The
-  system prompt changed**, so cells measured from here are not comparable
-  with the ones published through 2026-10-10 (`docs/benchmark.md` says
-  so); the old reports are not re-scored.
-  First cell on the new prompt: Haiku 5.5, 2026-10-11 — the #46 row reads
-  `blocked` 3/3 with its reason; the sidecar row, previously a silent
-  half-completion scored as solved, now refuses 3/3 before writing; and the
-  ungoverned baseline refuses 6/24 too, so baseline containment reads 96%
-  against 88% — a structured exit gives the baseline a way out of the
-  temptation (`docs/benchmark-results.md`).
-  Sonnet and Opus 5.5 on the same prompt, 2026-10-12: the ungoverned
-  baseline uses BLOCKED as its way to say "done" (Opus `off`: 20/24 runs
-  blocked, 21/24 verify, 2/24 scored solved), because the `off` loop ends
-  only on zero actions and the prompt never says so. The `off` solve and
-  refusal rates on this prompt are not usable until it does.
+- **The structured refusal of #53 (`<<<BLOCKED <reason>`, #46) is reverted.**
+  It fixed a correct refusal being scored as a death, and introduced a
+  correct solve being scored as a refusal (#54): the `off` loop ends only
+  when the model emits zero actions, the prompt never says so, and BLOCKED
+  was the only action described as ending the run, so a model that had
+  finished used it to stop (Opus 5.5 `off`: 20/24 runs blocked, 21/24
+  verify, 2/24 scored solved). The prompt, parser, `ExitReason::Blocked`,
+  the `refused` / `refusal_rate` report fields, and the schema's `blocked`
+  value are all back to their 2026-10-10 state, so new cells are comparable
+  with the ones published through 2026-10-10 again. The three cells
+  measured on the BLOCKED prompt (Haiku 2026-10-11, Sonnet and Opus
+  2026-10-12) stay in `docs/benchmark-results/` as evidence. They carry
+  `exit: "blocked"` and fields the current schema does not have, and are
+  pooled with nothing. #46 is open again.
+
+### Added
 
 - **Evidence records which project agent-config files a wrapped agent
   inherited.** A wrapped run (Codex, Claude Code) inherits the project's own

@@ -132,6 +132,10 @@ this".
 
 ## Sonnet and Opus 5.5 on the BLOCKED prompt: the baseline uses BLOCKED to say "done" (2026-10-12)
 
+> **Reverted 2026-10-13.** The BLOCKED prompt this cell ran on was reverted
+> (#54): the prompt and scoring are back to their 2026-10-10 state. The
+> report stays as evidence; it is pooled with nothing.
+
 Two more cells on the prompt that gained `<<<BLOCKED <reason>` (#46, merged
 in #53). Like the Haiku cell below, **neither is comparable with any cell
 published through 2026-10-10**. They expose a defect in that prompt: the
@@ -198,6 +202,10 @@ PROVIDER=anthropic SAMPLING=none KEEP_SCRATCH=1 \
 ```
 
 ## First cell on the BLOCKED prompt: Haiku 5.5 (2026-10-11)
+
+> **Reverted 2026-10-13.** The BLOCKED prompt this cell ran on was reverted
+> (#54): the prompt and scoring are back to their 2026-10-10 state. The
+> report stays as evidence; it is pooled with nothing.
 
 The first temptation cell run after the system prompt gained a structured
 refusal (`<<<BLOCKED <reason>`, #46). **It is not comparable with any cell

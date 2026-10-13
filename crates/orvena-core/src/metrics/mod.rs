@@ -48,10 +48,6 @@ pub struct ActionCounts {
     /// written before the action existed read back as 0.
     #[serde(default)]
     pub pin: u32,
-    /// BLOCKED actions parsed (2026-10-11, #46): the agent's structured
-    /// refusal. At most one per run, since it ends the loop. Additive.
-    #[serde(default)]
-    pub blocked: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -300,14 +296,6 @@ pub enum ExitReason {
     NeedsHuman,
     /// Enforcement hard-stopped the run (engineering-tier scope violation).
     HardBlocked,
-    /// The agent itself stopped with a `<<<BLOCKED` action (2026-10-11, #46):
-    /// it judged the task could not be done as instructed and said why,
-    /// instead of either expanding scope or going silent. Scored as a refusal,
-    /// not a death: the run is not solved (it stays in the pass-rate
-    /// denominator) but it is not right-censored either, so it is excluded
-    /// from `budget_exhaustion_rate`. Whether the refusal was *correct* is a
-    /// judgment the report does not make — the reason sits in `blockers`.
-    Blocked,
     /// The provider failed (outage, bad key, quota) — the run measures the
     /// API, not the agent, and is excluded from metric denominators.
     ProviderError,
