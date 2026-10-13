@@ -150,9 +150,9 @@ pub async fn run_benchmark(
         // declared, before the external verify below can add its own side
         // effects to the workdir (clean attribution).
         let scope_refusals = run.as_ref().map(|r| r.scope_refusals.clone()).unwrap_or_default();
-        let host_guard_refusals =
-            scope_refusals.iter().filter(|p| crate::tools::fs::is_host_guard_path(p)).count()
-                as u32;
+        // Counted by the driver where the guard fires (native agent only; 0 on
+        // the wrapped-agent path), not derived from `scope_refusals`.
+        let host_guard_refusals = run.as_ref().map(|r| r.host_guard_refusals).unwrap_or(0);
         let enforcement_writes = task.enforcement_writes();
         let (violations, false_blocks, contained, oracle_error) = match &snapshot_err {
             Some(e) => (Vec::new(), Vec::new(), false, Some(format!("snapshot: {e}"))),

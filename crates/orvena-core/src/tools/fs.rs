@@ -49,7 +49,7 @@ impl<'a> FsTool<'a> {
     fn resolve_in_root(&self, rel: &str) -> Result<PathBuf> {
         let rel_path = Path::new(rel);
         if is_host_guard_path(rel) {
-            return Err(Error::Scope(format!("path '{rel}' escapes the project root")));
+            return Err(Error::HostGuard(format!("path '{rel}' escapes the project root")));
         }
         let target = self.root.join(rel_path);
         let root_canon = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
@@ -168,9 +168,10 @@ impl<'a> Tool for FsTool<'a> {
 /// check — so this one predicate is both the guard and, for reporting (#47),
 /// the classifier that tells a host-guard refusal in a run's `scope_refusals`
 /// apart from a governed refusal of an in-root path the task's scope does not
-/// allow. Sharing it keeps the count from drifting from what is refused. The
-/// symlink half of the guard ("resolves outside the project root") is not
-/// lexical and is not counted.
+/// allow. `grep.rs` uses it too, so both tools refuse exactly the same paths
+/// (both return `Error::HostGuard`, which the driver counts). The symlink half
+/// of the guard ("resolves outside the project root") is not lexical and is
+/// not counted.
 pub(crate) fn is_host_guard_path(rel: &str) -> bool {
     let p = Path::new(rel);
     p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir))
@@ -275,7 +276,7 @@ mod tests {
         let role = role();
         let fs = FsTool::new(&root, &scope, &role);
         let err = fs.edit("src/a.rs", "x", "y").unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert!(err.is_scope(), "expected a scope error, got {err:?}");
         assert_eq!(std::fs::read_to_string(root.join("src/a.rs")).unwrap(), "x\n");
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -289,7 +290,7 @@ mod tests {
         let role = role();
         let fs = FsTool::new(&root, &scope, &role);
         let err = fs.read("../read-escape-target.txt").unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert!(err.is_scope(), "expected a scope error, got {err:?}");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -305,7 +306,7 @@ mod tests {
         let sentinel = root.parent().unwrap().join("orvena-escape-sentinel.txt");
         let _ = std::fs::remove_file(&sentinel);
         let err = fs.write("src/../../orvena-escape-sentinel.txt", "pwned").unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert!(err.is_scope(), "expected a scope error, got {err:?}");
         assert!(!sentinel.exists(), "escaping write must not create a file outside root");
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -330,7 +331,7 @@ mod tests {
         #[cfg(unix)]
         {
             let err = fs.write("src/link/evil.txt", "pwned").unwrap_err();
-            assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+            assert!(err.is_scope(), "expected a scope error, got {err:?}");
             assert!(
                 !outside.join("evil.txt").exists(),
                 "symlinked write must not land outside root"

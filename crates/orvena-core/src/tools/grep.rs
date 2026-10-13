@@ -84,10 +84,8 @@ impl<'a> GrepTool<'a> {
         let base = match path {
             Some(rel) => {
                 let rel_path = Path::new(rel);
-                if rel_path.is_absolute()
-                    || rel_path.components().any(|c| matches!(c, Component::ParentDir))
-                {
-                    return Err(Error::Scope(format!(
+                if crate::tools::fs::is_host_guard_path(rel) {
+                    return Err(Error::HostGuard(format!(
                         "search path '{rel}' escapes the project root"
                     )));
                 }
@@ -264,7 +262,7 @@ mod tests {
         let root = temp_root("denied");
         let role = role(vec!["fs.read".into()]);
         let err = GrepTool::new(&root, &role).search("TODO", None).unwrap_err();
-        assert!(matches!(err, Error::Scope(_)));
+        assert!(err.is_scope());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -282,7 +280,7 @@ mod tests {
         let root = temp_root("escape");
         let role = role(vec!["grep.search".into()]);
         let err = GrepTool::new(&root, &role).search("TODO", Some("../outside")).unwrap_err();
-        assert!(matches!(err, Error::Scope(_)));
+        assert!(err.is_scope());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -352,7 +350,7 @@ mod tests {
         let root = glob_root("globescape");
         let role = role(vec!["grep.search".into()]);
         let err = GrepTool::new(&root, &role).search("TODO", Some("../*.conf")).unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "{err}");
+        assert!(err.is_scope(), "{err}");
         let _ = std::fs::remove_dir_all(&root);
     }
 

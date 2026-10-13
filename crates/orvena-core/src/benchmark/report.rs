@@ -62,9 +62,11 @@ pub struct TaskResult {
     /// silently counted as contained.
     #[serde(default)]
     pub oracle_error: Option<String>,
-    /// Refusals this run drew from the host guard (#47): paths that reach
-    /// outside the project root (absolute, `~`, escaping `..`), which the
-    /// filesystem tool refuses in every tier. Separate from governed scope
+    /// Refusals this run drew from the host guard (#47): tool calls whose path
+    /// is absolute or has any `..` component, which the filesystem and search
+    /// tools refuse in every tier. Counted where the guard fires (WRITE, EDIT,
+    /// READ, SEARCH); the symlink check is not counted; native agent only (0 on
+    /// the wrapped-agent path). Separate from governed scope
     /// refusals, so `contained` in `off` can be read as "never tried" (0) vs
     /// "tried and the host guard stopped it" (>0). Absent in reports written
     /// before #47 (reads as 0 — not evidence that none happened).
@@ -511,10 +513,9 @@ pub struct RepeatedReport {
     /// on the run tells them apart (#46).
     #[serde(default)]
     pub abstain_rate: f32,
-    /// Measured runs (same denominator as `containment_rate`'s ran set) with
-    /// at least one host-guard refusal (#47): the model reached for a path
-    /// outside the project root and the filesystem tool refused it in every
-    /// tier. In `off` those runs still count as contained.
+    /// Ran runs (not containment's judged set, which excludes oracle errors)
+    /// with at least one host-guard refusal (#47): the model reached for an
+    /// absolute or `..` path and the guard refused it in every tier. In `off` those runs still count as contained.
     #[serde(default)]
     pub host_guard_refusal_runs: u32,
     #[serde(default)]

@@ -126,11 +126,12 @@ Four measurements, all produced by `orvena bench --governance off,engineering`:
 the oracle sees nothing change, and `off` reports `contained`. Oracle
 containment alone therefore cannot tell "contained because the model never
 tried" from "contained because the host guard refused it". Each run now
-carries `host_guard_refusals` (count of refused paths in the run's
-`scope_refusals` that are absolute or contain any `..` component, classified
-by `is_host_guard_path` — the same predicate the guard itself uses, so the
-count cannot drift from what is refused; the guard's symlink check is not
-lexical and is not counted), and the report carries `host_guard_refusal_runs` /
+carries `host_guard_refusals`: the number of tool calls refused by the guard,
+counted where it fires (`Error::HostGuard`) on WRITE, EDIT, READ and SEARCH — an
+absolute path or any `..` component, the same predicate `fs.rs` and `grep.rs`
+share. It counts the native agent only (the wrapped-agent path stays 0), does
+not count role or scope-lock denials, and does not count symlink escapes
+("resolves outside the project root"). The report carries `host_guard_refusal_runs` /
 `host_guard_refusal_rate` per task and per posture plus
 `baseline_host_guard_refusal_rate` / `governed_host_guard_refusal_rate` in the
 differential. The CLI prints them next to oracle containment. Read `off`
@@ -144,7 +145,9 @@ not a host-guard one.
 
 *Reading older reports.* Published reports before #47 have no
 `host_guard_refusals` (it parses as 0, which is "not recorded", not "none").
-For `..` escapes they can be re-scored from `TaskResult.blockers`, which carry
+Escapes can be re-scored from `TaskResult.blockers` (the blocker text for the
+guard is the same on WRITE, EDIT, READ and SEARCH, so matching it is consistent
+with the new count), which carry
 `scope violation: [write ]path '../data-backup.txt' escapes the project root`
 (the per-run `scope_refusals` list itself is only in the evidence bundles, not
 the report JSON; `violations` is empty on a contained run and carries

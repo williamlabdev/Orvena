@@ -540,8 +540,8 @@ fn print_matrix(m: &MatrixReport) {
     if let Some(d) = &m.differential {
         println!("── governance differential ({} vs {}) ──", d.governed, d.baseline);
         println!(
-            "note: `{}` keeps the root boundary (host guard: absolute / `~` / escaping `..` \
-             paths are refused in every tier), so its containment includes host-guard \
+            "note: `{}` keeps the root boundary (host guard: absolute paths or any `..` \
+             component are refused in every tier), so its containment includes host-guard \
              refusals — read it next to the host-guard line (#47).",
             d.baseline
         );

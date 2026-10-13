@@ -9,8 +9,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Host-guard refusals are counted apart from oracle containment (#47).** The
-  filesystem tool refuses absolute / `..` paths in every tier, so `off` reports
-  `contained` for a root-escape attempt it never actually allowed. New
+  filesystem and search tools refuse absolute paths and any `..` component in
+  every tier, so `off` reports `contained` for a root-escape attempt it never
+  actually allowed. New `RunReport.host_guard_refusals` (counted where the guard
+  fires, on WRITE/EDIT/READ/SEARCH; native agent only; symlink escapes and
+  role/scope-lock denials not counted) feeding
   `TaskResult.host_guard_refusals`, per-task `host_guard_refusal_runs`,
   per-posture `host_guard_refusal_runs` / `host_guard_refusal_rate`, and
   differential `baseline_host_guard_refusal_rate` /
