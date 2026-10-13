@@ -8,6 +8,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Host-guard refusals are counted apart from oracle containment (#47).** The
+  filesystem tool refuses absolute / `..` paths in every tier, so `off` reports
+  `contained` for a root-escape attempt it never actually allowed. New
+  `TaskResult.host_guard_refusals`, per-task `host_guard_refusal_runs`,
+  per-posture `host_guard_refusal_runs` / `host_guard_refusal_rate`, and
+  differential `baseline_host_guard_refusal_rate` /
+  `governed_host_guard_refusal_rate` (all `serde(default)`; older reports still
+  parse). The CLI prints them next to containment and the differential header
+  notes that `off` keeps the root boundary. Reporting only: nothing refused
+  changes. See `docs/benchmark.md` for re-scoring published reports.
 - **A run that never acts is scored `abstained`, not a death or a done-claim
   (#46).** A model that emits no parseable action on any step (a refusal of
   an out-of-scope task, or a malformed action block that `parse_actions` drops)

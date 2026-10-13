@@ -101,6 +101,7 @@ pub async fn run_benchmark(
                 false_blocks: Vec::new(),
                 contained: false,
                 oracle_error: None,
+                host_guard_refusals: 0,
                 evidence_valid: false,
                 provider_error: None,
                 token_accounting: TokenAccounting::default(),
@@ -149,6 +150,9 @@ pub async fn run_benchmark(
         // declared, before the external verify below can add its own side
         // effects to the workdir (clean attribution).
         let scope_refusals = run.as_ref().map(|r| r.scope_refusals.clone()).unwrap_or_default();
+        let host_guard_refusals =
+            scope_refusals.iter().filter(|p| crate::tools::fs::is_host_guard_path(p)).count()
+                as u32;
         let enforcement_writes = task.enforcement_writes();
         let (violations, false_blocks, contained, oracle_error) = match &snapshot_err {
             Some(e) => (Vec::new(), Vec::new(), false, Some(format!("snapshot: {e}"))),
@@ -207,6 +211,7 @@ pub async fn run_benchmark(
                     false_blocks,
                     contained,
                     oracle_error,
+                    host_guard_refusals,
                     evidence_valid,
                     provider_error: report.provider_error,
                     token_accounting: report.token_accounting,
@@ -237,6 +242,7 @@ pub async fn run_benchmark(
                 false_blocks,
                 contained,
                 oracle_error,
+                host_guard_refusals,
                 // A ran task that left no bundle is an M3 failure by definition.
                 evidence_valid: false,
                 // Deliberately not a provider error: after the P1 fix a provider
@@ -534,6 +540,7 @@ pub async fn run_benchmark_repeated(
                 exhaustion_rate: 0.0,
                 abstained: 0,
                 abstain_rate: 0.0,
+                host_guard_refusal_runs: 0,
                 deaths: Vec::new(),
                 search_vs_solved: SearchSolveTable::default(),
             });
@@ -562,6 +569,8 @@ pub async fn run_benchmark_repeated(
         let exhausted =
             deaths.iter().filter(|d| d.exit == ExitReason::BudgetExhausted).count() as u32;
         let abstained = deaths.iter().filter(|d| d.exit == ExitReason::Abstained).count() as u32;
+        let host_guard_refusal_runs =
+            measured.iter().filter(|(_, r)| r.host_guard_refusals > 0).count() as u32;
         tasks.push(TaskPassRate {
             id: t.id.clone(),
             runs: measured_runs,
@@ -571,6 +580,7 @@ pub async fn run_benchmark_repeated(
             exhaustion_rate: rate(exhausted, measured_runs),
             abstained,
             abstain_rate: rate(abstained, measured_runs),
+            host_guard_refusal_runs,
             search_vs_solved: SearchSolveTable::tally(&deaths),
             deaths,
         });
@@ -636,6 +646,10 @@ pub async fn run_benchmark_repeated(
     } else {
         ran_results.iter().filter(|t| t.exit == ExitReason::Abstained).count() as f32 / n_ran
     };
+    let host_guard_refusal_runs =
+        ran_results.iter().filter(|t| t.host_guard_refusals > 0).count() as u32;
+    let host_guard_refusal_rate =
+        if n_ran == 0.0 { 0.0 } else { host_guard_refusal_runs as f32 / n_ran };
     let mean_total_tokens = if n_ran == 0.0 {
         0.0
     } else {
@@ -676,6 +690,8 @@ pub async fn run_benchmark_repeated(
         mean_steps,
         budget_exhaustion_rate,
         abstain_rate,
+        host_guard_refusal_runs,
+        host_guard_refusal_rate,
         mean_total_tokens,
         search_use_rate,
         search_yield_rate,
@@ -839,6 +855,7 @@ mod tests {
             contained: true,
             oracle_error: None,
             evidence_valid: true,
+            host_guard_refusals: 0,
             provider_error: None,
             token_accounting: TokenAccounting::default(),
             exit: ExitReason::GatesPassed,
