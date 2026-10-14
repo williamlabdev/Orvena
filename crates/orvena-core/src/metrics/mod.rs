@@ -113,6 +113,15 @@ pub struct RunReport {
     /// without parsing prose.
     #[serde(default)]
     pub scope_refusals: Vec<String>,
+    /// Tool calls refused by the tier-independent root guard (#47): `fs.rs`
+    /// `resolve_in_root`'s lexical check ("escapes the project root": an
+    /// absolute path or any `..` component) on WRITE/EDIT/READ, and the same
+    /// check on a SEARCH path. Counted where the guard fires, so READ and
+    /// SEARCH are included and role/scope-lock denials are not. The symlink
+    /// check ("resolves outside the project root") is NOT counted. Native
+    /// agent only: the wrapped-agent path never sets it (stays 0).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub host_guard_refusals: u32,
     /// Whether this run's spawned children were confined by an OS sandbox
     /// (ADR-003) — so the bundle can distinguish enforced containment from mere
     /// intention. Bundles written before the field existed read back as
@@ -378,6 +387,7 @@ impl RunReport {
             gate_outcomes: Vec::new(),
             blockers: Vec::new(),
             scope_refusals: Vec::new(),
+            host_guard_refusals: 0,
             sandbox: crate::exec::sandbox::SandboxStatus::default(),
             provider_error: None,
             agent: None,
@@ -459,4 +469,8 @@ impl RunReport {
         )?);
         Ok(self)
     }
+}
+
+fn is_zero_u32(n: &u32) -> bool {
+    *n == 0
 }

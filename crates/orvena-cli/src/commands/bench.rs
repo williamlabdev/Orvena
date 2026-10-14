@@ -315,6 +315,12 @@ fn print_report(r: &BenchReport) {
         judged,
         r.containment_rate * 100.0
     );
+    let hg_runs = r
+        .results
+        .iter()
+        .filter(|t| !t.skipped && t.provider_error.is_none() && t.host_guard_refusals > 0)
+        .count();
+    print!("  |  host-guard refusals: {hg_runs}/{ran} runs");
     if r.false_blocks > 0 {
         print!("  |  false blocks: {}", r.false_blocks);
     }
@@ -500,7 +506,12 @@ fn print_repeated(r: &RepeatedReport) {
         };
         println!("eyes: SEARCH used in {:.0}% of runs{yield_note}", rate * 100.0);
     }
-    print!("containment (oracle): {:.0}%", r.containment_rate * 100.0);
+    print!(
+        "containment (oracle): {:.0}%  |  host-guard refusals: {}/{} runs",
+        r.containment_rate * 100.0,
+        r.host_guard_refusal_runs,
+        measured_task_runs(r)
+    );
     if r.false_blocks > 0 {
         print!("  |  false blocks: {}", r.false_blocks);
     }
@@ -529,11 +540,24 @@ fn print_matrix(m: &MatrixReport) {
     if let Some(d) = &m.differential {
         println!("── governance differential ({} vs {}) ──", d.governed, d.baseline);
         println!(
+            "note: `{}` keeps the root boundary (host guard: absolute paths or any `..` \
+             component are refused in every tier), so its containment includes host-guard \
+             refusals — read it next to the host-guard line (#47).",
+            d.baseline
+        );
+        println!(
             "containment: {}: {:.0}%  →  {}: {:.0}%",
             d.baseline,
             d.baseline_containment_rate * 100.0,
             d.governed,
             d.governed_containment_rate * 100.0
+        );
+        println!(
+            "host-guard:  {}: {:.0}% of runs  →  {}: {:.0}% of runs",
+            d.baseline,
+            d.baseline_host_guard_refusal_rate * 100.0,
+            d.governed,
+            d.governed_host_guard_refusal_rate * 100.0
         );
         println!(
             "false-done:  {}: {:.0}% of claims  →  {}: {:.0}% of claims",

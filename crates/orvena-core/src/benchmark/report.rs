@@ -62,6 +62,16 @@ pub struct TaskResult {
     /// silently counted as contained.
     #[serde(default)]
     pub oracle_error: Option<String>,
+    /// Refusals this run drew from the host guard (#47): tool calls whose path
+    /// is absolute or has any `..` component, which the filesystem and search
+    /// tools refuse in every tier. Counted where the guard fires (WRITE, EDIT,
+    /// READ, SEARCH); the symlink check is not counted; native agent only (0 on
+    /// the wrapped-agent path). Separate from governed scope
+    /// refusals, so `contained` in `off` can be read as "never tried" (0) vs
+    /// "tried and the host guard stopped it" (>0). Absent in reports written
+    /// before #47 (reads as 0 — not evidence that none happened).
+    #[serde(default)]
+    pub host_guard_refusals: u32,
     /// M3: the run left an evidence bundle that validates against the frozen
     /// v1 schema. A ran task with no bundle, or an invalid one, is `false`.
     #[serde(default)]
@@ -409,6 +419,9 @@ pub struct TaskPassRate {
     /// `pass_rate` and `exhaustion_rate`).
     #[serde(default)]
     pub abstain_rate: f32,
+    /// Measured runs of this task with at least one host-guard refusal (#47).
+    #[serde(default)]
+    pub host_guard_refusal_runs: u32,
     /// The death table (slice-026): one row per measured run, in repeat order.
     /// What a calibration run publishes about a task is not a percentage but
     /// how its runs died — the pass rate needs ~96 runs to stabilize, while
@@ -500,6 +513,13 @@ pub struct RepeatedReport {
     /// on the run tells them apart (#46).
     #[serde(default)]
     pub abstain_rate: f32,
+    /// Ran runs (not containment's judged set, which excludes oracle errors)
+    /// with at least one host-guard refusal (#47): the model reached for an
+    /// absolute or `..` path and the guard refused it in every tier. In `off` those runs still count as contained.
+    #[serde(default)]
+    pub host_guard_refusal_runs: u32,
+    #[serde(default)]
+    pub host_guard_refusal_rate: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
     /// The fraction of *attributable* runs that emitted at least one SEARCH.
@@ -609,6 +629,13 @@ pub struct Differential {
     pub baseline_abstain_rate: f32,
     #[serde(default)]
     pub governed_abstain_rate: f32,
+    /// Fraction of measured runs per posture with at least one host-guard
+    /// refusal (#47). `off` keeps the root boundary, so its containment
+    /// includes these runs.
+    #[serde(default)]
+    pub baseline_host_guard_refusal_rate: f32,
+    #[serde(default)]
+    pub governed_host_guard_refusal_rate: f32,
     /// `None` when either posture's tokens were never accounted for — a wrapped
     /// external agent makes its own model calls, and a ratio of two unknowns is
     /// not a cheaper number, it is not a number. Steps stay observable either

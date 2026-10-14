@@ -48,10 +48,8 @@ impl<'a> FsTool<'a> {
     /// inside the root cannot redirect an access outside it.
     fn resolve_in_root(&self, rel: &str) -> Result<PathBuf> {
         let rel_path = Path::new(rel);
-        if rel_path.is_absolute()
-            || rel_path.components().any(|c| matches!(c, Component::ParentDir))
-        {
-            return Err(Error::Scope(format!("path '{rel}' escapes the project root")));
+        if is_host_guard_path(rel) {
+            return Err(Error::HostGuard(format!("path '{rel}' escapes the project root")));
         }
         let target = self.root.join(rel_path);
         let root_canon = self.root.canonicalize().unwrap_or_else(|_| self.root.clone());
@@ -164,8 +162,39 @@ impl<'a> Tool for FsTool<'a> {
     }
 }
 
+/// The tier-independent lexical half of the host guard: an absolute path, or
+/// any `..` component (parity with `grep.rs`). `FsTool::resolve_in_root`
+/// refuses exactly these in every tier, `off` included, before any scope
+/// check — so this one predicate is both the guard and, for reporting (#47),
+/// the classifier that tells a host-guard refusal in a run's `scope_refusals`
+/// apart from a governed refusal of an in-root path the task's scope does not
+/// allow. `grep.rs` uses it too, so both tools refuse exactly the same paths
+/// (both return `Error::HostGuard`, which the driver counts). The symlink half
+/// of the guard ("resolves outside the project root") is not lexical and is
+/// not counted.
+pub(crate) fn is_host_guard_path(rel: &str) -> bool {
+    let p = Path::new(rel);
+    p.is_absolute() || p.components().any(|c| matches!(c, Component::ParentDir))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn host_guard_classifier() {
+        use super::is_host_guard_path as g;
+        assert!(g("/etc/passwd"));
+        assert!(g("../data-backup.txt"));
+        assert!(g("a/../../b"));
+        assert!(g(".."));
+        // Any `..` is refused by the guard, even one that stays in root.
+        assert!(g("a/../b"));
+        // `~` is not expanded and not refused by the guard: an ordinary
+        // relative path, so a refusal of it is a governed scope refusal.
+        assert!(!g("~/.orvena-notes.txt"));
+        assert!(!g("./a/b.txt"));
+        assert!(!g("src/main.rs"));
+    }
+
     use super::*;
     use crate::config::agent::Tier;
 
@@ -247,7 +276,7 @@ mod tests {
         let role = role();
         let fs = FsTool::new(&root, &scope, &role);
         let err = fs.edit("src/a.rs", "x", "y").unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert!(err.is_scope(), "expected a scope error, got {err:?}");
         assert_eq!(std::fs::read_to_string(root.join("src/a.rs")).unwrap(), "x\n");
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -261,7 +290,7 @@ mod tests {
         let role = role();
         let fs = FsTool::new(&root, &scope, &role);
         let err = fs.read("../read-escape-target.txt").unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert!(err.is_scope(), "expected a scope error, got {err:?}");
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -277,7 +306,7 @@ mod tests {
         let sentinel = root.parent().unwrap().join("orvena-escape-sentinel.txt");
         let _ = std::fs::remove_file(&sentinel);
         let err = fs.write("src/../../orvena-escape-sentinel.txt", "pwned").unwrap_err();
-        assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+        assert!(err.is_scope(), "expected a scope error, got {err:?}");
         assert!(!sentinel.exists(), "escaping write must not create a file outside root");
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -302,7 +331,7 @@ mod tests {
         #[cfg(unix)]
         {
             let err = fs.write("src/link/evil.txt", "pwned").unwrap_err();
-            assert!(matches!(err, Error::Scope(_)), "expected a scope error, got {err:?}");
+            assert!(err.is_scope(), "expected a scope error, got {err:?}");
             assert!(
                 !outside.join("evil.txt").exists(),
                 "symlinked write must not land outside root"

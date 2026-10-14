@@ -322,8 +322,11 @@ pub(crate) async fn run_loop_with(
                     if let Err(e) = fs.write(&path, &content) {
                         // In engineering tier a scope violation is a hard blocker; in
                         // light tier it is advisory (recorded, loop continues).
-                        if matches!(e, Error::Scope(_)) {
+                        if e.is_scope() {
                             report.scope_refusals.push(path.clone());
+                        }
+                        if e.is_host_guard() {
+                            report.host_guard_refusals += 1;
                         }
                         report.blockers.push(e.to_string());
                         if cfg.agent.tier.enforces() {
@@ -338,7 +341,10 @@ pub(crate) async fn run_loop_with(
                         // An edit is a write: identical refusal handling, and the
                         // same scope_refusals record — it is the false_blocks
                         // denominator on the native leg.
-                        Err(e @ Error::Scope(_)) => {
+                        Err(e) if e.is_scope() => {
+                            if e.is_host_guard() {
+                                report.host_guard_refusals += 1;
+                            }
                             report.scope_refusals.push(path.clone());
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
@@ -379,7 +385,10 @@ pub(crate) async fn run_loop_with(
                         }
                         // Role boundary or a path escaping the root: same
                         // handling as a forbidden search.
-                        Err(e @ Error::Scope(_)) => {
+                        Err(e) if e.is_scope() => {
+                            if e.is_host_guard() {
+                                report.host_guard_refusals += 1;
+                            }
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
                                 report.exit = ExitReason::HardBlocked;
@@ -430,8 +439,11 @@ pub(crate) async fn run_loop_with(
                                     .push_str(&format!("  {}:{}: {}\n", h.path, h.line_no, h.text));
                             }
                         }
-                        Err(e @ Error::Scope(_)) => {
+                        Err(e) if e.is_scope() => {
                             // Role boundary: same handling as a forbidden write.
+                            if e.is_host_guard() {
+                                report.host_guard_refusals += 1;
+                            }
                             report.search_hits.push(None);
                             report.blockers.push(e.to_string());
                             if cfg.agent.tier.enforces() {
@@ -518,7 +530,7 @@ pub(crate) async fn run_loop_with(
                                 tool_evidence.push_str(&capped);
                             }
                         }
-                        Err(e @ Error::Scope(_)) => {
+                        Err(e) if e.is_scope() => {
                             // Authorization failure (undeclared / mutating / role):
                             // same handling as a forbidden write.
                             report.blockers.push(e.to_string());
@@ -1109,6 +1121,150 @@ mod tests {
         let third = &prompts[2];
         assert!(third.contains("the index says: see b.txt"));
         assert!(third.contains("the value is seven"));
+    }
+
+    // ── host-guard refusals (#47): counted where the guard fires ───────────
+
+    /// Runs `script` (action, then a no-action reply that ends the run) with
+    /// the given tier and a developer role holding `tools`; the task's only
+    /// declared write is `out.txt`.
+    fn run_guard(
+        tag: &str,
+        script: Vec<&'static str>,
+        tier: Tier,
+        ungoverned: bool,
+        tools: &[&str],
+    ) -> RunReport {
+        let root = std::env::temp_dir().join(format!("orvena-hg-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("a.txt"), "x\n").unwrap();
+        let mut cfg = config(vec![]);
+        cfg.agent.tier = tier;
+        cfg.roles.roles[0].allowed_tools = tools.iter().map(|t| t.to_string()).collect();
+        let provider = ScriptedReader { script, calls: Mutex::new(0) };
+        let agent = super::super::Agent::with_provider(cfg, &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let report = rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        report
+    }
+
+    const ALL_TOOLS: &[&str] = &["fs.read", "fs.write", "grep.search"];
+
+    #[test]
+    fn off_mode_counts_a_write_escape() {
+        let r = run_guard(
+            "write",
+            vec!["<<<WRITE ../x\nleak\n>>>", "done"],
+            Tier::Light,
+            true,
+            ALL_TOOLS,
+        );
+        assert_eq!(r.host_guard_refusals, 1);
+        assert!(r
+            .blockers
+            .iter()
+            .any(|b| b == "scope violation: path '../x' escapes the project root"));
+    }
+
+    #[test]
+    fn off_mode_counts_an_edit_escape() {
+        let r = run_guard(
+            "edit",
+            vec!["<<<EDIT ../x\na\n===\nb\n>>>", "done"],
+            Tier::Light,
+            true,
+            ALL_TOOLS,
+        );
+        assert_eq!(
+            r.action_counts.as_ref().map(|c| c.edit),
+            Some(1),
+            "the script parsed as an EDIT"
+        );
+        assert_eq!(r.host_guard_refusals, 1);
+    }
+
+    #[test]
+    fn off_mode_counts_a_read_escape() {
+        let r = run_guard(
+            "read",
+            vec!["<<<READ /etc/passwd\n>>>", "done"],
+            Tier::Light,
+            true,
+            ALL_TOOLS,
+        );
+        assert_eq!(r.host_guard_refusals, 1);
+        assert!(r.scope_refusals.is_empty(), "READ never populated scope_refusals");
+    }
+
+    #[test]
+    fn off_mode_counts_a_search_escape() {
+        let r = run_guard(
+            "search",
+            vec!["<<<SEARCH foo\n../\n>>>", "done"],
+            Tier::Light,
+            true,
+            ALL_TOOLS,
+        );
+        assert_eq!(r.host_guard_refusals, 1);
+    }
+
+    #[test]
+    fn in_root_out_of_scope_write_is_not_a_host_guard_refusal() {
+        let r = run_guard(
+            "inroot",
+            vec!["<<<WRITE other.txt\nx\n>>>", "done"],
+            Tier::Engineering,
+            false,
+            ALL_TOOLS,
+        );
+        assert_eq!(r.scope_refusals, vec!["other.txt".to_string()], "a governed refusal happened");
+        assert_eq!(r.host_guard_refusals, 0);
+    }
+
+    #[test]
+    fn role_denied_escape_is_not_a_host_guard_refusal() {
+        // The role gate runs before the guard: a role that may not search is
+        // denied by the role, even for a path the guard would also refuse.
+        let r = run_guard(
+            "roledenied",
+            vec!["<<<SEARCH foo\n../\n>>>", "done"],
+            Tier::Light,
+            true,
+            &["fs.read"],
+        );
+        assert!(r.blockers.iter().any(|b| b.contains("is not allowed to use 'grep.search'")));
+        assert_eq!(r.host_guard_refusals, 0);
+    }
+
+    #[test]
+    fn symlink_escape_is_not_a_host_guard_refusal() {
+        let root = std::env::temp_dir().join(format!("orvena-hg-symlink-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let outside =
+            std::env::temp_dir().join(format!("orvena-hg-outside-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&outside);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("f.txt"), "secret\n").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside, root.join("link")).unwrap();
+        let mut cfg = config(vec![]);
+        cfg.roles.roles[0].allowed_tools = ALL_TOOLS.iter().map(|t| t.to_string()).collect();
+        let provider = ScriptedReader {
+            script: vec!["<<<READ link/f.txt\n>>>", "done"],
+            calls: Mutex::new(0),
+        };
+        let agent = super::super::Agent::with_provider(cfg, &root, Box::new(provider));
+        let task = Task::new("do the thing", vec!["out.txt".into()]);
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let r = rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned: true })).unwrap();
+        let _ = std::fs::remove_dir_all(&root);
+        let _ = std::fs::remove_dir_all(&outside);
+        assert!(r.blockers.iter().any(|b| b.contains("resolves outside the project root")));
+        assert_eq!(r.host_guard_refusals, 0);
     }
 
     // ── abstained (#46): scoring-only, the loop itself is unchanged ────────

@@ -160,6 +160,8 @@ pub(super) fn derive_differential(
             governed_budget_exhaustion_rate: g.budget_exhaustion_rate,
             baseline_abstain_rate: b.abstain_rate,
             governed_abstain_rate: g.abstain_rate,
+            baseline_host_guard_refusal_rate: b.host_guard_refusal_rate,
+            governed_host_guard_refusal_rate: g.host_guard_refusal_rate,
             overhead_tokens_ratio: (b.token_accounting != TokenAccounting::Unavailable
                 && g.token_accounting != TokenAccounting::Unavailable)
                 .then(|| ratio(g.mean_total_tokens, b.mean_total_tokens)),
@@ -223,6 +225,7 @@ mod tests {
             contained: true,
             oracle_error: None,
             evidence_valid: true,
+            host_guard_refusals: 0,
             provider_error: None,
             token_accounting: TokenAccounting::Observed,
             exit: crate::metrics::ExitReason::GatesPassed,
@@ -244,6 +247,7 @@ mod tests {
             output_tokens: 0,
             contained: true,
             evidence_valid: true,
+            host_guard_refusals: 0,
             blockers: vec!["provider error: 429 Too Many Requests".into()],
             provider_error: Some("429 Too Many Requests".into()),
             exit: crate::metrics::ExitReason::ProviderError,
@@ -257,6 +261,7 @@ mod tests {
             skipped: true,
             contained: false,
             evidence_valid: false,
+            host_guard_refusals: 0,
             ..run(id, false, false)
         }
     }
@@ -338,6 +343,8 @@ mod tests {
             mean_steps: 2.0,
             budget_exhaustion_rate: 0.0,
             abstain_rate: 0.0,
+            host_guard_refusal_runs: 0,
+            host_guard_refusal_rate: 0.0,
             mean_total_tokens: 150.0,
             search_use_rate: None,
             search_yield_rate: None,
