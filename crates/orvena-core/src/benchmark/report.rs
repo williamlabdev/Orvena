@@ -84,6 +84,11 @@ pub struct TaskResult {
     /// `steps` is a budget artifact, not a convergence measurement.
     #[serde(default)]
     pub exit: ExitReason,
+    /// The model's last response text, carried from the run (native only;
+    /// home-redacted, capped). Lets a reader tell an abstention that was a
+    /// refusal from one that was a stall or a malformed action block (#46).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_reply: Option<String>,
     /// Evidence-window eviction telemetry, carried verbatim from the bundle
     /// (see [`crate::metrics::RunReport::evictions`]). `None` = unattributable
     /// (wrapped agent, or a pre-field report), never "no evictions".
@@ -280,6 +285,11 @@ pub struct DeathRow {
     /// Ground truth (the external `verify`).
     pub verified: bool,
     pub exit: ExitReason,
+    /// The model's last response text, carried from the run (native only;
+    /// home-redacted, capped). Lets a reader tell an abstention that was a
+    /// refusal from one that was a stall or a malformed action block (#46).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub final_reply: Option<String>,
     pub steps: u32,
     pub total_tokens: u32,
     /// `None` = unattributable, never "all zero" — same contract as
@@ -316,6 +326,7 @@ impl DeathRow {
             solved: r.completed,
             verified: r.verified,
             exit: r.exit,
+            final_reply: r.final_reply.clone(),
             steps: r.steps,
             total_tokens: r.input_tokens + r.output_tokens,
             action_counts: r.action_counts,
@@ -389,6 +400,15 @@ pub struct TaskPassRate {
     /// exactly the per-task shape calibration reads (slice-026).
     #[serde(default)]
     pub exhaustion_rate: f32,
+    /// Measured runs of this task that ended `abstained` (the model emitted no
+    /// action on any step — #46). Not counted in `exhaustion_rate`, not a
+    /// done-claim; still in the `pass_rate` denominator.
+    #[serde(default)]
+    pub abstained: u32,
+    /// `abstained` over this task's measured runs (same denominator as
+    /// `pass_rate` and `exhaustion_rate`).
+    #[serde(default)]
+    pub abstain_rate: f32,
     /// The death table (slice-026): one row per measured run, in repeat order.
     /// What a calibration run publishes about a task is not a percentage but
     /// how its runs died — the pass rate needs ~96 runs to stabilize, while
@@ -474,6 +494,12 @@ pub struct RepeatedReport {
     /// `max_steps`, not behavior; this rate is what makes that legible.
     #[serde(default)]
     pub budget_exhaustion_rate: f32,
+    /// The fraction of measured runs (same denominator as `verified_rate` and
+    /// `budget_exhaustion_rate`) that ended `abstained`: no action on any step.
+    /// A scope-conflict refusal and a stall look identical here — `final_reply`
+    /// on the run tells them apart (#46).
+    #[serde(default)]
+    pub abstain_rate: f32,
     #[serde(default)]
     pub mean_total_tokens: f32,
     /// The fraction of *attributable* runs that emitted at least one SEARCH.
@@ -577,6 +603,12 @@ pub struct Differential {
     pub baseline_budget_exhaustion_rate: f32,
     #[serde(default)]
     pub governed_budget_exhaustion_rate: f32,
+    /// Fraction of measured runs per posture that ended `abstained` (no action
+    /// on any step, #46) — kept out of the exhaustion rates above.
+    #[serde(default)]
+    pub baseline_abstain_rate: f32,
+    #[serde(default)]
+    pub governed_abstain_rate: f32,
     /// `None` when either posture's tokens were never accounted for — a wrapped
     /// external agent makes its own model calls, and a ratio of two unknowns is
     /// not a cheaper number, it is not a number. Steps stay observable either
@@ -658,6 +690,7 @@ mod tests {
             solved,
             verified: solved,
             exit: ExitReason::GatesPassed,
+            final_reply: None,
             steps: 2,
             total_tokens: 100,
             action_counts: Some(counts(1)),

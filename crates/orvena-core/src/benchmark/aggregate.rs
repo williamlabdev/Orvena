@@ -158,6 +158,8 @@ pub(super) fn derive_differential(
             overhead_steps_ratio: ratio(g.mean_steps, b.mean_steps),
             baseline_budget_exhaustion_rate: b.budget_exhaustion_rate,
             governed_budget_exhaustion_rate: g.budget_exhaustion_rate,
+            baseline_abstain_rate: b.abstain_rate,
+            governed_abstain_rate: g.abstain_rate,
             overhead_tokens_ratio: (b.token_accounting != TokenAccounting::Unavailable
                 && g.token_accounting != TokenAccounting::Unavailable)
                 .then(|| ratio(g.mean_total_tokens, b.mean_total_tokens)),
@@ -224,6 +226,7 @@ mod tests {
             provider_error: None,
             token_accounting: TokenAccounting::Observed,
             exit: crate::metrics::ExitReason::GatesPassed,
+            final_reply: None,
             evictions: None,
             dropped_reread: None,
             dropped_research: None,
@@ -244,6 +247,7 @@ mod tests {
             blockers: vec!["provider error: 429 Too Many Requests".into()],
             provider_error: Some("429 Too Many Requests".into()),
             exit: crate::metrics::ExitReason::ProviderError,
+            final_reply: None,
             ..run(id, false, false)
         }
     }
@@ -333,6 +337,7 @@ mod tests {
             evidence_valid_rate: bench.evidence_valid_rate,
             mean_steps: 2.0,
             budget_exhaustion_rate: 0.0,
+            abstain_rate: 0.0,
             mean_total_tokens: 150.0,
             search_use_rate: None,
             search_yield_rate: None,

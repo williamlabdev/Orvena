@@ -47,13 +47,14 @@
         "gates_passed",
         "claimed_done",
         "budget_exhausted",
+        "abstained",
         "needs_human",
         "hard_blocked",
         "provider_error",
         "agent_error",
         "unrecorded"
       ],
-      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. Additive, 2026-08-04 (slice-021)."
+      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. `abstained` = the model emitted no action on any step (tool_calls == 0), classified from observables only; read `final_reply` to tell a refusal from a stall (#46). Additive, 2026-08-04 (slice-021); `abstained` added 2026-10-13: additive, but a strict validator built from the earlier v1 schema (closed enum) will reject bundles carrying it. The version is not bumped."
     },
     "input_tokens": { "type": "integer", "minimum": 0 },
     "output_tokens": { "type": "integer", "minimum": 0 },
@@ -108,6 +109,10 @@
     "agent_final_text": {
       "type": ["string", "null"],
       "description": "A wrapped agent's own final message, home-redacted and capped at 600 characters. The only place a wrapped agent states that it skipped half the task or could not start it; the gate cannot see either, so `completed` stays the gate's verdict and this is evidence beside it, never a judgment (issue #38). null = native loop, or output that carried no final text. Additive optional field; absent in bundles written before it existed (read back as null)."
+    },
+    "final_reply": {
+      "type": ["string", "null"],
+      "description": "Bench diagnostics: the raw text of the model's last response in a native run, home-redacted and truncated to 4000 characters with a trailing `…[truncated]` marker when cut. Lets a reader tell a refusal from a stall when `exit` is `abstained`. null/absent = a wrapped agent, or a bundle written before the field. Additive optional field; stays v1."
     },
     "agent_turns": {
       "type": ["integer", "null"],
