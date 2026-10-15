@@ -321,6 +321,14 @@ fn print_report(r: &BenchReport) {
         .filter(|t| !t.skipped && t.provider_error.is_none() && t.host_guard_refusals > 0)
         .count();
     print!("  |  host-guard refusals: {hg_runs}/{ran} runs");
+    let fe_runs = r
+        .results
+        .iter()
+        .filter(|t| !t.skipped && t.provider_error.is_none() && t.format_errors > 0)
+        .count();
+    if fe_runs > 0 {
+        print!("  |  native-markup replies: {fe_runs}/{ran} runs");
+    }
     if r.false_blocks > 0 {
         print!("  |  false blocks: {}", r.false_blocks);
     }
@@ -410,6 +418,8 @@ fn death_note(t: &TaskPassRate) -> Option<String> {
         .count();
     let abstained =
         t.deaths.iter().filter(|d| d.exit == orvena_core::metrics::ExitReason::Abstained).count();
+    let refused =
+        t.deaths.iter().filter(|d| d.exit == orvena_core::metrics::ExitReason::Refused).count();
     let s = &t.search_vs_solved;
     let cells: Vec<String> = [
         ("hit", s.hit),
@@ -425,7 +435,7 @@ fn death_note(t: &TaskPassRate) -> Option<String> {
     })
     .collect();
     Some(format!(
-        "deaths: {exhausted}/{} exhausted, {abstained} abstained  |  search→solved: {}",
+        "deaths: {exhausted}/{} exhausted, {abstained} abstained, {refused} refused  |  search→solved: {}",
         t.deaths.len(),
         cells.join(", ")
     ))
@@ -486,10 +496,11 @@ fn print_repeated(r: &RepeatedReport) {
     }
     println!();
     println!(
-        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  abstained: {:.0}%  |  mean {:.1} steps, {:.0} tok{}",
+        "ground truth: {:.0}% verified  |  false-done: {:.0}% of claims  |  abstained: {:.0}%  |  refused: {:.0}%  |  mean {:.1} steps, {:.0} tok{}",
         r.verified_rate * 100.0,
         r.false_done_rate * 100.0,
         r.abstain_rate * 100.0,
+        r.refusal_rate * 100.0,
         r.mean_steps,
         r.mean_total_tokens,
         token_note(r.token_accounting)
@@ -512,6 +523,13 @@ fn print_repeated(r: &RepeatedReport) {
         r.host_guard_refusal_runs,
         measured_task_runs(r)
     );
+    if r.format_error_runs > 0 {
+        print!(
+            "  |  native-markup replies: {}/{} runs",
+            r.format_error_runs,
+            measured_task_runs(r)
+        );
+    }
     if r.false_blocks > 0 {
         print!("  |  false blocks: {}", r.false_blocks);
     }
@@ -579,6 +597,13 @@ fn print_matrix(m: &MatrixReport) {
             d.baseline_abstain_rate * 100.0,
             d.governed,
             d.governed_abstain_rate * 100.0
+        );
+        println!(
+            "refused:     {}: {:.0}%  →  {}: {:.0}%",
+            d.baseline,
+            d.baseline_refusal_rate * 100.0,
+            d.governed,
+            d.governed_refusal_rate * 100.0
         );
         match d.overhead_tokens_ratio {
             Some(tokens) => println!(

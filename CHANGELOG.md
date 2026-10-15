@@ -17,6 +17,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `parse_step(..).actions` and returns what it did before for any reply without
   a terminal block.
 
+### Changed
+
+- **Explicit termination in the native loop (#54, #59).** The run ends only on
+  `<<<DONE …>>>` (ungoverned: `claimed_done`; governed: the gates still decide)
+  or `<<<BLOCKED …>>>` (new exit `refused`, both postures). Both blocks are
+  documented in the system prompt of both postures, and the governed scope rule
+  now says to stop with BLOCKED. A reply with no action and no terminal block
+  no longer ends an ungoverned run: it is re-prompted with a `NO ACTION` line,
+  or a `FORMAT ERROR` line when it used native tool-call markup, counted in the
+  new `RunReport.format_errors` / `TaskResult.format_errors` (runs with any:
+  `RepeatedReport.format_error_runs`). A governed run whose DONE the gates
+  never accept ends `budget_exhausted`, not `abstained`. New
+  `refused` / `refusal_rate` on `TaskPassRate`, `RepeatedReport` and
+  `Differential`; `evidence.v1.json` gains the `refused` exit and an optional
+  `format_errors` (additive, stays v1; same strict-validator caveat as
+  `abstained`). Baseline cells before this start a new series and are not
+  re-scored.
+
 ### Fixed
 
 - **Host-guard refusals are counted apart from oracle containment (#47).** The
