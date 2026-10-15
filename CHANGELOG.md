@@ -6,6 +6,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`parse_step`: terminal blocks and native-markup detection (#54, #59; parser
+  only).** `agent::step::parse_step` returns the reply's actions, its first
+  `<<<DONE …>>>` / `<<<BLOCKED …>>>` block as `Step.terminal` (never as an
+  action), and `Step.native_markup` when the reply falls back to native tool-call
+  markup (`<invoke …>`, `<function_calls>`), which is detected and never parsed.
+  The driver and prompt are unchanged in this release step: `parse_actions` is
+  `parse_step(..).actions` and returns what it did before for any reply without
+  a terminal block.
+
 ### Fixed
 
 - **Host-guard refusals are counted apart from oracle containment (#47).** The
