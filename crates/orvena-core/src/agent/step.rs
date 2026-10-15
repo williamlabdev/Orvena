@@ -30,6 +30,18 @@
 //! >>>
 //! ```
 //!
+//! Two terminal blocks end a run rather than act on it (#54). They are parsed
+//! by [`parse_step`] into [`Step::terminal`], never into the action list:
+//!
+//! ```text
+//! <<<DONE <one-line summary>
+//! >>>
+//!
+//! <<<BLOCKED <reason>
+//! [further lines of reason]
+//! >>>
+//! ```
+//!
 //! EDIT's old/new are split on the first body line that is exactly `===`
 //! (slice-020). Known v1 limit: an old/new that itself contains such a line
 //! cannot be expressed — full-file WRITE remains the escape hatch. A block with
@@ -66,14 +78,81 @@ pub enum Action {
     },
 }
 
+/// How the agent says the run is over (#54). Kept apart from [`Action`]: a
+/// terminal block changes nothing in the project, and counting it as an action
+/// would silently change the ungoverned loop's "zero actions" exit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Terminal {
+    /// The agent claims the task is complete. A claim, not proof: what it is
+    /// worth is decided by the driver (gates) or the bench (external verify).
+    Done { summary: String },
+    /// The agent declares it cannot complete the task as instructed. The
+    /// reason is recorded verbatim, never interpreted.
+    Blocked { reason: String },
+}
+
+/// Everything one model reply says, as parsed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Step {
+    pub actions: Vec<Action>,
+    /// The first terminal block, if any. Later ones are ignored.
+    pub terminal: Option<Terminal>,
+    /// The reply contains a model's native tool-call markup (`<invoke …>`,
+    /// `<function_calls>`) instead of this protocol (#59). Detected, never
+    /// parsed: mapping it to an action would make format adherence free and
+    /// hide a failure the benchmark exists to see.
+    pub native_markup: bool,
+}
+
 /// Parse zero or more `<<<WRITE …>>>` / `<<<SEARCH …>>>` / `<<<RUN …>>>` blocks
 /// from a model response.
 pub fn parse_actions(text: &str) -> Vec<Action> {
+    parse_step(text).actions
+}
+
+/// Parse a model response into its actions, its terminal block and whether it
+/// fell back to native tool-call markup.
+pub fn parse_step(text: &str) -> Step {
     let mut actions = Vec::new();
+    let mut terminal = None;
+    let mut native_markup = false;
     let mut lines = text.lines();
     while let Some(line) = lines.next() {
         let trimmed = line.trim_start();
-        if let Some(raw) = trimmed.strip_prefix("<<<WRITE ") {
+        if is_native_markup(trimmed) {
+            native_markup = true;
+        } else if let Some((kind, raw)) = terminal_header(trimmed) {
+            // Header text and body lines join into one string; a bare
+            // `<<<DONE` / `>>>` still terminates, with an empty text.
+            //
+            // A `>` straight after the keyword can only be a closer, never
+            // text: `<<<DONE>`, `<<<DONE>>`, `<<<DONE>>> thanks` all close on
+            // the header line. Handing them to `split_header` would read the
+            // block as open and swallow every action after it.
+            let (head, self_closed) = match raw.strip_prefix('>') {
+                Some(rest) => (rest.trim_start_matches('>').trim().to_string(), true),
+                None => split_header(raw),
+            };
+            let mut parts: Vec<String> = Vec::new();
+            if !head.is_empty() {
+                parts.push(head);
+            }
+            if !self_closed {
+                for body in lines.by_ref() {
+                    if body.trim() == ">>>" {
+                        break;
+                    }
+                    parts.push(body.trim().to_string());
+                }
+            }
+            let text = parts.join(" ").trim().to_string();
+            if terminal.is_none() {
+                terminal = Some(match kind {
+                    TerminalKind::Done => Terminal::Done { summary: text },
+                    TerminalKind::Blocked => Terminal::Blocked { reason: text },
+                });
+            }
+        } else if let Some(raw) = trimmed.strip_prefix("<<<WRITE ") {
             let (path, self_closed) = split_header(raw);
             let mut content_lines = Vec::new();
             if !self_closed {
@@ -187,7 +266,33 @@ pub fn parse_actions(text: &str) -> Vec<Action> {
             }
         }
     }
-    actions
+    Step { actions, terminal, native_markup }
+}
+
+enum TerminalKind {
+    Done,
+    Blocked,
+}
+
+/// `<<<DONE` / `<<<BLOCKED` followed by nothing, a space or a closer — not
+/// `<<<DONEX`. Returns the rest of the header line.
+fn terminal_header(trimmed: &str) -> Option<(TerminalKind, &str)> {
+    let (kind, rest) = if let Some(rest) = trimmed.strip_prefix("<<<DONE") {
+        (TerminalKind::Done, rest)
+    } else if let Some(rest) = trimmed.strip_prefix("<<<BLOCKED") {
+        (TerminalKind::Blocked, rest)
+    } else {
+        return None;
+    };
+    (rest.is_empty() || rest.starts_with(' ') || rest.starts_with('>')).then_some((kind, rest))
+}
+
+/// A line opening a native tool call. Observed from Sonnet 5.5 on 2026-10-13:
+/// `<invoke name="READ">`, and runs of empty `<invoke name="x">` (#59).
+fn is_native_markup(trimmed: &str) -> bool {
+    trimmed.starts_with("<invoke ")
+        || trimmed.starts_with("<invoke>")
+        || trimmed.starts_with("<function_calls>")
 }
 
 /// Split a block header into its value and whether the block closed on the same
@@ -471,5 +576,104 @@ mod tests {
                 Action::Run { name: "test".into() },
             ]
         );
+    }
+
+    #[test]
+    fn done_parses_as_terminal_not_action() {
+        let s = parse_step("<<<DONE fixed the port\n>>>\n");
+        assert!(s.actions.is_empty(), "a terminal block is never an action");
+        assert_eq!(s.terminal, Some(Terminal::Done { summary: "fixed the port".into() }));
+        assert!(!s.native_markup);
+        assert!(parse_actions("<<<DONE fixed the port\n>>>\n").is_empty());
+    }
+
+    #[test]
+    fn blocked_reason_joins_header_and_body_and_may_be_empty() {
+        let s = parse_step("<<<BLOCKED src/data.txt.bak\nis not WRITABLE\n>>>");
+        assert_eq!(
+            s.terminal,
+            Some(Terminal::Blocked { reason: "src/data.txt.bak is not WRITABLE".into() })
+        );
+        assert_eq!(
+            parse_step("<<<BLOCKED out of scope>>>").terminal,
+            Some(Terminal::Blocked { reason: "out of scope".into() })
+        );
+        assert_eq!(
+            parse_step("<<<BLOCKED\n>>>").terminal,
+            Some(Terminal::Blocked { reason: String::new() })
+        );
+    }
+
+    #[test]
+    fn a_terminal_word_must_end_at_a_boundary() {
+        for text in ["<<<DONEX\n<<<RUN check\n>>>", "<<<BLOCKEDNESS\n<<<RUN check\n>>>"] {
+            let s = parse_step(text);
+            assert_eq!(s.terminal, None);
+            assert_eq!(s.actions, vec![Action::Run { name: "check".into() }], "{text:?}");
+        }
+    }
+
+    #[test]
+    fn a_closer_right_after_the_keyword_closes_the_block() {
+        for (text, summary) in [
+            ("<<<DONE>\n<<<RUN check\n>>>", ""),
+            ("<<<DONE>>\n<<<RUN check\n>>>", ""),
+            ("<<<DONE>>>\n<<<RUN check\n>>>", ""),
+            ("<<<DONE>>> thanks\n<<<RUN check\n>>>", "thanks"),
+        ] {
+            let s = parse_step(text);
+            assert_eq!(s.terminal, Some(Terminal::Done { summary: summary.into() }), "{text:?}");
+            assert_eq!(s.actions, vec![Action::Run { name: "check".into() }], "{text:?}");
+        }
+    }
+
+    #[test]
+    fn native_markup_does_not_change_what_parse_actions_returns() {
+        // The driver still calls parse_actions; with no terminal block present
+        // its output must be exactly what it was before parse_step existed.
+        assert_eq!(
+            parse_actions("<invoke name=\"x\">\n<<<RUN check\n>>>\n</invoke>"),
+            vec![Action::Run { name: "check".into() }]
+        );
+        assert_eq!(
+            parse_actions("<<<WRITE a.txt\n<invoke x>\n>>>"),
+            vec![Action::Write { path: "a.txt".into(), content: "<invoke x>\n".into() }],
+            "a markup-looking line inside a body stays body content"
+        );
+    }
+
+    #[test]
+    fn actions_before_a_terminal_are_kept_and_the_first_terminal_wins() {
+        let s = parse_step("<<<WRITE a.txt\nfix\n>>>\n<<<DONE ok\n>>>\n<<<BLOCKED late\n>>>");
+        assert_eq!(
+            s.actions,
+            vec![Action::Write { path: "a.txt".into(), content: "fix\n".into() }]
+        );
+        assert_eq!(s.terminal, Some(Terminal::Done { summary: "ok".into() }));
+    }
+
+    #[test]
+    fn a_terminal_body_is_not_scanned_for_actions() {
+        let s = parse_step("<<<DONE\n<<<WRITE a.txt\n>>>");
+        assert!(s.actions.is_empty());
+        assert_eq!(s.terminal, Some(Terminal::Done { summary: "<<<WRITE a.txt".into() }));
+    }
+
+    #[test]
+    fn native_markup_is_detected_and_never_parsed() {
+        // Verbatim shapes from the 2026-10-13 Sonnet 5.5 report (#59).
+        let s = parse_step("<invoke name=\"READ\">\ntests/it.rs\n</invoke>\n\n<invoke name=\"RUN\">\ncheck\n</invoke>");
+        assert!(s.native_markup);
+        assert!(s.actions.is_empty(), "markup is detected, not mapped to an action");
+        assert_eq!(s.terminal, None);
+        assert!(parse_step("<invoke name=\"x\">\n</invoke>").native_markup);
+        assert!(parse_step("<function_calls>\n<invoke name=\"READ\">").native_markup);
+    }
+
+    #[test]
+    fn protocol_text_alone_is_not_native_markup() {
+        assert!(!parse_step("<<<READ a.txt\n>>>").native_markup);
+        assert!(!parse_step("BLOCKER: only src/data.txt is WRITABLE").native_markup);
+        assert!(!parse_step("").native_markup);
     }
 }
