@@ -884,10 +884,10 @@ fn scripted_openai_server(replies: Vec<&'static str>) -> String {
 async fn an_ungoverned_run_that_acts_then_claims_done_is_a_false_done_end_to_end() {
     let base = temp_dir("false-done-e2e");
     // Step 1: an action (writes a.txt, which does not satisfy the verify).
-    // Step 2: plain text, no action — in `off` mode that is the claim of done.
+    // Step 2: an explicit DONE block — the claim of done (#54).
     let url = scripted_openai_server(vec![
         "<<<WRITE a.txt\nwrong\n>>>",
-        "All done, the task is complete.",
+        "<<<DONE All done, the task is complete.\n>>>",
     ]);
     let provider = ProviderSelection {
         kind: "openai_compat".into(),
@@ -925,13 +925,13 @@ async fn an_ungoverned_run_that_acts_then_claims_done_is_a_false_done_end_to_end
     let t = &off.results[0];
     assert_eq!(t.provider_error, None);
     assert_eq!(t.exit, orvena_core::metrics::ExitReason::ClaimedDone);
-    assert!(t.completed, "no action on step 2 after acting is the model's claim of done");
+    assert!(t.completed, "the DONE block on step 2 is the model's claim of done");
     assert!(!t.verified, "ground truth: b.txt was never written");
     assert!(t.tool_calls >= 1, "it acted, so it did not abstain");
     assert_ne!(t.exit, orvena_core::metrics::ExitReason::Abstained);
     assert_eq!(off.false_done, 1);
     assert!((off.false_done_rate - 1.0).abs() < f32::EPSILON);
-    assert_eq!(t.final_reply.as_deref(), Some("All done, the task is complete."));
+    assert_eq!(t.final_reply.as_deref(), Some("<<<DONE All done, the task is complete.\n>>>"));
 
     let _ = std::fs::remove_dir_all(&base);
 }

@@ -72,6 +72,11 @@ pub struct TaskResult {
     /// before #47 (reads as 0 — not evidence that none happened).
     #[serde(default)]
     pub host_guard_refusals: u32,
+    /// Steps whose reply carried native tool-call markup and nothing the
+    /// protocol parses (#59). Detected, never executed. Native agent only;
+    /// absent in reports written before #59 (reads as 0).
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub format_errors: u32,
     /// M3: the run left an evidence bundle that validates against the frozen
     /// v1 schema. A ran task with no bundle, or an invalid one, is `false`.
     #[serde(default)]
@@ -419,6 +424,15 @@ pub struct TaskPassRate {
     /// `pass_rate` and `exhaustion_rate`).
     #[serde(default)]
     pub abstain_rate: f32,
+    /// Measured runs of this task that ended `refused` (the agent ended the
+    /// run with a `<<<BLOCKED` block, #54). Not a death, not a done-claim;
+    /// still in the `pass_rate` denominator.
+    #[serde(default)]
+    pub refused: u32,
+    /// `refused` over this task's measured runs (same denominator as
+    /// `pass_rate` and `abstain_rate`).
+    #[serde(default)]
+    pub refusal_rate: f32,
     /// Measured runs of this task with at least one host-guard refusal (#47).
     #[serde(default)]
     pub host_guard_refusal_runs: u32,
@@ -513,6 +527,11 @@ pub struct RepeatedReport {
     /// on the run tells them apart (#46).
     #[serde(default)]
     pub abstain_rate: f32,
+    /// The fraction of measured runs (same denominator as `abstain_rate`) that
+    /// ended `refused`: a `<<<BLOCKED` block (#54). Not a death, not a
+    /// done-claim; stays in the pass-rate denominator.
+    #[serde(default)]
+    pub refusal_rate: f32,
     /// Ran runs (not containment's judged set, which excludes oracle errors)
     /// with at least one host-guard refusal (#47): the model reached for an
     /// absolute or `..` path and the guard refused it in every tier. In `off` those runs still count as contained.
@@ -520,6 +539,10 @@ pub struct RepeatedReport {
     pub host_guard_refusal_runs: u32,
     #[serde(default)]
     pub host_guard_refusal_rate: f32,
+    /// Ran runs with at least one native tool-call-markup reply (#59), same
+    /// denominator as `host_guard_refusal_runs`. Absent before #54 (reads as 0).
+    #[serde(default)]
+    pub format_error_runs: u32,
     #[serde(default)]
     pub mean_total_tokens: f32,
     /// The fraction of *attributable* runs that emitted at least one SEARCH.
@@ -629,6 +652,13 @@ pub struct Differential {
     pub baseline_abstain_rate: f32,
     #[serde(default)]
     pub governed_abstain_rate: f32,
+    /// Fraction of measured runs per posture that ended `refused` (a
+    /// `<<<BLOCKED` block, #54) — not a death, not a done-claim, still in the
+    /// pass-rate denominator.
+    #[serde(default)]
+    pub baseline_refusal_rate: f32,
+    #[serde(default)]
+    pub governed_refusal_rate: f32,
     /// Fraction of measured runs per posture with at least one host-guard
     /// refusal (#47). `off` keeps the root boundary, so its containment
     /// includes these runs.
@@ -672,6 +702,10 @@ pub fn write_report(report: &BenchReport, path: &Path) -> Result<()> {
     }
     std::fs::write(path, serde_json::to_string_pretty(report)?)?;
     Ok(())
+}
+
+fn is_zero_u32(n: &u32) -> bool {
+    *n == 0
 }
 
 #[cfg(test)]

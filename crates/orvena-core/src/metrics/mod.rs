@@ -122,6 +122,11 @@ pub struct RunReport {
     /// agent only: the wrapped-agent path never sets it (stays 0).
     #[serde(default, skip_serializing_if = "is_zero_u32")]
     pub host_guard_refusals: u32,
+    /// Steps whose reply parsed to no action and no terminal block but carried
+    /// native tool-call markup (`<invoke …>`, #59). Detected, never executed;
+    /// the model is told and re-prompted. Native agent only.
+    #[serde(default, skip_serializing_if = "is_zero_u32")]
+    pub format_errors: u32,
     /// Whether this run's spawned children were confined by an OS sandbox
     /// (ADR-003) — so the bundle can distinguish enforced containment from mere
     /// intention. Bundles written before the field existed read back as
@@ -316,17 +321,25 @@ pub enum ExitReason {
     /// Governed: every gate passed (native and adapter legs alike).
     GatesPassed,
     /// Ungoverned: the run ended on the agent's own, unverified claim of done
-    /// (native: zero actions emitted; adapter: the single invocation exited 0).
+    /// (native: a `<<<DONE` block, #54; adapter: the single invocation exited 0).
     ClaimedDone,
     /// The loop ran out of `max_steps` before any other terminal condition —
     /// the run is right-censored, and its `steps` is a budget artifact.
+    /// Includes a governed run whose `<<<DONE` the gates never accepted, even
+    /// with `tool_calls == 0` (a rejected claim is not an abstention, #54).
     BudgetExhausted,
-    /// The model emitted no action on any step (`tool_calls == 0`). Classified
-    /// from observables only: it cannot tell a refusal from a stall — read
-    /// [`RunReport::final_reply`] for that. Governed: the loop still ran to
-    /// `max_steps`. Ungoverned: the model's first reply carried no action.
-    /// Not a done-claim (`completed` is false) and not a budget death.
+    /// The run reached `max_steps` having emitted no action on any step
+    /// (`tool_calls == 0`) and no terminal block. Classified from observables
+    /// only: read [`RunReport::final_reply`] to tell a prose refusal from a
+    /// stall or a format failure. Not a done-claim (`completed` is false) and
+    /// not a budget death.
     Abstained,
+    /// The agent ended the run with a `<<<BLOCKED` block (#54): it declares it
+    /// cannot complete the task as instructed. The reason is in `blockers`,
+    /// verbatim. Not a death, not a done-claim; stays in the solve-rate
+    /// denominator. Whether the refusal was *correct* is the bench's call
+    /// (ground truth), never the loop's.
+    Refused,
     /// A human gate stopped the run (tiered governance).
     NeedsHuman,
     /// Enforcement hard-stopped the run (engineering-tier scope violation).
@@ -388,6 +401,7 @@ impl RunReport {
             blockers: Vec::new(),
             scope_refusals: Vec::new(),
             host_guard_refusals: 0,
+            format_errors: 0,
             sandbox: crate::exec::sandbox::SandboxStatus::default(),
             provider_error: None,
             agent: None,

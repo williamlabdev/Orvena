@@ -48,13 +48,14 @@
         "claimed_done",
         "budget_exhausted",
         "abstained",
+        "refused",
         "needs_human",
         "hard_blocked",
         "provider_error",
         "agent_error",
         "unrecorded"
       ],
-      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. `abstained` = the model emitted no action on any step (tool_calls == 0), classified from observables only; read `final_reply` to tell a refusal from a stall (#46). Additive, 2026-08-04 (slice-021); `abstained` added 2026-10-13: additive, but a strict validator built from the earlier v1 schema (closed enum) will reject bundles carrying it. The version is not bumped."
+      "description": "Why the loop stopped, as structured data — `blockers` keeps the prose. `budget_exhausted` marks a right-censored run whose step count is a budget artifact. `abstained` = the model emitted no action on any step (tool_calls == 0), classified from observables only; read `final_reply` to tell a refusal from a stall (#46). Additive, 2026-08-04 (slice-021); `abstained` added 2026-10-13: additive, but a strict validator built from the earlier v1 schema (closed enum) will reject bundles carrying it. The version is not bumped. `refused` added 2026-10-15 (#54): the agent ended the run with a BLOCKED block; same strict-validator caveat."
     },
     "input_tokens": { "type": "integer", "minimum": 0 },
     "output_tokens": { "type": "integer", "minimum": 0 },
@@ -113,6 +114,11 @@
     "final_reply": {
       "type": ["string", "null"],
       "description": "Bench diagnostics: the raw text of the model's last response in a native run, home-redacted and truncated to 4000 characters with a trailing `…[truncated]` marker when cut. Lets a reader tell a refusal from a stall when `exit` is `abstained`. null/absent = a wrapped agent, or a bundle written before the field. Additive optional field; stays v1."
+    },
+    "format_errors": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Steps whose reply carried native tool-call markup and nothing the protocol parses (#59); detected, never executed. Native agent only. Additive optional field; absent in bundles written before it (read back as 0); stays v1."
     },
     "agent_turns": {
       "type": ["integer", "null"],

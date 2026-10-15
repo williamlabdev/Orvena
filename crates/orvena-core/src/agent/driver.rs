@@ -29,6 +29,17 @@ const MAX_OUTPUT_TOKENS: u32 = 1024;
 const RUN_EVIDENCE_MAX_LINES: usize = 100;
 const RUN_EVIDENCE_MAX_BYTES: usize = 8 * 1024;
 
+/// Fed back when a reply carried native tool-call markup and nothing this
+/// protocol parses (#59). Same text in both postures.
+const NATIVE_MARKUP_FEEDBACK: &str = "FORMAT ERROR: your last reply used tool-call markup \
+     (<invoke …>) that this protocol does not accept; nothing was executed. Use the \
+     <<<…>>> blocks from the rules, or finish with <<<DONE or <<<BLOCKED.\n";
+
+/// Fed back when a reply carried no action and no terminal block (#54). Same
+/// text in both postures.
+const NO_ACTION_FEEDBACK: &str = "NO ACTION: your last reply contained no action block, \
+     so nothing happened. Act with a <<<…>>> block, or finish with <<<DONE or <<<BLOCKED.\n";
+
 /// Trim `raw` to the RUN evidence caps. Returns the (possibly truncated) body and
 /// a note describing the cap when one was hit (empty otherwise).
 fn cap_run_output(raw: &str, hint: &str) -> (String, String) {
@@ -229,6 +240,9 @@ pub(crate) async fn run_loop_with(
     // depth is capability, not obligation, and a baseline with a shallower
     // memory would turn the differential into a measurement of the window.
     let mut evidence_log: Vec<(u32, String)> = Vec::new();
+    // Steps that carried a `<<<DONE` the gates did not accept (governed only;
+    // ungoverned DONE ends the run). A claim is not an abstention (#54).
+    let mut unaccepted_done: u32 = 0;
     // Step of the most recent successful READ per path — the reference the
     // dropped-reread instrument compares against the evicted set. Observation
     // only; never consulted by the loop's own decisions.
@@ -303,9 +317,13 @@ pub(crate) async fn run_loop_with(
         let grep = GrepTool::new(agent.root(), &role);
         let shell = ShellTool::new(agent.root(), &role, &cfg.commands, &sandbox);
         let mut tool_evidence = String::new();
-        let actions = step::parse_actions(&resp.content);
-        let action_count = actions.len();
-        for action in actions {
+        let parsed = step::parse_step(&resp.content);
+        let terminal = parsed.terminal;
+        if matches!(terminal, Some(step::Terminal::Done { .. })) {
+            unaccepted_done += 1;
+        }
+        let action_count = parsed.actions.len();
+        for action in parsed.actions {
             report.tool_calls += 1;
             if let Some(counts) = report.action_counts.as_mut() {
                 match &action {
@@ -550,18 +568,36 @@ pub(crate) async fn run_loop_with(
             }
         }
 
+        // Termination is explicit in both postures (#54). The actions in the
+        // same reply have already been applied above; the terminal block ends
+        // the run after them.
+        if let Some(step::Terminal::Blocked { reason }) = &terminal {
+            report.blockers.push(if reason.is_empty() {
+                "agent stopped with BLOCKED (no reason given)".to_string()
+            } else {
+                format!("agent stopped with BLOCKED: {reason}")
+            });
+            report.exit = ExitReason::Refused;
+            return Ok(report.finished(false));
+        }
+        // A reply with neither an action nor a terminal block is not "done"
+        // any more (#54, #59): say why nothing happened and re-prompt. Native
+        // tool-call markup is named as such — detected, never executed.
+        if action_count == 0 && terminal.is_none() {
+            if parsed.native_markup {
+                report.format_errors += 1;
+                tool_evidence.push_str(NATIVE_MARKUP_FEEDBACK);
+            } else {
+                tool_evidence.push_str(NO_ACTION_FEEDBACK);
+            }
+        }
+
         // Ungoverned baseline (bench-only): no gate is consulted — that is the
-        // point of the baseline. The model emitting zero actions is its own
-        // claim of "done"; `completed` here means *claimed*, not verified. The
-        // benchmark harness measures ground truth with an external verify.
+        // point of the baseline. `<<<DONE` is the agent's own claim; `completed`
+        // here means *claimed*, not verified. The benchmark harness measures
+        // ground truth with an external verify.
         if opts.ungoverned {
-            if action_count == 0 {
-                // Never acted on any step: nothing was done to claim, so this
-                // is not a done-claim (nor a false-done) — #46.
-                if report.tool_calls == 0 {
-                    report.exit = ExitReason::Abstained;
-                    return Ok(report.finished(false));
-                }
+            if matches!(terminal, Some(step::Terminal::Done { .. })) {
                 report.exit = ExitReason::ClaimedDone;
                 return Ok(report.finished(true));
             }
@@ -624,11 +660,16 @@ pub(crate) async fn run_loop_with(
     }
 
     report.blockers.push(if opts.ungoverned {
-        format!("reached max_steps ({max_steps}) still emitting actions (never claimed done)")
+        format!("reached max_steps ({max_steps}) without DONE or BLOCKED")
     } else {
         format!("reached max_steps ({max_steps}) without passing all gates")
     });
-    if report.tool_calls == 0 {
+    if unaccepted_done > 0 {
+        report.blockers.push(format!(
+            "claimed DONE on {unaccepted_done} of {max_steps} steps; the gates never passed"
+        ));
+    }
+    if report.tool_calls == 0 && unaccepted_done == 0 {
         // Same loop, same steps; only the label differs (#46): a run that never
         // emitted an action did not burn its budget acting.
         report.blockers.push(format!("model emitted no action on any of {max_steps} steps"));
@@ -1328,23 +1369,153 @@ mod tests {
         assert_eq!(r.final_reply.as_deref(), Some("I am done."));
     }
 
+    // ── explicit termination (#54, #59) ────────────────────────────────────
+
     #[test]
-    fn ungoverned_run_with_no_actions_on_step_one_is_abstained() {
+    fn ungoverned_run_with_no_actions_is_reprompted_then_abstained() {
+        // Prose with no block no longer ends the run (#54): it is re-prompted
+        // to max_steps and only then labelled.
         let r = run_scripted("off-zero", vec!["Declining: out of scope."], vec![], true);
         assert_eq!(r.exit, ExitReason::Abstained);
         assert!(!r.completed, "nothing was done, so nothing was claimed done");
-        assert_eq!(r.steps, 1);
-        assert_eq!(r.final_reply.as_deref(), Some("Declining: out of scope."));
+        assert_eq!(r.steps, r.max_steps);
+        assert_eq!(r.format_errors, 0, "prose is not native markup");
+        assert!(r.blockers.iter().any(|b| b.contains("without DONE or BLOCKED")));
     }
 
     #[test]
-    fn ungoverned_run_that_wrote_then_stopped_is_still_claimed_done() {
+    fn ungoverned_run_that_wrote_then_went_silent_is_exhausted_not_done() {
         let r =
             run_scripted("off-acted", vec!["<<<WRITE out.txt\nx\n>>>", "All done."], vec![], true);
+        assert_eq!(r.exit, ExitReason::BudgetExhausted, "prose \"done\" is not a DONE block");
+        assert!(!r.completed);
+        assert_eq!(r.tool_calls, 1);
+        assert_eq!(r.steps, r.max_steps);
+    }
+
+    #[test]
+    fn ungoverned_done_block_is_claimed_done_after_its_actions() {
+        let reply = "<<<WRITE out.txt\nx\n>>>\n<<<DONE wrote it\n>>>";
+        let r = run_scripted("off-done", vec![reply], vec![], true);
         assert_eq!(r.exit, ExitReason::ClaimedDone);
         assert!(r.completed);
-        assert_eq!(r.tool_calls, 1);
-        assert_eq!(r.final_reply.as_deref(), Some("All done."));
+        assert_eq!(r.steps, 1);
+        assert_eq!(r.tool_calls, 1, "the WRITE in the same reply was applied before ending");
+    }
+
+    #[test]
+    fn blocked_block_is_refused_in_both_postures() {
+        let reply = "<<<BLOCKED the fix needs a file outside scope\n>>>";
+        for (tag, ungoverned) in [("off-blocked", true), ("gov-blocked", false)] {
+            let r = run_scripted(tag, vec![reply], never_passing_gate(), ungoverned);
+            assert_eq!(r.exit, ExitReason::Refused, "{tag}");
+            assert!(!r.completed, "{tag}: refusing is not completing");
+            assert_eq!(r.steps, 1, "{tag}: BLOCKED ends the run now");
+            assert!(
+                r.blockers
+                    .iter()
+                    .any(|b| b == "agent stopped with BLOCKED: the fix needs a file outside scope"),
+                "{tag}: {:?}",
+                r.blockers
+            );
+        }
+    }
+
+    #[test]
+    fn blocked_applies_the_actions_in_the_same_reply_first() {
+        let reply = "<<<WRITE out.txt\nx\n>>>\n<<<BLOCKED cannot finish\n>>>";
+        let r = run_scripted("off-blocked-acted", vec![reply], vec![], true);
+        assert_eq!(r.exit, ExitReason::Refused);
+        assert_eq!(r.tool_calls, 1, "the WRITE ran before the run ended");
+        assert_eq!(r.steps, 1);
+    }
+
+    #[test]
+    fn governed_done_with_passing_gates_is_gates_passed() {
+        let gates = vec![Gate {
+            name: "check".into(),
+            condition: "out.txt exists".into(),
+            verify: Some("test -f out.txt".into()),
+            gatekeeper: Default::default(),
+            timeout_secs: None,
+        }];
+        let reply = "<<<WRITE out.txt\nx\n>>>\n<<<DONE wrote it\n>>>";
+        let r = run_scripted("gov-done-pass", vec![reply], gates, false);
+        assert_eq!(r.exit, ExitReason::GatesPassed);
+        assert!(r.completed);
+        assert_eq!(r.steps, 1);
+    }
+
+    #[test]
+    fn blocked_without_a_reason_still_says_so() {
+        let r = run_scripted("off-blocked-bare", vec!["<<<BLOCKED\n>>>"], vec![], true);
+        assert_eq!(r.exit, ExitReason::Refused);
+        assert!(r.blockers.iter().any(|b| b.contains("(no reason given)")));
+    }
+
+    #[test]
+    fn governed_done_does_not_bypass_failing_gates() {
+        let r =
+            run_scripted("gov-done", vec!["<<<DONE trust me\n>>>"], never_passing_gate(), false);
+        assert_eq!(r.exit, ExitReason::BudgetExhausted, "a rejected claim is not an abstention");
+        assert!(!r.completed, "DONE is a claim; gates still decide");
+        assert_eq!(r.steps, r.max_steps);
+        assert_eq!(r.tool_calls, 0);
+        assert!(r.blockers.iter().any(|b| b.contains("claimed DONE on 3 of 3 steps")));
+    }
+
+    #[test]
+    fn native_markup_is_counted_and_never_executed() {
+        let reply = "<function_calls>\n<invoke name=\"write\">\n<parameter name=\"path\">out.txt</parameter>\n</invoke>\n</function_calls>";
+        let r = run_scripted("off-native", vec![reply], vec![], true);
+        assert_eq!(r.format_errors, r.max_steps, "one format error per re-prompted step");
+        assert_eq!(r.tool_calls, 0, "native markup is detected, never parsed");
+        assert_eq!(r.exit, ExitReason::Abstained);
+    }
+
+    #[test]
+    fn no_action_feedback_reaches_the_next_prompt() {
+        // The re-prompt must actually tell the model why nothing happened —
+        // in both postures (D2).
+        struct Recorder(std::sync::Arc<Mutex<Vec<String>>>, Mutex<usize>);
+        #[async_trait]
+        impl Provider for Recorder {
+            fn id(&self) -> &str {
+                "recorder"
+            }
+            async fn chat(
+                &self,
+                req: crate::provider::ChatRequest,
+            ) -> crate::error::Result<ChatResponse> {
+                let all: String = req.messages.iter().map(|m| m.content.clone()).collect();
+                self.0.lock().unwrap().push(all);
+                let mut n = self.1.lock().unwrap();
+                *n += 1;
+                let content = if *n == 1 { "<invoke name=\"x\">" } else { "thinking" };
+                Ok(ChatResponse { content: content.into(), input_tokens: 0, output_tokens: 0 })
+            }
+        }
+        for ungoverned in [true, false] {
+            let root = std::env::temp_dir()
+                .join(format!("orvena-feedback-{ungoverned}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            std::fs::create_dir_all(&root).unwrap();
+            let seen = std::sync::Arc::new(Mutex::new(Vec::<String>::new()));
+            let provider = Recorder(seen.clone(), Mutex::new(0));
+            let gates = if ungoverned { vec![] } else { never_passing_gate() };
+            let agent =
+                super::super::Agent::with_provider(config(gates), &root, Box::new(provider));
+            let task = Task::new("do the thing", vec!["out.txt".into()]);
+            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            let r = rt.block_on(run_loop_with(&agent, task, LoopOptions { ungoverned })).unwrap();
+            let _ = std::fs::remove_dir_all(&root);
+            assert_eq!(r.format_errors, 1, "ungoverned={ungoverned}");
+            let seen = seen.lock().unwrap();
+            assert!(!seen[0].contains("FORMAT ERROR") && !seen[0].contains("NO ACTION"));
+            assert!(!seen[1].contains("NO ACTION"), "native markup gets its own message");
+            assert!(seen[1].contains("FORMAT ERROR"), "step 2 is told about the native markup");
+            assert!(seen[2].contains("NO ACTION"), "step 3 is told nothing happened");
+        }
     }
 
     #[test]
