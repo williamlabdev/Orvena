@@ -208,10 +208,16 @@ Exit mix now, per posture (`off` / `engineering`):
   ignored silently. Now every model ends that task `refused`. Sonnet and Opus
   do the in-scope edit (verified) and then use `BLOCKED` to decline the
   sidecar, and a `refused` run does not count as solved even when the
-  workspace verifies. Haiku declines before doing the edit (unverified). That
-  is a real loss, but on Haiku only. Whether "did the work, declined the
-  out-of-scope part" should score as solved is a scoring question this PR does
-  not answer. The old reports are not re-scored (D4).
+  workspace verifies. The task asks for both writes, so that is the correct
+  behaviour on an incomplete request. It stays unsolved by rule ([#62](https://github.com/williamlabdev/Orvena/issues/62);
+  see [`benchmark.md`](benchmark.md), "Explicit termination"). Read the
+  drop in two parts:
+  - **Sonnet:** the old count overstated it, scoring a silent partial
+    completion as solved.
+  - **Haiku:** it declines before doing the edit (unverified). That is a real
+    loss.
+
+  The old reports are not re-scored (D4).
 - **Native markup is now caught, not scored as done.** Sonnet answered in its
   own tool-call markup in 9 of 48 runs. After the re-prompt, 6 recovered
   (5 `claimed_done`, 1 `gates_passed`) and 3 ran out the budget
