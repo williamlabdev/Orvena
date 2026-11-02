@@ -38,13 +38,13 @@ set 層的平均正好把它蓋掉。
 |---|---|---|
 | `hit` | 至少一次 SEARCH 有命中 | 找到了 |
 | `miss` | 有搜尋真的看了檔案,全部 0 命中 | 搜錯東西——模型問題 |
-| `blocked` | 有發搜尋,但沒有任何一次真的看了檔案(全部死在工具邊界) | slice-027 那種死法——工具問題 |
+| `tool_error`(#48 前叫 `blocked`) | 有發搜尋,但沒有任何一次真的看了檔案(全部死在工具邊界:壞參數、路徑不存在) | slice-027 那種死法——工具問題,**不是** scope/policy 拒絕 |
 | `no_search` | 沒發過搜尋 | |
 | `unattributable` | `action_counts` 是 `None`(wrapped agent) | 紀錄缺口,不是行為發現 |
 
 兩個刻意的區分,各對應一次踩過的雷:
 
-1. **`blocked` ≠ `miss`**。slice-027 修掉的死法若再出現(新的工具邊界),
+1. **`tool_error` ≠ `miss`**。slice-027 修掉的死法若再出現(新的工具邊界),
    它必須顯示為工具問題,不能混進「搜錯東西」讓模型背鍋。
    錯誤的搜尋(`search_hits` 裡的 `None`)永遠不算 miss。
 2. **`unattributable` ≠ `no_search`**。`action_counts` 的 `None` 是
@@ -55,7 +55,7 @@ set 層的平均正好把它蓋掉。
 
 ```
   needle-12          0/6 solved  (0%)
-                     deaths: 6/6 exhausted  |  search→solved: miss 0/5, blocked 0/1
+                     deaths: 6/6 exhausted  |  search→solved: miss 0/5, tool_error 0/1
 ```
 
 只在 `deaths` 非空時印——報表比欄位老的時候,「沒量到」不印成「0% 耗盡」。
@@ -63,8 +63,8 @@ set 層的平均正好把它蓋掉。
 ## 驗證
 
 `cargo test --workspace`、fmt、clippy 全綠。新測試:分類的五個邊界
-(混雜 error/miss 中有一個 hit 仍是 hit;全零是 miss 不是 blocked;
-全 error 是 blocked 不是 miss;沒搜尋與不可歸因是兩類)、tally 的配對、
+(混雜 error/miss 中有一個 hit 仍是 hit;全零是 miss 不是 tool_error;
+全 error 是 tool_error 不是 miss;沒搜尋與不可歸因是兩類)、tally 的配對、
 以及**舊版 JSON 反序列化**(缺欄位讀回預設,「沒記錄」不得偽裝成「量到零」)。
 
 ## 沒做的(這一刀刻意停在哪)
@@ -73,3 +73,12 @@ set 層的平均正好把它蓋掉。
   那是 `capability-v2.yaml` 的檔頭格式,依 SLICE-026 的門,
   YAML 動工前要先過 DRAFT 定案。本刀只把讀數側備好。
 - 分類**不回饋**進 loop 行為——量測/治理分離(踩過三次的那條)照舊。
+
+## 2026-11-02 增補:`blocked` 改名 `tool_error`(#48)
+
+2026-10-10 Haiku 5.5 differential 的 `off` 臂印出 `search→solved: blocked 0/1`,
+讀起來像 ungoverned 臂被 governance 擋了;實情是模型把兩個路徑塞成一個參數,
+`tools/grep.rs` 回「path does not exist」,全 error 落到這格。這格從一開始就是
+「工具邊界」的意思(見上表),但和 refusal 系的 `blocked`/`<<<BLOCKED` 撞名。
+改名為 `tool_error`;`SearchSolveTable` 以 `#[serde(alias = "blocked")]` 讀舊報表,
+已入庫的 13 份 JSON 不改寫。分類規則本身零改動。

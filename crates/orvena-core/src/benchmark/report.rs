@@ -253,10 +253,15 @@ pub enum SearchOutcome {
     /// the loop searched for the wrong thing.
     Miss,
     /// Searches were emitted but not one ever looked at a file (every outcome
-    /// errored at the tool boundary). This is the death slice-027 fixed for
-    /// globs; keeping it distinct from `Miss` is what would make a recurrence
-    /// visible as a tool problem instead of a model problem.
-    Blocked,
+    /// errored at the tool boundary: bad argument, missing path). This is the
+    /// death slice-027 fixed for globs; keeping it distinct from `Miss` is
+    /// what would make a recurrence visible as a tool problem instead of a
+    /// model problem. It is **not** a scope or policy refusal — those are
+    /// counted in `scope_refusals`, and the label was renamed from `blocked`
+    /// so an ungoverned arm never reads a tool error as governance (#48).
+    /// Reports written before #48 serialize this variant as `blocked`.
+    #[serde(alias = "blocked")]
+    ToolError,
     /// The loop never searched.
     NoSearch,
     /// The run's actions were not Orvena's to attribute (wrapped agent).
@@ -271,7 +276,7 @@ impl SearchOutcome {
     /// `counts = None` means unattributable, **not** "zero searches" — the
     /// same contract as [`TaskResult::action_counts`]. Errored searches record
     /// `None` in `hits` and are never read as misses; a run whose every search
-    /// errored is `Blocked`, because nothing was ever actually searched.
+    /// errored is `ToolError`, because nothing was ever actually searched.
     pub fn classify(counts: Option<&ActionCounts>, hits: &[Option<u32>]) -> Self {
         let Some(counts) = counts else {
             return Self::Unattributable;
@@ -281,7 +286,7 @@ impl SearchOutcome {
         } else if hits.iter().any(|h| h.is_some()) {
             Self::Miss
         } else if counts.search > 0 {
-            Self::Blocked
+            Self::ToolError
         } else {
             Self::NoSearch
         }
@@ -375,7 +380,10 @@ pub struct SolveSplit {
 pub struct SearchSolveTable {
     pub hit: SolveSplit,
     pub miss: SolveSplit,
-    pub blocked: SolveSplit,
+    /// Serialized as `tool_error`; reports written before #48 carry the
+    /// same cell under `blocked` and still deserialize.
+    #[serde(alias = "blocked")]
+    pub tool_error: SolveSplit,
     pub no_search: SolveSplit,
     pub unattributable: SolveSplit,
 }
@@ -387,7 +395,7 @@ impl SearchSolveTable {
             let cell = match row.search {
                 SearchOutcome::Hit => &mut table.hit,
                 SearchOutcome::Miss => &mut table.miss,
-                SearchOutcome::Blocked => &mut table.blocked,
+                SearchOutcome::ToolError => &mut table.tool_error,
                 SearchOutcome::NoSearch => &mut table.no_search,
                 SearchOutcome::Unattributable => &mut table.unattributable,
             };
@@ -730,11 +738,34 @@ mod tests {
     }
 
     #[test]
-    fn every_search_erroring_is_blocked_not_a_miss() {
+    fn pre_48_reports_still_read_the_blocked_cell_as_tool_error() {
+        // Reports written before #48 serialized this cell as `blocked`.
+        let old = r#"{"hit":{"solved":1,"failed":0},"miss":{"solved":0,"failed":2},
+            "blocked":{"solved":0,"failed":3},"no_search":{"solved":0,"failed":0},
+            "unattributable":{"solved":0,"failed":0}}"#;
+        let table: SearchSolveTable = serde_json::from_str(old).unwrap();
+        assert_eq!(table.tool_error, SolveSplit { solved: 0, failed: 3 });
+        let fresh = serde_json::to_string(&table).unwrap();
+        assert!(fresh.contains("\"tool_error\""), "{fresh}");
+        assert!(!fresh.contains("\"blocked\""), "{fresh}");
+    }
+
+    #[test]
+    fn pre_48_death_rows_still_read_search_blocked_as_tool_error() {
+        // `DeathRow.search` serializes the enum itself, so the row-level form
+        // `"search":"blocked"` (2026-10-10 Haiku report, bench-runs/*) needs the
+        // alias on the variant, not just on the table cell.
+        let outcome: SearchOutcome = serde_json::from_str("\"blocked\"").unwrap();
+        assert_eq!(outcome, SearchOutcome::ToolError);
+        assert_eq!(serde_json::to_string(&outcome).unwrap(), "\"tool_error\"");
+    }
+
+    #[test]
+    fn every_search_erroring_is_tool_error_not_a_miss() {
         // The slice-027 death: searches emitted, none ever looked at a file.
         // Reading it as Miss would blame the model for a tool boundary.
         let hits = vec![None, None, None];
-        assert_eq!(SearchOutcome::classify(Some(&counts(3)), &hits), SearchOutcome::Blocked);
+        assert_eq!(SearchOutcome::classify(Some(&counts(3)), &hits), SearchOutcome::ToolError);
     }
 
     #[test]
@@ -767,11 +798,11 @@ mod tests {
             row(true, SearchOutcome::Hit),
             row(false, SearchOutcome::Miss),
             row(false, SearchOutcome::Miss),
-            row(false, SearchOutcome::Blocked),
+            row(false, SearchOutcome::ToolError),
         ]);
         assert_eq!(table.hit, SolveSplit { solved: 1, failed: 0 });
         assert_eq!(table.miss, SolveSplit { solved: 0, failed: 2 });
-        assert_eq!(table.blocked, SolveSplit { solved: 0, failed: 1 });
+        assert_eq!(table.tool_error, SolveSplit { solved: 0, failed: 1 });
         assert_eq!(table.no_search, SolveSplit::default());
     }
 
