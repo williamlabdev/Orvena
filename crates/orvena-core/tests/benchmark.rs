@@ -282,7 +282,7 @@ async fn repeated_runs_aggregate_per_task_pass_rates() {
     // Every row lands in exactly one cell of the search/solve correspondence.
     let cells = |t: &benchmark::TaskPassRate| {
         let s = &t.search_vs_solved;
-        [s.hit, s.miss, s.blocked, s.no_search, s.unattributable]
+        [s.hit, s.miss, s.tool_error, s.no_search, s.unattributable]
             .iter()
             .map(|c| c.solved + c.failed)
             .sum::<u32>()

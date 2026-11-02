@@ -424,7 +424,7 @@ fn death_note(t: &TaskPassRate) -> Option<String> {
     let cells: Vec<String> = [
         ("hit", s.hit),
         ("miss", s.miss),
-        ("blocked", s.blocked),
+        ("tool_error", s.tool_error),
         ("no-search", s.no_search),
         ("unattributed", s.unattributable),
     ]
