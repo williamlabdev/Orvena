@@ -751,6 +751,16 @@ mod tests {
     }
 
     #[test]
+    fn pre_48_death_rows_still_read_search_blocked_as_tool_error() {
+        // `DeathRow.search` serializes the enum itself, so the row-level form
+        // `"search":"blocked"` (2026-10-10 Haiku report, bench-runs/*) needs the
+        // alias on the variant, not just on the table cell.
+        let outcome: SearchOutcome = serde_json::from_str("\"blocked\"").unwrap();
+        assert_eq!(outcome, SearchOutcome::ToolError);
+        assert_eq!(serde_json::to_string(&outcome).unwrap(), "\"tool_error\"");
+    }
+
+    #[test]
     fn every_search_erroring_is_tool_error_not_a_miss() {
         // The slice-027 death: searches emitted, none ever looked at a file.
         // Reading it as Miss would blame the model for a tool boundary.
